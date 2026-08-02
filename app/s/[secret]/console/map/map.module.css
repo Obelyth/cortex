@@ -1,0 +1,131 @@
+/* The map screen: full-bleed canvas with a floating HUD, layers pill and detail drawer. */
+.mapWrap {
+  position: relative; height: calc(100vh - 64px - 46px - 120px); min-height: 560px;
+  margin: 14px 0 0; border: 1px solid var(--hair); border-radius: var(--radius-md);
+  overflow: hidden; background: var(--ground);
+}
+.canvas { width: 100%; height: 100%; display: block; }
+
+.hud {
+  position: absolute; top: 14px; right: 14px; width: 218px; display: flex;
+  flex-direction: column; gap: 8px; padding: 12px;
+  background: rgba(26, 33, 43, 0.94); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--elev-2);
+}
+.hudRow { display: flex; gap: 4px; }
+.hudBtn {
+  flex: 1; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--muted); background: none;
+  border: 1px solid var(--hair); border-radius: var(--radius-sm);
+  padding: 5px 2px; cursor: pointer;
+}
+.hudBtn:hover { color: var(--ink); }
+.onBtn { color: var(--accent); border-color: var(--accent); }
+.sliderRow {
+  display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 8px;
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.sliderRow input { width: 100%; accent-color: var(--accent); }
+.search {
+  font-family: var(--mono); font-size: 11px; color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--hair); border-radius: var(--radius-sm);
+  padding: 6px 8px;
+}
+.search:focus { outline: 2px solid var(--accent-hi); outline-offset: 1px; border-color: var(--accent); }
+.capNote { font-family: var(--mono); font-size: 9px; color: var(--faint); letter-spacing: 0.05em; }
+
+.legend {
+  position: absolute; left: 14px; bottom: 14px; width: 190px;
+  max-height: calc(100% - 28px); overflow-y: auto;
+  background: rgba(26, 33, 43, 0.94); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--elev-2); overflow-x: hidden;
+}
+.legendShut { width: auto; }
+.legendHead {
+  width: 100%; text-align: left; font-family: var(--mono); font-size: 10px;
+  letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--muted);
+  background: none; border: 0; padding: 10px 12px; cursor: pointer;
+}
+.legendRow {
+  display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center;
+  width: 100%; background: none; border: 0; border-top: 1px solid var(--hair);
+  padding: 7px 12px; cursor: pointer; text-align: left;
+}
+.legendRow span {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink);
+}
+.legendRow b { font-family: var(--mono); font-size: 10.5px; font-weight: 400; color: var(--faint); }
+.legendRow i { width: 8px; height: 8px; border-radius: 2px; display: block; }
+
+.drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(360px, 88%);
+  background: var(--sunk); border-left: 1px solid var(--line);
+  box-shadow: -24px 0 60px -24px rgba(0, 0, 0, 0.85); padding: 20px 22px; overflow-y: auto;
+}
+.drawerClose {
+  position: absolute; top: 12px; right: 14px; background: none; border: 0;
+  color: var(--faint); font-size: 20px; cursor: pointer; line-height: 1;
+}
+.drawerClose:hover { color: var(--ink); }
+.drawerLayer {
+  font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--accent);
+}
+.drawerTitle {
+  font-family: var(--display); font-weight: 700; font-size: 26px; text-transform: uppercase;
+  letter-spacing: var(--tracking-display); color: var(--bright); margin: 8px 0 4px;
+}
+.drawerId { font-family: var(--mono); font-size: 10.5px; color: var(--faint); word-break: break-all; }
+.drawerDetail { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 12px; }
+.drawerDesc { font-size: 13px; color: var(--ink); line-height: 1.55; margin-top: 10px; }
+.drawerStatus {
+  display: inline-block; margin-top: 12px; font-family: var(--mono); font-size: 9.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--warn);
+  border: 1px solid currentColor; border-radius: 3px; padding: 2px 6px;
+}
+@media (max-width: 900px) {
+  .hud { width: 172px; }
+  .mapWrap { height: 70vh; min-height: 480px; }
+  /* The two floating panels must never intersect: the legend narrows and caps at half the
+     map height so it can't climb up into the HUD's column. */
+  .legend { width: 150px; max-height: 50%; }
+}
+
+.legendGroup {
+  display: grid; grid-template-columns: 12px 1fr auto; gap: 6px; align-items: center;
+  width: 100%; background: none; border: 0; border-top: 1px solid var(--hair);
+  padding: 5px 12px 5px 22px; cursor: pointer; text-align: left;
+}
+.legendGroup em { font-style: normal; color: var(--faint); font-size: 9px; }
+.legendGroup span { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.legendGroup b { font-family: var(--mono); font-size: 10px; font-weight: 400; color: var(--faint); }
+
+.drawerKv { margin-top: 14px; border-top: 1px solid var(--hair); }
+.drawerKv > div {
+  display: grid; grid-template-columns: 88px 1fr; gap: 10px;
+  padding: 7px 0; border-bottom: 1px solid var(--hair);
+}
+.drawerKv dt {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint); padding-top: 1px;
+}
+.drawerKv dd { font-family: var(--mono); font-size: 11.5px; color: var(--ink); margin: 0; }
+
+.drawerRel { margin-top: 16px; }
+.drawerRelHead {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint); margin-bottom: 4px;
+}
+.drawerRelRow {
+  display: flex; justify-content: space-between; gap: 10px; width: 100%;
+  background: none; border: 0; border-top: 1px solid var(--hair);
+  padding: 6px 0; cursor: pointer; text-align: left;
+}
+.drawerRelRow span { font-size: 12px; color: var(--ink); }
+.drawerRelRow:hover span { color: var(--accent); }
+.drawerRelRow b {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 400;
+  text-transform: uppercase; color: var(--faint);
+}

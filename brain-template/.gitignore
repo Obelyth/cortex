@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+# tool-generated question logs must never dirty the mirror — a dirty tree
+# blocks writes, so asking a question must not disable storing the answer
+log/questions.jsonl

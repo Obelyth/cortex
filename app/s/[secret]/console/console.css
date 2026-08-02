@@ -1,0 +1,71 @@
+/* Console shell — design 1b. Masthead + permanent live ribbon; hairlines carry structure. */
+.conRoot { min-height: 100vh; display: flex; flex-direction: column; }
+
+.conMast {
+  height: 64px; display: flex; align-items: center; gap: 16px; padding: 0 26px;
+  background: linear-gradient(180deg, var(--surface), var(--ground));
+  border-bottom: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.conEmblem { flex: none; }
+.conWordmark {
+  font-family: var(--display); font-weight: 700; font-size: 24px;
+  letter-spacing: var(--tracking-display); text-transform: uppercase; color: var(--bright);
+  white-space: nowrap;
+}
+.conBy {
+  font-family: var(--mono); font-size: 9px; letter-spacing: var(--tracking-label);
+  color: var(--faint); vertical-align: 4px; margin-left: 4px; text-transform: uppercase;
+}
+.conTabs { display: flex; gap: 2px; margin-left: 18px; }
+.conTab {
+  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--muted); padding: 21px 12px 19px;
+  border-bottom: 2px solid transparent; text-decoration: none;
+}
+.conTab:hover { color: var(--ink); text-decoration: none; }
+.conTab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.conTabN { margin-left: 6px; color: var(--warn); font-variant-numeric: tabular-nums; }
+.conSpacer { flex: 1; }
+.conSha { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.conClock {
+  font-family: var(--mono); font-size: 11px; color: var(--ink);
+  font-variant-numeric: tabular-nums; min-width: 62px; text-align: right;
+}
+
+.conRibbon {
+  height: 46px; display: flex; align-items: center; gap: 18px; padding: 0 26px;
+  background: var(--sunk); border-bottom: 1px solid var(--hair);
+  box-shadow: inset 0 10px 18px -12px rgba(0, 0, 0, 0.9);
+  overflow: hidden; white-space: nowrap;
+}
+.conLiveDot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 8px var(--accent); flex: none; animation: conBlip 1.8s ease-in-out infinite;
+}
+@keyframes conBlip { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .conLiveDot { animation: none; } }
+.conLive {
+  font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--accent);
+}
+.conRibbonItem {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; max-width: 340px;
+}
+.conRibbonSha { color: var(--accent); }
+.conRibbonSum { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+
+.conBody { flex: 1; max-width: 1240px; width: 100%; margin: 0 auto; padding: 6px 26px 40px; }
+.conFoot {
+  max-width: 1240px; width: 100%; margin: 0 auto; padding: 14px 26px 24px;
+  border-top: 1px solid var(--line);
+  font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
+  color: var(--faint); text-transform: uppercase;
+}
+@media (max-width: 900px) {
+  .conMast { height: auto; flex-wrap: wrap; padding: 10px 16px; row-gap: 0; }
+  .conTab { padding: 10px 8px; }
+  .conRibbon { padding: 0 16px; }
+  .conRibbonItem { max-width: 180px; }
+}
