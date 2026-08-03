@@ -26,11 +26,23 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CORTEX by OBELYTH — one memory, every surface",
+  metadataBase: new URL("https://obelyth-cortex.vercel.app"),
+  title: "Cortex by Obelyth — one memory, every surface",
   description:
-    "A private markdown brain served to every Claude surface over MCP, with a read path that proves its own citations.",
-  // The console is private and the landing describes a personal system — neither wants indexing.
-  robots: { index: false, follow: false },
+    "Your notes, in one place, available to Claude everywhere you use it. Ask a question and get the answer plus the exact line it came from — checked automatically, or an honest “that isn't in here.”",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Cortex by Obelyth — one memory, every surface",
+    description:
+      "A private markdown brain served to every Claude surface over MCP, with a read path that proves its own citations. Open source, AGPL-3.0.",
+    url: "/",
+    siteName: "Cortex by Obelyth",
+    type: "website",
+    images: [{ url: "/brand/obelyth-emblem.png", width: 256, height: 256, alt: "The Obelyth emblem" }],
+  },
+  twitter: { card: "summary" },
+  // The product site is public and indexable. Gated routes 404 without the secret, and the
+  // raw demo-map route still opts itself out with its own x-robots-tag header.
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

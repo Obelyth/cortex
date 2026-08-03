@@ -1,16 +1,11 @@
-import ConsoleDemo from "./console-demo";
-import styles from "./console-demo.module.css";
+import Welcome from "./welcome";
 
 /**
- * The landing IS the console. No hero, no sections — the first thing a visitor sees is the
- * instrument itself, full-viewport, running on synthetic data (the badge in its top bar says
- * so). The prose surfaces survive at /tools and /guide, and the console's own guide screen
- * carries the wiring story; nothing here links a gated route.
+ * The landing is the Cortex Welcome experience: hero, principles, how a question gets
+ * answered, the two connect paths, the console arrival (a working demo on stand-in
+ * notes), and the make-it-yours close. All of it is client-animated, so the page is one
+ * client component; the metadata lives in layout.tsx.
  */
 export default function Landing() {
-  return (
-    <div className={styles.page}>
-      <ConsoleDemo />
-    </div>
-  );
+  return <Welcome />;
 }
