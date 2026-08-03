@@ -62,7 +62,8 @@ export function GET() {
       "content-type": "text/html; charset=utf-8",
       // Static and synthetic — a shared cache is welcome to it.
       "cache-control": "public, max-age=3600, s-maxage=86400",
-      // The site is noindex globally; raw routes have to say it themselves.
+      // The site is indexable, but this raw route is an embedded demo document — the
+      // landing is the page that should rank, so this one opts out.
       "x-robots-tag": "noindex, nofollow",
       "content-security-policy":
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; font-src 'self'",
