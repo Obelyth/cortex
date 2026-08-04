@@ -53,11 +53,83 @@ const AREAS = [
 ];
 
 function saveUrl(): string {
-  const p = window.location.pathname.replace(/\/+$/, "");
-  return `${p.replace(/\/settings$/, "")}/settings/save`;
+  let p = window.location.pathname;
+  while (p.endsWith("/")) p = p.slice(0, -1);
+  if (p.endsWith("/settings")) p = p.slice(0, -"/settings".length);
+  return `${p}/settings/save`;
 }
 
-export function SettingsClient({ vm }: { vm: SettingsVM }) {
+function ToggleRow({
+  label,
+  on,
+  disabled,
+  busy,
+  title,
+  onClick,
+}: Readonly<{
+  label: string;
+  on: boolean;
+  disabled: boolean;
+  busy: boolean;
+  title?: string;
+  onClick: () => void;
+}>) {
+  return (
+    <div className={styles.gRow}>
+      <span className={styles.note}>{label}</span>
+      <button
+        type="button"
+        className={`${styles.pvBtn}${on ? " " + styles.pvOn : ""}`}
+        disabled={disabled}
+        aria-pressed={on}
+        title={title}
+        onClick={onClick}
+      >
+        {busy ? "…" : on ? "on" : "off"}
+      </button>
+    </div>
+  );
+}
+
+function StepperRow({
+  label,
+  value,
+  disabled,
+  onStep,
+}: Readonly<{
+  label: string;
+  value: number;
+  disabled: boolean;
+  onStep: (delta: number) => void;
+}>) {
+  return (
+    <div className={styles.gRow}>
+      <span className={styles.note}>{label}</span>
+      <span className={styles.stepper}>
+        <button type="button" className={styles.rdBtn} disabled={disabled} onClick={() => onStep(-1)}>−</button>
+        <span className={styles.fig}>{value}</span>
+        <button type="button" className={styles.rdBtn} disabled={disabled} onClick={() => onStep(1)}>+</button>
+      </span>
+    </div>
+  );
+}
+
+/** The flagged nested ternaries, named instead of nested. */
+function chipTitle(r: SettingsVM["readers"][number]): string {
+  if (r.isDefault) return `reading now (${r.defaultSource})`;
+  if (!r.configured) return `${r.provider} has no key`;
+  if (r.disabled) return `${r.provider} is off`;
+  if (r.evalState === "measured") return "measured on the eval — make default";
+  return `${r.evalState} — make default`;
+}
+
+function guestHeading(g: SettingsVM["guest"]): string {
+  if (!g.open) return "Guest · door closed";
+  if (!g.kvReady) return "Guest · secret set, KV missing — cannot serve";
+  return "Guest · door open";
+}
+
+export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,15 +196,7 @@ export function SettingsClient({ vm }: { vm: SettingsVM }) {
                   className={`${styles.gArea}${r.isDefault ? " " + styles.gOn : ""}`}
                   disabled={disabledAll || off || r.isDefault}
                   aria-pressed={r.isDefault}
-                  title={
-                    r.isDefault
-                      ? `reading now (${r.defaultSource})`
-                      : !r.configured
-                        ? `${r.provider} has no key`
-                        : r.disabled
-                          ? `${r.provider} is off`
-                          : `${r.evalState === "measured" ? "measured on the eval" : r.evalState} — make default`
-                  }
+                  title={chipTitle(r)}
                   onClick={() => send({ defaultReader: r.model }, r.model)}
                 >
                   {busy === r.model ? "…" : r.model}
@@ -142,30 +206,24 @@ export function SettingsClient({ vm }: { vm: SettingsVM }) {
           </div>
           <div className={styles.setRows}>
             {vm.providers.map((p) => (
-              <div key={p.provider} className={styles.gRow}>
-                <span className={styles.note}>
-                  {p.provider} · {p.configured ? "key set" : `${p.keyEnv} missing`}
-                </span>
-                <button
-                  type="button"
-                  className={`${styles.pvBtn}${p.disabled ? "" : " " + styles.pvOn}`}
-                  disabled={disabledAll || p.holdsDefault}
-                  aria-pressed={!p.disabled}
-                  title={p.holdsDefault ? "serves the current default — change the default first" : undefined}
-                  onClick={() =>
-                    send(
-                      {
-                        disabledProviders: p.disabled
-                          ? vm.providers.filter((x) => x.disabled && x.provider !== p.provider).map((x) => x.provider)
-                          : [...vm.providers.filter((x) => x.disabled).map((x) => x.provider), p.provider],
-                      },
-                      p.provider
-                    )
-                  }
-                >
-                  {busy === p.provider ? "…" : p.disabled ? "off" : "on"}
-                </button>
-              </div>
+              <ToggleRow
+                key={p.provider}
+                label={`${p.provider} · ${p.configured ? "key set" : `${p.keyEnv} missing`}`}
+                on={!p.disabled}
+                disabled={disabledAll || p.holdsDefault}
+                busy={busy === p.provider}
+                title={p.holdsDefault ? "serves the current default — change the default first" : undefined}
+                onClick={() =>
+                  send(
+                    {
+                      disabledProviders: p.disabled
+                        ? vm.providers.filter((x) => x.disabled && x.provider !== p.provider).map((x) => x.provider)
+                        : [...vm.providers.filter((x) => x.disabled).map((x) => x.provider), p.provider],
+                    },
+                    p.provider
+                  )
+                }
+              />
             ))}
           </div>
           <Reveal label="how the reader is chosen">
@@ -176,9 +234,7 @@ export function SettingsClient({ vm }: { vm: SettingsVM }) {
         </section>
 
         <section>
-          <div className={styles.label}>
-            Guest {g.open ? (g.kvReady ? "· door open" : "· secret set, KV missing — cannot serve") : "· door closed"}
-          </div>
+          <div className={styles.label}>{guestHeading(g)}</div>
           <div className={styles.note}>
             {g.open
               ? `${g.usedToday ?? "—"} / ${g.dailyAsks} asks today · ${g.queued} proposal${g.queued === 1 ? "" : "s"} waiting`
@@ -208,34 +264,17 @@ export function SettingsClient({ vm }: { vm: SettingsVM }) {
             })}
           </div>
           <div className={styles.setRows}>
-            <div className={styles.gRow}>
-              <span className={styles.note}>show source and evidence</span>
-              <button
-                type="button"
-                className={`${styles.pvBtn}${g.citations ? " " + styles.pvOn : ""}`}
-                disabled={disabledAll}
-                aria-pressed={g.citations}
-                onClick={() => send({ guest: { citations: !g.citations } }, "citations")}
-              >
-                {busy === "citations" ? "…" : g.citations ? "on" : "off"}
-              </button>
-            </div>
-            <div className={styles.gRow}>
-              <span className={styles.note}>asks per day</span>
-              <span className={styles.stepper}>
-                <button type="button" className={styles.rdBtn} disabled={disabledAll} onClick={() => step("dailyAsks", g.dailyAsks, -10, 10, 1000)}>−</button>
-                <span className={styles.fig}>{g.dailyAsks}</span>
-                <button type="button" className={styles.rdBtn} disabled={disabledAll} onClick={() => step("dailyAsks", g.dailyAsks, 10, 10, 1000)}>+</button>
-              </span>
-            </div>
-            <div className={styles.gRow}>
-              <span className={styles.note}>notes per ask (max k)</span>
-              <span className={styles.stepper}>
-                <button type="button" className={styles.rdBtn} disabled={disabledAll} onClick={() => step("maxK", g.maxK, -1, 1, 40)}>−</button>
-                <span className={styles.fig}>{g.maxK}</span>
-                <button type="button" className={styles.rdBtn} disabled={disabledAll} onClick={() => step("maxK", g.maxK, 1, 1, 40)}>+</button>
-              </span>
-            </div>
+            <ToggleRow
+              label="show source and evidence"
+              on={g.citations}
+              disabled={disabledAll}
+              busy={busy === "citations"}
+              onClick={() => send({ guest: { citations: !g.citations } }, "citations")}
+            />
+            <StepperRow label="asks per day" value={g.dailyAsks} disabled={disabledAll}
+              onStep={(d) => step("dailyAsks", g.dailyAsks, d * 10, 10, 1000)} />
+            <StepperRow label="notes per ask (max k)" value={g.maxK} disabled={disabledAll}
+              onStep={(d) => step("maxK", g.maxK, d, 1, 40)} />
           </div>
           <Reveal label="how scope is enforced">
             Out-of-scope notes are removed from the corpus before the reader runs — an unticked

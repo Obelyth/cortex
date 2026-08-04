@@ -34,10 +34,10 @@ export interface LedgerRetracted {
 export function LedgerClient({
   rows,
   retractedByPath,
-}: {
+}: Readonly<{
   rows: LedgerRow[];
   retractedByPath: Record<string, LedgerRetracted[]>;
-}) {
+}>) {
   const [open, setOpen] = useState<string | null>(null);
 
   return (
