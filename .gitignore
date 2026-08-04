@@ -1,10 +1,8 @@
 node_modules/
 .next/
 .env*.local
-.env
-.env.production
-.vercel/
 .vercel
 *.tsbuildinfo
 next-env.d.ts
 .claude/
+results/

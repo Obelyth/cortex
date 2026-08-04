@@ -82,8 +82,8 @@ function stripEmphasis(s: string): string {
  * Meaning-preserving comparison form: unify unicode, drop markdown that is acting as markup,
  * collapse space.
  *
- * Deliberately NOT lowercasing. Case is part of an identifier — `By Zone` vs `By zone` is the
- * exact bug that has had the the ops dashboard's pipeline dead for a month — so a quote that changes case has
+ * Deliberately NOT lowercasing. Case is part of an identifier — `By Rig` vs `By rig` is the
+ * exact bug that has had the OTS pipeline dead for a month — so a quote that changes case has
  * changed the fact.
  */
 export function normalise(s: string): string {
@@ -147,7 +147,7 @@ export function splitBlocks(text: string): Block[] {
     // A new list item, table row or heading starts its own block; a continuation line does not.
     // A blockquote starts its own block too. Without that, `> **SUPERSEDED ...**` merged into
     // the bullet above it and the retraction check could not see it as a neighbour — which is
-    // exactly how notes/aurora-aurora.md's dead SHIPPED line kept passing as current.
+    // exactly how notes/grain-grain.md's dead SHIPPED line kept passing as current.
     const startsBlock =
       isHeading || /^[ \t]*([-*+]|\d+[.)])[ \t]+/.test(l) || /^[ \t]*\|/.test(l) || /^[ \t]*>/.test(l);
     if (!l.trim()) {
@@ -180,12 +180,35 @@ export function splitBlocks(text: string): Block[] {
 const SUPERSEDED_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|was:\s*["\u201c]|\bDo not answer\b/i;
 
 /**
+ * The two markers say different things, and conflating them cost the stamp its credibility.
+ *
+ * A BANNER retires a passage: `> **SUPERSEDED 2026-07-25 \u2026**`, `DEPRECATED`, `Do not answer`.
+ * Everything near it is history.
+ *
+ * An IN-PLACE CORRECTION does the opposite. House style is `<current claim> (was: "<old
+ * claim>")`, so the block carrying `was:` is the block carrying the TRUTH \u2014 the marker is
+ * evidence of currency, not of death. Reading it as a retraction meant the freshest, most
+ * asked-about content in the brain got stamped "It is history. Do not answer from it." while
+ * being exactly right. That is the wolf-crying this file's own comments warn about: a warning
+ * that fires on healthy text stops being read.
+ *
+ * Detection stays as broad as it was \u2014 nothing that used to be flagged is now silent. Only the
+ * sentence changes, and the absolute one is reserved for the case where it is true.
+ */
+const BANNER_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|\bDo not answer\b/i;
+const WAS_RE = /was:\s*["\u201c]/i;
+/** The retired wording itself, captured out of `(was: "\u2026")`. */
+const WAS_QUOTED_RE = /was:\s*["\u201c]([^"\u201d]{1,400})["\u201d]/gi;
+
+export type Retraction = "none" | "banner" | "correction";
+
+/**
  * The banner usually sits in its own block immediately above or below the text it retracts —
  * `> **SUPERSEDED 2026-07-25 ...**` on one line, the dead claim on the next. Checking only the
  * matched block misses every one of them.
  *
  * Neighbours only, deliberately. Flagging everything below a banner until the next heading
- * would mark most of aurora-aurora.md, and a warning that fires on healthy text stops being
+ * would mark most of grain-grain.md, and a warning that fires on healthy text stops being
  * read. Erring toward over-flagging is still the right direction — a spurious "check this"
  * costs a glance, a missed retraction costs a wrong answer with a green stamp — so the radius
  * is one block, not zero.
@@ -197,15 +220,60 @@ export function retracted(blocks: Block[], i: number): boolean {
   return SUPERSEDED_RE.test(blocks[i].heading);
 }
 
+/**
+ * Which kind of marker fired, so render() can say the true thing rather than the strong thing.
+ *
+ * `matched` is the file's own text for the citation. It decides the one case a `was:` marker
+ * alone cannot: whether the quote is the CURRENT claim standing beside the retired wording, or
+ * the retired wording itself. Quoting the inside of `(was: "…")` is a genuinely dead citation
+ * and keeps the absolute stamp — that is exactly what the landmine test hunts for.
+ */
+export function retraction(blocks: Block[], i: number, matched?: string): Retraction {
+  const near = [blocks[i], blocks[i - 1], blocks[i + 1]].filter(Boolean) as Block[];
+  const heading = blocks[i].heading;
+  if (near.some((b) => BANNER_RE.test(b.text)) || BANNER_RE.test(heading)) return "banner";
+  if (!near.some((b) => WAS_RE.test(b.text)) && !WAS_RE.test(heading)) return "none";
+
+  // A `was:` marker is present. If the citation is the retired wording, this is a retraction
+  // after all — compared on normalised text, the same footing every other check here uses.
+  const needle = normalise(matched ?? "");
+  if (needle) {
+    for (const b of [...near.map((b) => b.text), heading]) {
+      for (const m of b.matchAll(WAS_QUOTED_RE)) {
+        const old = normalise(m[1]);
+        if (old && (old.includes(needle) || needle.includes(old))) return "banner";
+      }
+    }
+  }
+  return "correction";
+}
+
 export interface Verdict {
   verified: boolean;
   reason: string;
-  /** The file's OWN text for the match, so displayed and verified cannot diverge. */
+  /** The file's OWN text for the match, so displayed and verified cannot diverge. Truncated
+   *  for display — use `block` for anything that has to be complete. */
   matched?: string;
+  /**
+   * The same block, UNTRUNCATED.
+   *
+   * `matched` is capped at 400 characters because it is printed. That cap is a display
+   * decision, and it leaked: the eval harness scored "did the reader quote the labelled
+   * passage" against `matched`, so any labelled span sitting past character 400 of its own
+   * block was unreachable — a perfect reader capped at 83.5% because of a formatting constant.
+   * Anything measuring rather than showing reads this field.
+   */
+  block?: string;
   line?: number;
   heading?: string;
   /** The block, or the heading above it, is marked as retracted or corrected. */
   superseded?: boolean;
+  /**
+   * WHICH marker fired. `superseded` stays the broad boolean every caller already relies on;
+   * this says whether the passage is retired ("banner") or is an in-place correction whose
+   * quoted claim is the current one ("correction"). Only the stamp's wording depends on it.
+   */
+  retraction?: Retraction;
 }
 
 /** True iff `quote` appears verbatim inside a single block of `text`. */
@@ -227,9 +295,13 @@ export function verifyQuote(text: string | undefined, quote: string): Verdict {
       verified: true,
       reason: b.text.includes(quote) ? "exact" : "normalised (markdown/whitespace differs)",
       matched: b.text.trim().slice(0, 400),
+      block: b.text.trim(),
       line: b.line,
       heading: b.heading,
       superseded: retracted(blocks, i),
+      // Classified on the QUOTE, not the block: inside `(was: "…")` is a dead citation, beside
+      // it is the live one, and the same block can hold both.
+      retraction: retraction(blocks, i, quote),
     };
   }
   // Present in the file, but only by joining text across a block boundary. That is not a quote.
@@ -255,6 +327,9 @@ export interface Citation {
   line?: number;
   heading?: string;
   superseded?: boolean;
+  retraction?: Retraction;
+  /** The cited block, untruncated. For measurement, never for display. */
+  block?: string;
 }
 
 /** What every answer carries. `commit` pins the proof to an exact revision. */
@@ -277,5 +352,7 @@ export function checkCitation(
     line: v.line,
     heading: v.heading,
     superseded: v.superseded,
+    retraction: v.retraction,
+    block: v.block,
   };
 }

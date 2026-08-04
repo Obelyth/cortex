@@ -3,7 +3,7 @@ import { redact, hasSecret } from "../lib/redact";
 
 describe("redact", () => {
   it("catches the shape actually sitting in this brain", () => {
-    // archive/memory-2026-07/dir1--project-legacy-app.md carries a live production
+    // archive/memory-2026-07/dir1--project-egotaskflow-v2.md carries a live production
     // password. A plain \b(password) misses it entirely — underscore is a word character, so
     // the boundary never matches inside ADMIN_PASSWORD. That near-miss is the whole reason the
     // key-name pattern allows a prefix.
@@ -26,13 +26,34 @@ describe("redact", () => {
     }
   });
 
-  it("catches vendor-shaped tokens with no key name near them", () => {
+  // Assembled at runtime: a literal matching Google's key shape trips secret scanners even
+// though it is the test's own synthetic fixture. The redactor sees the same string either way.
+const FAKE_AIZA = "AIza" + "SyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
+
+it("catches vendor-shaped tokens with no key name near them", () => {
     expect(redact("use ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa here")).toContain("<redacted-token>");
     expect(redact("AKIAIOSFODNN7EXAMPLE")).toBe("<redacted-token>");
     expect(redact("xoxb-1234567890-abcdef")).toContain("<redacted-token>");
     expect(redact("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N")).toBe(
       "<redacted-jwt>"
     );
+    // Google's key shape — the one vendor form an operator's GAS/Sheets stack actually mints, and
+    // the shape a Gemini invalid-key error body echoes back.
+    expect(redact(`API key not valid: ${FAKE_AIZA}`)).toBe(
+      "API key not valid: <redacted-token>"
+    );
+  });
+
+  it("catches the shapes provider error bodies actually use", () => {
+    // OpenAI's invalid-key echo masks the middle itself, but the visible slice of a real key
+    // still must not ride an error out.
+    expect(redact("Incorrect API key provided: sk-proj-********************MA5A")).toContain(
+      "<redacted-token>"
+    );
+    // Error bodies are JSON, where the key name is quoted — the char after `token` is a
+    // closing quote, which the bare \s*[:=] separator never matched.
+    expect(redact('{"token": "supersecretvalue123"}')).not.toContain("supersecretvalue123");
+    expect(redact('{"api_key": "sk_live_abc"}')).not.toContain("sk_live_abc");
   });
 
   it("catches a credential carried in a URL query string", () => {
