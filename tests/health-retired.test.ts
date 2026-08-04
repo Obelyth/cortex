@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { corpus } from "./helpers/health-corpus";
 
 vi.mock("../lib/corpus", () => ({ loadCorpus: vi.fn() }));
 
@@ -7,13 +8,6 @@ import { health } from "../lib/health";
 
 const mLoad = vi.mocked(loadCorpus);
 
-function corpus(files: Array<[string, string]>) {
-  return {
-    sha: "e".repeat(40),
-    bytes: files.reduce((a, [, t]) => a + t.length, 0),
-    files: new Map(files),
-  } as unknown as Awaited<ReturnType<typeof loadCorpus>>;
-}
 
 /** The shape that caused the defect: a page that documents killing a tool names it constantly. */
 const CHANGELOG = `# cortex
