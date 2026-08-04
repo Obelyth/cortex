@@ -3,8 +3,7 @@ import { readCalls } from "@/lib/calls";
 import { readSettings, safeActiveReader, readerCards } from "@/lib/settings";
 import { PROVIDERS, PROVIDER_KEY_ENV, providerConfigured, modelsOf } from "@/lib/reader";
 import { DEFAULT_MODEL } from "@/lib/ask";
-import { readGuestPolicy, guestReaderModel } from "@/lib/guest";
-import { ReadersClient, type ReaderVM, type ProviderVM, type GuestVM } from "./readers-client";
+import { ReadersClient, type ReaderVM, type ProviderVM } from "./readers-client";
 import styles from "../console.module.css";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +16,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
  * Readers — which models may read this brain, which one does, and how each has actually
  * behaved. The screen that stopped this being a Claude brain and started it being a brain.
  *
- * Two halves, deliberately: the registry facts (provider, key, measured or not) are read off
- * the server and cannot be argued with, and the two controls (default reader, provider
- * switches) are the only mutable state in the whole system. Where a panel cannot know
+ * An instrument, not a control panel: the registry facts and each reader's record are read off
+ * the server and cannot be argued with; the controls live on the settings screen, their one
+ * home. Where a panel cannot know
  * something — an unmeasured model, a reader with no calls yet, a store that is not configured
  * — it says so in that many words. An empty column here must never read as a zero.
  */
@@ -68,23 +67,7 @@ export default async function Readers({
     configured: providerConfigured(p),
     disabled: settings.disabledProviders.includes(p),
     models: modelsOf(p).length,
-    // A provider cannot be switched off while it serves the effective default: the write is
-    // refused server-side, and the button says why before it is ever clicked.
-    holdsDefault: p === cards.find((c) => c.isDefault)?.provider,
   }));
-
-  const gp = await readGuestPolicy();
-  const guest: GuestVM = {
-    // Presence only — the guest secret never reaches a rendered page, same rule as every other
-    // credential in this console.
-    open: Boolean(process.env.GUEST_PATH_SECRET?.trim()),
-    scope: gp.scope,
-    citations: gp.citations,
-    dailyAsks: gp.dailyAsks,
-    maxK: gp.maxK,
-    usedToday: gp.usedToday,
-    reader: guestReaderModel(settings),
-  };
 
   const envReader = process.env.READER_MODEL?.trim() || null;
   const unattributed = asks.length - attributed.length;
@@ -106,7 +89,7 @@ export default async function Readers({
               ? "no reader resolves — brain_ask errors on every call until this is fixed"
               : `${
                   active.source === "console"
-                    ? "set here, in the console"
+                    ? "set in settings"
                     : active.source === "env"
                       ? "from READER_MODEL in the environment"
                       : "the built-in default — nothing has overridden it"
@@ -145,19 +128,11 @@ export default async function Readers({
       <ReadersClient
         readers={readers}
         providers={providers}
-        guest={guest}
-        writable={settings.source === "store"}
-        storeNote={
-          settings.source === "store"
-            ? null
-            : settings.source === "unconfigured"
-              ? "No KV store is configured, so these controls have nowhere durable to write. The reader is whatever READER_MODEL and the built-in default say, and every provider stays selectable."
-              : "The settings store was unreachable this render, so the controls are held. The read path has fallen back to READER_MODEL and the built-in default — a store outage never changes which model reads, it only stops you changing it."
-        }
         conflicts={resolveError ? [resolveError, ...settings.conflicts] : settings.conflicts}
         envReader={envReader}
         builtIn={DEFAULT_MODEL}
         usageNote={
+
           durable
             ? attributed.length === 0
               ? asks.length === 0

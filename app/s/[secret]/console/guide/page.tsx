@@ -110,14 +110,14 @@ export default async function Guide({
       grants: "asks · proposes — never writes",
       open: guestServes,
       state: guestServes
-        ? "open · scoped on the readers screen"
+        ? "open · scoped in settings"
         : guestOpen
           ? "secret set · KV missing — door cannot serve"
           : "closed · set GUEST_PATH_SECRET",
       wire: `https://<host>/api/g/<GUEST_PATH_SECRET>/mcp`,
       note: "Questions are answered by a Claude reader from the areas you share; suggestions wait on the attention screen until accepted. The corpus itself is never handed over.",
       // The only path with a policy attached, so it is the only one that links onward.
-      link: { href: "readers", label: "scope it" },
+      link: { href: "settings", label: "scope it" },
     },
   ];
 
@@ -201,7 +201,7 @@ export default async function Guide({
             setting rather than an assumption. Every reader is held to one contract — a refusal
             or truncation throws rather than masquerading as <b>NOT IN BRAIN</b> — and the
             resolution order is: the call&rsquo;s own choice, then the{" "}
-            <a className={styles.railLink} href="readers">readers</a> screen&rsquo;s default,
+            <a className={styles.railLink} href="settings">settings</a> screen&rsquo;s default,
             then <span className={styles.mono}>READER_MODEL</span>, then the built-in. Guest
             questions are always read by a Claude model, whatever the default says. Trust comes
             from the verification, not from the model.

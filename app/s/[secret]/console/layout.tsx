@@ -4,7 +4,6 @@ import { listCommits, type CommitInfo } from "@/lib/github";
 import { listProposals } from "@/lib/proposals";
 import { Tabs } from "./tabs";
 import { Clock } from "./clock";
-import { Appearance } from "./appearance";
 import "./console.css";
 
 // Every screen under this shell reads the live corpus — never cached, never static.
@@ -93,7 +92,6 @@ export default async function ConsoleLayout({
         </span>
         <span className="conRibbonSum">live corpus · read path verified</span>
         <span className="conSpacer" />
-        <Appearance />
       </div>
 
       <main className="conBody">{children}</main>

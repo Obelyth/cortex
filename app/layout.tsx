@@ -10,7 +10,10 @@ import "./globals.css";
  * The DISPLAY slot ships empty on purpose. The reference deployment uses a licensed display
  * face we cannot redistribute; headers fall back to Hanken bold here. To add your own: drop a
  * font in public/fonts/, add a next/font/local block exposing --font-display, and put its
- * variable class on <html> below.
+ * variable class on // suppressHydrationWarning is for ONE attribute: the console layout stamps data-appearance
+    // on <html> pre-paint (from localStorage) so a reload never flashes the wrong ground. The
+    // server cannot know that value, the mismatch is by design.
+    <html> below.
  */
 const hanken = Hanken_Grotesk({
   subsets: ["latin"],
@@ -55,7 +58,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
+    <html suppressHydrationWarning
       lang="en"
       className={`${hanken.variable} ${jetbrains.variable}`}
     >
