@@ -3,6 +3,9 @@
  * real on it, same contract as the demo map. Every path, SHA, count and quote here is
  * invented; tests/console-demo.test.ts pins that this file stays that way. The invented
  * project names follow the fixture convention (aurora, beacon, relay).
+ *
+ * The demo carries five of the real console's six screens; the sixth is declared in
+ * OMITTED below rather than mocked, so the landing can be exact about what it shows.
  */
 
 export type Stamp =
@@ -187,3 +190,18 @@ export const NAV = [
 ] as const;
 
 export type ScreenKey = (typeof NAV)[number]["k"];
+
+/**
+ * The one real-console screen the demo does not carry. Readers is the reader registry
+ * (measured / unstable / unmeasured) plus the only controls that mutate a deployment —
+ * default reader, provider switches, guest scope and budget. A static demo cannot render
+ * those as working switches without lying, so the screen is omitted and this note is the
+ * copy the landing shows instead of claiming full parity.
+ */
+export const OMITTED = {
+  screen: "readers",
+  note:
+    "Not shown in this demo: the Readers screen — the reader registry and its live controls " +
+    "(default reader, provider switches, guest scope and budget). Its switches change a real " +
+    "deployment, so the demo declares it instead of faking it.",
+} as const;

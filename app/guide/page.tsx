@@ -26,6 +26,15 @@ export default function Guide() {
         lives only in that URL and in the server's environment.
       </p>
 
+      <h2>Open a guest door <span className="count">off by default</span></h2>
+      <p className="lede">
+        Set <span className="mono">GUEST_PATH_SECRET</span> and a third path exists:{" "}
+        <span className="mono">/api/g/&lt;secret&gt;/mcp</span>. A guest can ask — scoped to the
+        areas you share, never handed the corpus — and propose a note for your review; accepting
+        is what commits. Nothing else is registered on that door, so nothing else appears to
+        exist.
+      </p>
+
       <h2>The rituals</h2>
       <div className="panel">
         <div className="ritual">
@@ -63,7 +72,10 @@ export default function Guide() {
         <span className="mono">(was: &quot;…&quot;)</span> or{" "}
         <span className="mono">Do not answer</span>) comes back stamped SUPERSEDED rather than
         VERIFIED — verbatim is exactly what a stale answer looks like in a memory that keeps its
-        corrections on the page.
+        corrections on the page. Quote the current claim beside its own{" "}
+        <span className="mono">(was: &quot;…&quot;)</span> marker and the stamp is{" "}
+        <span className="mono">CORRECTED</span> instead: the correction was made in place, so
+        answer from the current claim.
       </p>
 
       <h2>What is public and what is not</h2>

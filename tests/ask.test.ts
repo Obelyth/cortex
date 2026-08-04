@@ -39,7 +39,7 @@ function citing(path: string, quote: string, answer = "an answer") {
 // cache is exercised without reaching the network.
 let restore: typeof globalThis.fetch;
 beforeEach(() => {
-  process.env.BRAIN_REPO = "ShootJackal/brain";
+  process.env.BRAIN_REPO = "acme/brain";
   process.env.GITHUB_TOKEN = "test";
   restore = globalThis.fetch;
   globalThis.fetch = (async (url: string) => {

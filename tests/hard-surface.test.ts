@@ -110,7 +110,7 @@ const compliantReader =
 let restoreFetch: typeof globalThis.fetch;
 
 beforeEach(() => {
-  vi.stubEnv("BRAIN_REPO", "ShootJackal/brain");
+  vi.stubEnv("BRAIN_REPO", "acme/brain");
   vi.stubEnv("BRAIN_BRANCH", "main");
   vi.stubEnv("GITHUB_TOKEN", "test-pat");
   restoreFetch = globalThis.fetch;
@@ -632,7 +632,8 @@ describe("what reaches the client on failure", () => {
         JSON.stringify({
           message: "Bad credentials",
           documentation_url: "https://docs.github.com/rest",
-          internal_hint: "token ghp_REDACTEDBUTECHOEDANYWAYAAAAAAAAAAAA for ShootJackal/brain",
+          // Synthetic token and repo — the fixture exists to prove neither string is relayed.
+          internal_hint: "token ghp_REDACTEDBUTECHOEDANYWAYAAAAAAAAAAAA for acme/brain",
         }),
         { status: 401 }
       )) as typeof fetch;

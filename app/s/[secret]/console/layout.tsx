@@ -22,7 +22,17 @@ export const maxDuration = 60;
  * The utility bar under it names the corpus being read and carries the appearance switch; the
  * counts and the last write moved to the footer, where the design puts them.
  */
-const LEGAL = ["Legal", "Privacy", "Terms", "Status"];
+/**
+ * The footer links only to pages this deployment actually serves. The previous row
+ * (Legal / Privacy / Terms / Status) pointed at README anchors that were never written —
+ * governance pages the release does not ship, which on a trust product reads as theatre.
+ * Until that content exists, honest chrome is the public surfaces we really have: root-relative
+ * hrefs, so they resolve on any host and carry nothing vendor-specific.
+ */
+const FOOT_LINKS = [
+  { label: "Tools", href: "/tools" },
+  { label: "Guide", href: "/guide" },
+];
 
 export default async function ConsoleLayout({
   children,
@@ -93,10 +103,10 @@ export default async function ConsoleLayout({
         <span className="conFootRule" />
         <span className="conFootTag">build {build} · head {h.sha}</span>
         <span className="conSpacer" />
-        {LEGAL.map((l) => (
-          <a key={l} className="conFootLink" href={`https://github.com/Obelyth/cortex#${l.toLowerCase()}`}
-            target="_blank" rel="noreferrer">
-            {l}
+        {/* New tab so the gated console stays open behind the public page. */}
+        {FOOT_LINKS.map((l) => (
+          <a key={l.label} className="conFootLink" href={l.href} target="_blank" rel="noreferrer">
+            {l.label}
           </a>
         ))}
         <span className="conFootTag">© 2026 Obelyth</span>

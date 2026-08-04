@@ -1,0 +1,36 @@
+# Keeps a security-pitched, self-hostable product's supply chain moving without
+# a weekly wall of single-dependency PRs. Groups exist so related packages bump
+# together: a React bump without its types (or an MCP SDK bump without its
+# handler) is exactly the kind of half-update that breaks the build.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      # next/react/react-dom and their type packages must move in lockstep.
+      framework:
+        patterns:
+          - next
+          - react
+          - react-dom
+          - "@types/react*"
+      # The MCP SDK and mcp-handler are exact-pinned in package.json because
+      # their pairing is compatibility-sensitive; reviewing them as one PR keeps
+      # the pins from drifting apart.
+      mcp:
+        patterns:
+          - "@modelcontextprotocol/*"
+          - mcp-handler
+      # Tooling-only updates (typescript, vitest, @types/node) carry no runtime
+      # risk and can be reviewed as a batch.
+      dev-tooling:
+        dependency-type: development
+
+  # ci.yml pins actions by major tag; those pins go stale silently unless
+  # something watches them.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

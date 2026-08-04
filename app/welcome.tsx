@@ -37,6 +37,7 @@ const STEPS = [
 const STAMPS = [
   { tag: "VERIFIED", cls: "p_pass", line: "The quote really is in that note, word for word. It proves the source, not that the reasoning is right." },
   { tag: "SUPERSEDED", cls: "p_warn", line: "The quote is real, but you have since corrected that passage. Old notes read exactly like current ones." },
+  { tag: "CORRECTED", cls: "p_processing", line: "The quote is real and current — it sits beside the wording it replaced. Read the new claim, not the old one." },
   { tag: "PARTIAL", cls: "p_warn", line: "The same wording appears in more than one note, so we cannot say which one it came from." },
   { tag: "NOT IN BRAIN", cls: "p_processing", line: "Nothing in your notes covers it, and Claude said so instead of guessing." },
   { tag: "UNVERIFIED", cls: "p_fail", line: "The quote could not be found where it was said to be. Shown anyway and flagged, rather than hidden." },
@@ -503,7 +504,9 @@ export default function Welcome() {
             <h2 data-reveal="" id="connect-title" className={styles.h2}>Set up in one command</h2>
             <p data-reveal="" className={styles.sectionLede}>
               Two ways to connect, depending on where you use Claude. Both are locked down: get
-              the credentials wrong and the page simply does not exist.
+              the credentials wrong and the page simply does not exist. There is also a third
+              door for people who are not you — a guest link that can only ask (scoped to what
+              you share) and propose a note for your review. It stays closed until you open it.
             </p>
 
             <div className={styles.paths}>

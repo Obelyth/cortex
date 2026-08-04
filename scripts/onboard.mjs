@@ -146,19 +146,31 @@ ok(`deployed — production alias: ${url}`);
 head("5 · Verify — trust the check, not the deploy log");
 const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
 const MCP_SECRET_FOR_CHECK = liveSecret;
+let healthy = true;
 const tools = sh(
   `curl -s --max-time 30 -X POST "${url}/api/s/${MCP_SECRET_FOR_CHECK}/mcp" ` +
   `-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' ` +
   `--data '${body}' | grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`
 );
-const expected = "brain_ask brain_capture brain_context brain_corpus brain_read brain_write";
-if (tools.trim() === expected) ok(`secret-URL path healthy — 6 tools: ${tools.trim()}`);
-else {
+// The roster comes from lib/tool-roster.json — the same file the ops healthcheck asserts and
+// tests/tool-roster.test.ts pins to registerTools(). A roster string hardcoded here went stale
+// once and failed every healthy first deploy at the finish line, hiding the wiring
+// instructions behind a false UNHEALTHY. Never inline it again.
+const roster = JSON.parse(readFileSync(join(ROOT, "lib", "tool-roster.json"), "utf8"));
+const expected = roster.trusted.join(" ");
+if (tools.trim() === expected) {
+  ok(`secret-URL path healthy — ${roster.trusted.length} tools: ${tools.trim()}`);
+} else {
   act(`UNHEALTHY — got: ${tools.trim() || "<none>"} (expected: ${expected})`);
-  act("if you see an auth/SSO page instead of tools: disable Vercel Deployment Protection");
-  act("   (project Settings → Deployment Protection), then re-run — secrets are kept on re-run");
-  act(`secrets are recoverable any time with: vercel env pull --environment production .env.pull`);
-  process.exit(1);
+  act("if you see an auth/SSO page instead of tools: disable Vercel Deployment Protection for");
+  act("   PRODUCTION only (Settings → Deployment Protection) — the doors carry their own auth,");
+  act("   and preview protection can stay on. Then re-run; secrets are kept on re-run.");
+  act("secrets are recoverable any time with:");
+  act("   vercel env pull --environment production .env.production.local   (gitignored)");
+  act("");
+  act("The deploy itself succeeded — the wiring commands below are printed anyway; fix the");
+  act("check before trusting the doors.");
+  healthy = false;
 }
 
 // ------------------------------------------------------------------ wire ---
@@ -179,3 +191,5 @@ say(`  Store MCP_TOKEN and CONNECTOR_PATH_SECRET in your password manager now �
   this is the only time they are shown together.\n`);
 ok(`done. Have something to bring in? npm run ingest -- --from <folder> --repo ${brainRepo}`);
 rl.close();
+
+process.exit(healthy ? 0 : 1);
