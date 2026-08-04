@@ -18,12 +18,41 @@ export default function Guide() {
   https://<host>/api/mcp \\
   --header "Authorization: Bearer <MCP_TOKEN>"`}</pre>
 
-      <h2>Wire claude.ai <span className="count">web · iOS · desktop</span></h2>
+      <h2>Wire Cursor <span className="count">read · write</span></h2>
       <p className="lede">
-        claude.ai custom connectors cannot send headers, so they use the secret-URL alias
+        Same bearer door as Claude Code. Add this to{" "}
+        <span className="mono">~/.cursor/mcp.json</span> (or a project{" "}
+        <span className="mono">.cursor/mcp.json</span>), then refresh MCP in Settings → Tools
+        &amp; MCP. All six tools are available — prefer{" "}
+        <span className="mono">brain_corpus</span> for reads (no Anthropic key);{" "}
+        <span className="mono">brain_write</span> / <span className="mono">brain_capture</span>{" "}
+        for commits.
+      </p>
+      <pre>{`{
+  "mcpServers": {
+    "cortex": {
+      "url": "https://<host>/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_TOKEN>"
+      }
+    }
+  }
+}`}</pre>
+
+      <h2>Wire Gemini / Codex <span className="count">header-capable CLIs</span></h2>
+      <p className="lede">
+        Point each client&rsquo;s MCP HTTP config at{" "}
+        <span className="mono">https://&lt;host&gt;/api/mcp</span> with{" "}
+        <span className="mono">Authorization: Bearer &lt;MCP_TOKEN&gt;</span> — same endpoint as
+        Cursor and Claude Code, in that client&rsquo;s own syntax.
+      </p>
+
+      <h2>Wire claude.ai / ChatGPT <span className="count">header-less connectors</span></h2>
+      <p className="lede">
+        Clients that cannot send headers use the secret-URL alias
         instead: <span className="mono">/api/s/&lt;secret&gt;/mcp</span>. Add it once as a custom
-        connector on the web, and it syncs to the iOS app and desktop on its own. The secret
-        lives only in that URL and in the server's environment.
+        connector on the web (claude.ai syncs to iOS and desktop). The secret
+        lives only in that URL and in the server&rsquo;s environment.
       </p>
 
       <h2>The rituals</h2>
@@ -55,13 +84,13 @@ export default function Guide() {
 
       <h2>How answers are proven</h2>
       <p className="lede">
-        <span className="mono">brain_ask</span> reads the whole live corpus and cites the file it
-        answered from. A deterministic verifier — no model, no network — then checks the quote
-        against that file at that commit, and the stamp says exactly what that proves. A passage
-        the brain has retracted (marked <span className="mono">SUPERSEDED</span>,{" "}
-        <span className="mono">CORRECTION</span>, <span className="mono">DEPRECATED</span>,{" "}
-        <span className="mono">(was: &quot;…&quot;)</span> or{" "}
-        <span className="mono">Do not answer</span>) comes back stamped SUPERSEDED rather than
+        Prefer <span className="mono">brain_corpus</span> so the calling model reads the notes
+        directly. When you want a stamp, <span className="mono">brain_ask</span> cites the file it
+        answered from and a deterministic verifier — no model, no network — checks the quote
+        against that file at that commit. A passage the brain has retracted (marked{" "}
+        <span className="mono">SUPERSEDED</span>, <span className="mono">CORRECTION</span>,{" "}
+        <span className="mono">DEPRECATED</span>, <span className="mono">(was: &quot;…&quot;)</span>{" "}
+        or <span className="mono">Do not answer</span>) comes back stamped SUPERSEDED rather than
         VERIFIED — verbatim is exactly what a stale answer looks like in a memory that keeps its
         corrections on the page.
       </p>

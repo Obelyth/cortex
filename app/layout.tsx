@@ -1,17 +1,22 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Bebas_Neue, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 /**
- * Both faces are self-hosted: next/font/google fetches at BUILD time and serves from this
- * origin, so there is no runtime request to Google — no third-party font CDN in the loading
- * path of a page about keeping a private brain private.
+ * Faces are self-hosted: next/font/google fetches at BUILD time and serves from this origin,
+ * so there is no runtime request to Google — no third-party font CDN in the loading path of a
+ * page about keeping a private brain private.
  *
- * The DISPLAY slot ships empty on purpose. The reference deployment uses a licensed display
- * face we cannot redistribute; headers fall back to Hanken bold here. To add your own: drop a
- * font in public/fonts/, add a next/font/local block exposing --font-display, and put its
- * variable class on <html> below.
+ * Display: Bebas Neue stands in for the licensed Steelfish face we cannot redistribute —
+ * tall industrial caps for hero/section headers. Swap for a local Steelfish file later via
+ * next/font/local on --font-display if the license allows.
  */
+const display = Bebas_Neue({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-display",
+});
 const hanken = Hanken_Grotesk({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
@@ -49,7 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`${hanken.variable} ${jetbrains.variable}`}
+      className={`${display.variable} ${hanken.variable} ${jetbrains.variable}`}
     >
       <body>{children}</body>
     </html>

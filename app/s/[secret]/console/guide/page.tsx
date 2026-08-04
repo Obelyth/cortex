@@ -18,13 +18,28 @@ export default async function Guide({
         <pre className={styles.pre}>{`claude mcp add --transport http cortex \\
   https://<host>/api/mcp \\
   --header "Authorization: Bearer <MCP_TOKEN>"`}</pre>
-        <div className={styles.blockHead}><span>2 · claude.ai</span></div>
+        <div className={styles.blockHead}><span>2 · Cursor (read + write)</span></div>
+        <pre className={styles.pre}>{`{
+  "mcpServers": {
+    "cortex": {
+      "url": "https://<host>/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_TOKEN>"
+      }
+    }
+  }
+}`}</pre>
         <p className={styles.prose}>
-          Custom connectors cannot send headers, so they use the secret-URL alias{" "}
-          <span className={styles.mono}>/api/s/&lt;secret&gt;/mcp</span>. Add it once on the web
-          and it syncs to iOS and desktop on its own.
+          Put that in <span className={styles.mono}>~/.cursor/mcp.json</span> (or project{" "}
+          <span className={styles.mono}>.cursor/mcp.json</span>), refresh MCP — all six tools,
+          including write. Prefer <span className={styles.mono}>brain_corpus</span> for reads.
         </p>
-        <div className={styles.blockHead}><span>3 · The rituals</span></div>
+        <div className={styles.blockHead}><span>3 · Gemini / Codex / ChatGPT</span></div>
+        <p className={styles.prose}>
+          Header-capable CLIs use the same bearer URL as Cursor. ChatGPT (and claude.ai) use the
+          secret-URL alias <span className={styles.mono}>/api/s/&lt;secret&gt;/mcp</span>.
+        </p>
+        <div className={styles.blockHead}><span>4 · The rituals</span></div>
         <p className={styles.prose}>
           <b>Boot</b> — open with brain_context. <b>Capture</b> — &ldquo;remember: …&rdquo;
           becomes a commit. <b>Wrap up</b> — outcomes to project pages and the daily log.
@@ -33,8 +48,8 @@ export default async function Guide({
       <section className={styles.block}>
         <div className={styles.blockHead}><span>The six tools</span></div>
         {[
-          ["brain_ask", "reads the whole corpus, cites, and the verifier stamps the citation"],
-          ["brain_corpus", "hands the notes to the calling model instead — no egress"],
+          ["brain_corpus", "preferred read — notes into this conversation, no reader egress"],
+          ["brain_ask", "optional verified ask via server-side Anthropic reader + stamp"],
           ["brain_context", "profile · index · the last week of logs, one call"],
           ["brain_read", "one note by path"],
           ["brain_write", "create, replace, append — returns the commit SHA"],

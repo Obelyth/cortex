@@ -2,8 +2,9 @@
 
 /**
  * The Welcome landing — the Cortex Welcome design implemented over window scrolling.
- * Hero → principles → how → connect → the console arrival (a 260vh pinned section where
- * the working demo sheet settles in as you scroll) → footer. The animation layer is
+ * Hero → principles → how (+ dual read paths) → stamps → connect → rituals → console
+ * arrival → footer. One job per band; stamps and rituals are no longer jammed into neighbors.
+ * The animation layer is
  * written straight to the DOM rather than through React state: it is an animation, and
  * re-reconciling a landing with a live console inside it on every scroll frame is the
  * wrong trade. Reveal-on-enter is fail-safe: nothing is hidden until the observer's
@@ -14,13 +15,6 @@ import { useEffect, useRef, useState } from "react";
 import ConsoleDemo from "./console-demo";
 import styles from "./welcome.module.css";
 
-const HERO_STATS = [
-  { n: "68", label: "notes in your brain" },
-  { n: "6", label: "things Claude can do" },
-  { n: "4", label: "places you can ask" },
-  { n: "0", label: "things to keep in sync" },
-];
-
 const PRINCIPLES = [
   { n: "01", title: "One place", body: "Every note lives in one place, and Claude reads all of it each time. Nothing can drift out of date, because there is no copy to keep in sync." },
   { n: "02", title: "Every surface", body: "Terminal, web, phone, desktop. Whichever one you open, you are talking to the same notes at the same moment in time." },
@@ -28,10 +22,10 @@ const PRINCIPLES = [
 ];
 
 const STEPS = [
-  { n: "01", name: "You ask", rule: "var(--accent-cyan)", body: "A question in plain language, from wherever you happen to be working." },
-  { n: "02", name: "Claude reads", rule: "var(--ob-steel-300)", body: "All of your notes, as they are right now — not a summary and not an old copy." },
-  { n: "03", name: "It cites", rule: "var(--ob-steel-300)", body: "The answer comes back naming the note and the exact passage it came from." },
-  { n: "04", name: "It is checked", rule: "var(--ob-warn)", body: "That quote is matched against the file automatically, and the verdict travels with the answer." },
+  { n: "01", name: "You ask", rule: "accent" as const, body: "A question in plain language, from wherever you happen to be working." },
+  { n: "02", name: "Claude reads", rule: "steel" as const, body: "All of your notes, as they are right now — not a summary and not an old copy." },
+  { n: "03", name: "It cites", rule: "steel" as const, body: "The answer comes back naming the note and the exact passage it came from." },
+  { n: "04", name: "It is checked", rule: "warn" as const, body: "That quote is matched against the file automatically, and the verdict travels with the answer." },
 ];
 
 const STAMPS = [
@@ -48,7 +42,31 @@ const RITUALS = [
   { tag: "Wrapping up", text: "When you finish, what happened goes to the project page and the daily log — same habit on desktop or phone." },
 ];
 
+/** Existing product language from /tools — visual room only; not a new architecture story. */
+const READ_PATHS = [
+  {
+    tool: "brain_corpus",
+    tag: "preferred · no egress",
+    body: "The notes land in the calling conversation. The caller does its own reading — no server-side reader.",
+  },
+  {
+    tool: "brain_ask",
+    tag: "optional · stamp",
+    body: "A server-side reader cites a source, and a deterministic verifier stamps the citation.",
+  },
+];
+
 const CMD = 'claude mcp add --transport http cortex https://<host>/api/mcp --header "Authorization: Bearer <MCP_TOKEN>"';
+const CURSOR_MCP = `{
+  "mcpServers": {
+    "cortex": {
+      "url": "https://<host>/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_TOKEN>"
+      }
+    }
+  }
+}`;
 const URL_ALIAS = "https://<host>/api/s/<secret>/mcp";
 const REPO = "https://github.com/Obelyth/cortex";
 
@@ -285,7 +303,8 @@ export default function Welcome() {
             }
             paths.push({ pts, speed: 0.07 + rnd(i) * 0.09, off: rnd(i * 5) });
             const at = Math.floor(pts.length * (0.18 + 0.62 * rnd(i * 3)));
-            nodesN.push({ at, c: i % 5 === 0 ? "224,173,72" : i % 3 === 0 ? "139,111,214" : "31,189,214" });
+            // Greyscale + cyan only — no violet. Warm amber is reserved for rare nodes.
+            nodesN.push({ at, c: i % 5 === 0 ? "224,173,72" : i % 2 === 0 ? "31,189,214" : "139,151,164" });
           }
         };
         const size = () => {
@@ -321,26 +340,19 @@ export default function Welcome() {
             ctx.lineCap = "round";
             ctx.stroke();
 
-            // bokeh, not tracer fire: wide out-of-focus blooms reading as depth of field
-            for (let s = 0; s < 2; s++) {
+            // Soft signal pulses — restrained; most of the field stays chrome-silent
+            for (let s = 0; s < 1; s++) {
               const u = (((ph * P.speed + P.off + s * 0.5) % 1) + 1) % 1;
               const h = pts[Math.floor(u * (n - 1))];
-              const R = 74 + 26 * Math.sin(i * 2.1 + ph * 3);
-              const a = 0.085 * S.dim;
+              const R = 48 + 14 * Math.sin(i * 2.1 + ph * 3);
+              const a = 0.045 * S.dim;
               const g = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, R);
-              g.addColorStop(0, `rgba(96,214,236,${a.toFixed(4)})`);
-              g.addColorStop(0.45, `rgba(31,189,214,${(a * 0.42).toFixed(4)})`);
+              g.addColorStop(0, `rgba(31,189,214,${a.toFixed(4)})`);
+              g.addColorStop(0.55, `rgba(31,189,214,${(a * 0.28).toFixed(4)})`);
               g.addColorStop(1, "rgba(31,189,214,0)");
               ctx.fillStyle = g;
               ctx.beginPath();
               ctx.arc(h.x, h.y, R, 0, Math.PI * 2);
-              ctx.fill();
-              const g2 = ctx.createRadialGradient(h.x, h.y, 0, h.x, h.y, R * 0.28);
-              g2.addColorStop(0, `rgba(148,236,247,${(a * 1.5).toFixed(4)})`);
-              g2.addColorStop(1, "rgba(148,236,247,0)");
-              ctx.fillStyle = g2;
-              ctx.beginPath();
-              ctx.arc(h.x, h.y, R * 0.28, 0, Math.PI * 2);
               ctx.fill();
             }
 
@@ -401,11 +413,11 @@ export default function Welcome() {
       <main>
         {/* ─────────────── HERO ─────────────── */}
         <section className={styles.hero}>
-          <div className={styles.heroGlow} aria-hidden="true" />
+          <div className={styles.heroAtmosphere} aria-hidden="true" />
           <div data-flow="" className={styles.inner}>
-            <div data-reveal="" className={styles.badge}>
-              <span className={styles.blip} />
-              <span className={styles.badgeText}>Your own private memory · try the live demo below</span>
+            <div data-reveal="" className={styles.brandHero}>
+              <p className={styles.brandName}>Cortex</p>
+              <span className={styles.brandBy}>by Obelyth</span>
             </div>
             <h1 data-reveal="" className={styles.h1}>One memory,<br />every surface.</h1>
             <p data-reveal="" className={styles.lede}>
@@ -422,14 +434,6 @@ export default function Welcome() {
                 Read the source
               </a>
             </div>
-            <div data-reveal="" className={styles.stats}>
-              {HERO_STATS.map((s) => (
-                <span key={s.label} className={styles.stat}>
-                  <span className={styles.statN}>{s.n}</span>
-                  <span className={styles.statL}>{s.label}</span>
-                </span>
-              ))}
-            </div>
           </div>
           <div className={styles.cueWrap} aria-hidden="true">
             <span>Scroll</span>
@@ -441,9 +445,12 @@ export default function Welcome() {
         <section className={styles.section} aria-labelledby="principles-title">
           <div data-flow="" className={styles.inner}>
             <div data-reveal="" className={styles.kicker}>What it is</div>
-            <h2 data-reveal="" id="principles-title" className={styles.h2} style={{ marginBottom: 64 }}>
+            <h2 data-reveal="" id="principles-title" className={styles.h2}>
               You can check its work
             </h2>
+            <p data-reveal="" className={styles.sectionLede}>
+              One corpus. Every Claude surface. Citations that prove themselves.
+            </p>
             <div className={styles.threeUp}>
               {PRINCIPLES.map((p) => (
                 <div data-reveal="" key={p.n} className={styles.col}>
@@ -468,7 +475,13 @@ export default function Welcome() {
 
             <div className={styles.steps}>
               {STEPS.map((s) => (
-                <div data-reveal="" key={s.n} className={styles.step} style={{ borderTop: `2px solid ${s.rule}` }}>
+                <div data-reveal="" key={s.n} className={styles.step}>
+                  <span
+                    className={`${styles.stepRule} ${
+                      s.rule === "accent" ? styles.stepRuleAccent : s.rule === "warn" ? styles.stepRuleWarn : ""
+                    }`}
+                    aria-hidden="true"
+                  />
                   <div className={styles.stepN}>Step {s.n}</div>
                   <div className={styles.stepName}>{s.name}</div>
                   <p className={styles.stepBody}>{s.body}</p>
@@ -476,15 +489,43 @@ export default function Welcome() {
               ))}
             </div>
 
+            <div data-reveal="" className={styles.readPaths} aria-label="Two read paths">
+              <div className={styles.readPathsHead}>
+                <span className={styles.kicker}>Two tools, one corpus</span>
+                <p className={styles.readPathsLede}>
+                  Prefer <span className={styles.mono}>brain_corpus</span> — notes into this
+                  conversation, no reader key. <span className={styles.mono}>brain_ask</span> is
+                  optional when you want a verified stamp.
+                </p>
+              </div>
+              <div className={styles.readPathsGrid}>
+                {READ_PATHS.map((p) => (
+                  <div key={p.tool} className={styles.readPath}>
+                    <div className={styles.pathTag}>
+                      <b className={styles.mono}>{p.tool}</b>
+                      <span>{p.tag}</span>
+                    </div>
+                    <p className={styles.readPathBody}>{p.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ─────────────── STAMPS ─────────────── */}
+        <section className={`${styles.section} ${styles.sectionDeep}`} aria-labelledby="stamps-title">
+          <div data-flow="" className={styles.inner}>
+            <div data-reveal="" className={styles.kicker}>Verification · brain_ask</div>
             <div data-reveal="" className={styles.stampsGrid}>
               <div>
-                <div className={styles.stampsLead}>Every answer<br />shows its work</div>
+                <h2 id="stamps-title" className={styles.stampsLead}>Every answer<br />shows its work</h2>
                 <p className={styles.stampsNote}>
                   This check is mechanical, not another AI judging the first one. It only answers
                   one question: is that quote really in that note?
                 </p>
               </div>
-              <div>
+              <div className={styles.stampList}>
                 {STAMPS.map((s) => (
                   <div key={s.tag} className={styles.stampRow}>
                     <span className={`${styles.pill} ${styles[s.cls]}`}>{s.tag}</span>
@@ -502,8 +543,8 @@ export default function Welcome() {
             <div data-reveal="" className={styles.kicker}>Getting started</div>
             <h2 data-reveal="" id="connect-title" className={styles.h2}>Set up in one command</h2>
             <p data-reveal="" className={styles.sectionLede}>
-              Two ways to connect, depending on where you use Claude. Both are locked down: get
-              the credentials wrong and the page simply does not exist.
+              Same brain, several doors — Claude Code, Cursor, Gemini, ChatGPT, claude.ai. Get the
+              credentials wrong and the page simply does not exist.
             </p>
 
             <div className={styles.paths}>
@@ -520,11 +561,24 @@ export default function Welcome() {
   --header "Authorization: Bearer <MCP_TOKEN>"`}</pre>
               </div>
               <div data-reveal="" className={styles.pathCard}>
-                <div className={styles.pathTag}><b>Path 02</b><span>secret url</span></div>
-                <div className={styles.pathTitle}>claude.ai</div>
+                <div className={styles.pathTag}><b>Path 02</b><span>read + write</span></div>
+                <div className={styles.pathTitle}>Cursor</div>
                 <p className={styles.pathBody}>
-                  The Claude apps connect with a private link instead of a token. Add it once on
-                  the web and your phone and desktop pick it up automatically.
+                  Same bearer door. Drop into mcp.json, refresh MCP — all six tools, including
+                  write. Prefer brain_corpus for reads.
+                </p>
+                <div className={styles.preHead}>
+                  <span>~/.cursor/mcp.json</span>
+                  <CopyButton text={CURSOR_MCP} label="Copy the Cursor MCP config" />
+                </div>
+                <pre className={styles.pre}>{CURSOR_MCP}</pre>
+              </div>
+              <div data-reveal="" className={styles.pathCard}>
+                <div className={styles.pathTag}><b>Path 03</b><span>secret url</span></div>
+                <div className={styles.pathTitle}>claude.ai / ChatGPT</div>
+                <p className={styles.pathBody}>
+                  Header-less apps connect with a private link instead of a token. Gemini CLI uses
+                  the same bearer URL as Cursor.
                 </p>
                 <div className={styles.preHead}>
                   <span>connector url</span>
@@ -535,11 +589,21 @@ export default function Welcome() {
 # Settings → Connectors → Add custom`}</pre>
               </div>
             </div>
+          </div>
+        </section>
 
+        {/* ─────────────── RITUALS ─────────────── */}
+        <section className={`${styles.section} ${styles.sectionTint}`} aria-labelledby="rituals-title">
+          <div data-flow="" className={styles.inner}>
+            <div data-reveal="" className={styles.kicker}>In practice</div>
+            <h2 data-reveal="" id="rituals-title" className={styles.h2}>Three habits</h2>
+            <p data-reveal="" className={styles.sectionLede}>
+              The same rituals on every surface — boot context, capture a note, wrap a session.
+            </p>
             <div data-reveal="" className={`${styles.threeUp} ${styles.rituals}`}>
               {RITUALS.map((r) => (
                 <div key={r.tag} className={styles.col}>
-                  <div className={styles.kicker} style={{ marginBottom: 12 }}>{r.tag}</div>
+                  <div className={styles.colN}>{r.tag}</div>
                   <p className={styles.colBody}>{r.text}</p>
                 </div>
               ))}

@@ -103,9 +103,11 @@ export const BARS = [3, 2, 1, 0, 1, 2, 6, 11, 16, 21, 24, 19, 27, 33, 25, 18, 22
 
 export const SURFACES = [
   { name: "Claude Code", sub: "terminal", auth: "bearer", state: "ONLINE", status: "pass" as BadgeStatus, ago: "12 s" },
+  { name: "Cursor", sub: "IDE · read+write", auth: "bearer", state: "ONLINE", status: "pass" as BadgeStatus, ago: "38 s" },
+  { name: "Gemini CLI", sub: "terminal", auth: "bearer", state: "ONLINE", status: "pass" as BadgeStatus, ago: "3 min" },
+  { name: "ChatGPT", sub: "custom connector", auth: "connector secret", state: "ONLINE", status: "pass" as BadgeStatus, ago: "9 min" },
   { name: "iOS", sub: "claude.ai app", auth: "connector secret", state: "ONLINE", status: "pass" as BadgeStatus, ago: "4 min" },
-  { name: "Web", sub: "claude.ai", auth: "connector secret", state: "ONLINE", status: "pass" as BadgeStatus, ago: "26 min" },
-  { name: "Desktop", sub: "Mac", auth: "connector secret", state: "IDLE", status: "neutral" as BadgeStatus, ago: "6 hr" },
+  { name: "Web", sub: "claude.ai", auth: "connector secret", state: "IDLE", status: "neutral" as BadgeStatus, ago: "6 hr" },
 ];
 
 export const COMMITS = [
@@ -162,8 +164,8 @@ export const RITUALS = [
 ];
 
 export const TOOLS = [
-  { name: "brain_ask", role: "the retriever", what: "Reads the whole live corpus, then proves the quote it cited against the file." },
-  { name: "brain_corpus", role: "the direct read", what: "Hands the notes to the calling conversation. No model call." },
+  { name: "brain_corpus", role: "the direct read", what: "Preferred read — hands notes to this conversation. No reader model." },
+  { name: "brain_ask", role: "verified ask", what: "Optional: server-side reader plus a deterministic citation stamp." },
   { name: "brain_context", role: "the boot call", what: "Profile, index and the last week of log entries, in one call." },
   { name: "brain_read", role: "one note", what: "One note by path. Paths are allowlisted by shape." },
   { name: "brain_write", role: "the commit", what: "Create, replace or append. A save without a commit SHA did not happen." },

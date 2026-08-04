@@ -73,6 +73,12 @@
   --glow-cyan: 0 0 0 1px rgba(31, 189, 214, 0.5), 0 0 18px -2px rgba(62, 211, 230, 0.35);
   --radius-sm: 5px;
   --radius-md: 8px;
+
+  /* —— Motion — crisp, no bounce ——————————————————————— */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 120ms;
+  --dur-2: 180ms;
+  --dur-3: 280ms;
 }
 
 * { box-sizing: border-box; }
@@ -114,7 +120,7 @@ body::before {
   -webkit-mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 25%, transparent 100%);
   mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 25%, transparent 100%);
 }
-.wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 30px 22px 80px; }
+.wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 40px 24px 96px; }
 
 /* masthead shared by both pages */
 .mast {
@@ -122,8 +128,8 @@ body::before {
   padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 26px;
 }
 .mast h1 {
-  font-family: var(--display); font-weight: 700; font-size: 28px;
-  letter-spacing: var(--tracking-display); text-transform: uppercase;
+  font-family: var(--display); font-weight: 400; font-size: 30px;
+  letter-spacing: 0.06em; text-transform: uppercase;
   line-height: 1.04; margin: 0; color: var(--bright);
 }
 /* the lockup: emblem + wordmark + byline. The emblem is the brand's one warm note. */
@@ -171,13 +177,13 @@ pre .dim { color: var(--faint); }
 h2 {
   font-family: var(--mono); font-size: 11px; font-weight: 500;
   letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--muted);
-  margin: 38px 0 6px; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  margin: 52px 0 10px; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
 }
 h2 .count {
   color: var(--faint); letter-spacing: 0.04em; font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
-.lede { font-size: 13.5px; color: var(--muted); margin: 0 0 15px; max-width: 68ch; }
+.lede { font-size: 13.5px; color: var(--muted); margin: 0 0 20px; max-width: 62ch; line-height: 1.65; }
 .panel {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius-md); box-shadow: var(--elev-1); overflow: hidden;

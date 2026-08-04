@@ -507,11 +507,30 @@ export default function ConsoleDemo() {
   --header "Authorization: Bearer <MCP_TOKEN>"`}</pre>
                   </div>
                   <div className={styles.card}>
-                    <div className={styles.statLabel}>Wire claude.ai</div>
+                    <div className={styles.statLabel}>Wire Cursor · read + write</div>
                     <p className={styles.guideText}>
-                      Custom connectors cannot send headers, so they use the secret-URL alias{" "}
-                      <span className={styles.inlineMono}>{"/api/s/<secret>/mcp"}</span>. Add it once on the
-                      web and it syncs to iOS and desktop on its own.
+                      Same bearer door. Drop into{" "}
+                      <span className={styles.inlineMono}>~/.cursor/mcp.json</span>, refresh MCP —
+                      all six tools, including write. Prefer{" "}
+                      <span className={styles.inlineMono}>brain_corpus</span> for reads.
+                    </p>
+                    <pre className={styles.pre}>{`{
+  "mcpServers": {
+    "cortex": {
+      "url": "https://<host>/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <MCP_TOKEN>"
+      }
+    }
+  }
+}`}</pre>
+                  </div>
+                  <div className={styles.card}>
+                    <div className={styles.statLabel}>Wire claude.ai / ChatGPT</div>
+                    <p className={styles.guideText}>
+                      Header-less clients use the secret-URL alias{" "}
+                      <span className={styles.inlineMono}>{"/api/s/<secret>/mcp"}</span>. Gemini CLI
+                      and Codex use the same bearer URL as Cursor.
                     </p>
                   </div>
                   <div className={`${styles.card} ${styles.flush}`}>

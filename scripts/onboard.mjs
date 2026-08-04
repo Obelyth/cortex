@@ -167,7 +167,24 @@ say(`  Claude Code (any machine — run once, user scope):
       claude mcp add --transport http cortex ${url}/api/mcp \\
         --header "Authorization: Bearer ${liveToken}"
 
-  claude.ai (web → syncs to iOS and desktop on its own):
+  Cursor (read + write — ~/.cursor/mcp.json or .cursor/mcp.json):
+      {
+        "mcpServers": {
+          "cortex": {
+            "url": "${url}/api/mcp",
+            "headers": { "Authorization": "Bearer ${liveToken}" }
+          }
+        }
+      }
+      Then refresh MCP in Cursor Settings → Tools & MCP. All six tools
+      (brain_corpus, brain_read, brain_write, …) are available — prefer
+      brain_corpus for reads (no Anthropic key needed).
+
+  Gemini CLI / Codex CLI (header-capable, same door as Cursor):
+      Point the client's MCP HTTP config at ${url}/api/mcp
+      with Authorization: Bearer ${liveToken}
+
+  claude.ai / ChatGPT custom connectors (header-less — secret URL):
       Settings → Connectors → Add custom connector
       URL: ${url}/api/s/${liveSecret}/mcp
 

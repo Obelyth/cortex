@@ -7,16 +7,16 @@ import { BrandFoot, Mast } from "../mast";
  */
 const TOOLS = [
   {
-    name: "brain_ask",
-    role: "the retriever",
-    what: "Fetches the whole live corpus in one tarball, hands a reader model the actual notes, and then checks the quote it cited against the file — deterministically, no model in that loop.",
-    returns: "an answer, a verdict stamp, and the evidence line it was proven against",
+    name: "brain_corpus",
+    role: "the preferred read",
+    what: "Returns the notes into the calling conversation so the caller reads the material itself — the straight coded path. No reader model is called and nothing leaves the brain's own storage.",
+    returns: "the live corpus, or the notes most relevant to a question",
   },
   {
-    name: "brain_corpus",
-    role: "the direct read",
-    what: "Returns the notes into the calling conversation instead, so the caller reads the material itself. No model is called and nothing leaves the brain's own storage.",
-    returns: "the live corpus, or the notes most relevant to a question",
+    name: "brain_ask",
+    role: "verified ask",
+    what: "Optional path: fetches the corpus, hands a server-side Anthropic reader the notes, then checks the quote it cited against the file — deterministically, no model in that verify loop.",
+    returns: "an answer, a verdict stamp, and the evidence line it was proven against",
   },
   {
     name: "brain_context",
@@ -71,14 +71,15 @@ export default function Tools() {
 
       <h2>The read path</h2>
       <p className="lede">
-        Two ways to the same corpus. <span className="mono">brain_ask</span> is for when you want
-        an answer: a reader model reads the actual notes and cites its source, and a deterministic
-        verifier stamps the citation — <span className="mono">VERIFIED</span>,{" "}
+        Two ways to the same corpus. Prefer <span className="mono">brain_corpus</span>: the notes
+        land in the calling conversation and the caller does its own reading — no separate reader
+        key. <span className="mono">brain_ask</span> is optional when you want a server-side reader
+        plus a deterministic citation stamp — <span className="mono">VERIFIED</span>,{" "}
         <span className="mono">SUPERSEDED</span>, <span className="mono">PARTIALLY VERIFIED</span>,{" "}
-        <span className="mono">NOT IN BRAIN</span> or <span className="mono">UNVERIFIED</span>. <span className="mono">brain_corpus</span> is for when you want the material:
-        the notes land in the calling conversation and the caller does its own reading. Ranking a
-        generated index was retired after it measured <span className="mono num">55%</span> against
-        reading the text at <span className="mono num">97%</span>.
+        <span className="mono">NOT IN BRAIN</span> or <span className="mono">UNVERIFIED</span>.
+        Ranking a generated index was retired after it measured{" "}
+        <span className="mono num">55%</span> against reading the text at{" "}
+        <span className="mono num">97%</span>.
       </p>
 
       <h2>Auth</h2>
@@ -93,7 +94,7 @@ export default function Tools() {
 
       <footer className="foot">
         <span className="mono">
-          brain_ask · brain_corpus · brain_context · brain_read · brain_write · brain_capture
+          brain_corpus · brain_ask · brain_context · brain_read · brain_write · brain_capture
         </span>
       </footer>
       <BrandFoot />

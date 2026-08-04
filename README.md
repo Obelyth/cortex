@@ -53,8 +53,8 @@ Every ingested note gets a provenance line, because a brain that cannot say wher
 
 | tool | what it does |
 |---|---|
-| `brain_ask` | The retriever. Fetches the whole live corpus as one tarball, hands a reader model the actual notes, then checks the quote it cited against the file — deterministically, no model in that loop. |
-| `brain_corpus` | Returns the notes into the calling conversation instead. No model call; nothing leaves your storage. |
+| `brain_corpus` | **Preferred read.** Returns the notes into the calling conversation so the caller reads them directly. No model call; nothing leaves your storage. |
+| `brain_ask` | Optional verified ask. Fetches the corpus, hands a server-side Anthropic reader the notes, then checks the quote against the file — deterministically, no model in that verify loop. |
 | `brain_context` | The boot call: profile, index, and the last week of logs. |
 | `brain_read` | One note, by path. Paths are allowlisted by shape. |
 | `brain_write` | Create, replace, or append. Returns the commit SHA — a save without a SHA did not happen. |
@@ -108,17 +108,33 @@ tarball as your notes, and the corpus loader routes it to the map only: the read
 Cortex speaks **standard MCP over streamable HTTP** — Claude is its first-class client, not a
 dependency. Any MCP-capable agent connects through one of the same two doors:
 
-- **Header-capable clients** (Codex CLI, Gemini CLI, Cursor, most IDE agents): point them at
-  `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` — the same wiring as Claude Code, in each
-  client's own MCP config syntax.
-- **Header-less clients** (ChatGPT custom connectors, and anything else that only takes a URL):
-  the secret-URL door, `/api/s/<CONNECTOR_PATH_SECRET>/mcp` — the same mechanism claude.ai uses,
-  subject to each vendor's own connector availability and policies.
+- **Header-capable clients** (Cursor, Codex CLI, Gemini CLI, Claude Code, most IDE agents): point
+  them at `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>`.
 
-One nuance: `brain_ask`'s server-side reader calls the Anthropic API regardless of which client
-asked, so it needs `ANTHROPIC_API_KEY` even in a GPT or Gemini shop. The other five tools are
-fully model-agnostic — and `brain_corpus` exists precisely so the *calling* model can read the
-notes itself, whoever it is. The verifier never involves a model at all.
+  Cursor (`~/.cursor/mcp.json` or project `.cursor/mcp.json`) — full read + write:
+
+  ```json
+  {
+    "mcpServers": {
+      "cortex": {
+        "url": "https://<host>/api/mcp",
+        "headers": {
+          "Authorization": "Bearer <MCP_TOKEN>"
+        }
+      }
+    }
+  }
+  ```
+
+  Then refresh MCP in Cursor Settings → Tools & MCP. Prefer `brain_corpus` for reads;
+  `brain_write` / `brain_capture` for commits.
+
+- **Header-less clients** (ChatGPT custom connectors, claude.ai, and anything else that only
+  takes a URL): the secret-URL door, `/api/s/<CONNECTOR_PATH_SECRET>/mcp`.
+
+`brain_corpus` is the default read path for every client — the calling model reads the notes
+itself, no Anthropic key required. `brain_ask` is optional when you want a verified stamp; that
+path alone calls Anthropic and needs `ANTHROPIC_API_KEY`. The verifier never involves a model.
 
 ## Privacy posture, in one paragraph
 
