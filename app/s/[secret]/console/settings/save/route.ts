@@ -1,5 +1,5 @@
-import { safeEqualStrings } from "@/lib/auth";
 import { readSettings, writeSettings } from "@/lib/settings";
+import { bad, gateConsolePost } from "../../post-gate";
 import { readGuestPolicy, writeGuestPolicy, isScopeEntry } from "@/lib/guest";
 import { PROVIDERS, providerOf, type Provider, type ReaderModel } from "@/lib/reader";
 
@@ -18,52 +18,13 @@ import { PROVIDERS, providerOf, type Provider, type ReaderModel } from "@/lib/re
  */
 export const dynamic = "force-dynamic";
 
-function bad(message: string, status = 400): Response {
-  return Response.json({ error: message }, { status });
-}
-
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ secret: string }> }
 ): Promise<Response> {
-  const { secret } = await ctx.params;
-  const expected = process.env.CONNECTOR_PATH_SECRET;
-  if (!expected || !safeEqualStrings(secret, expected)) {
-    return new Response(null, { status: 404 });
-  }
-
-  // Same-origin only. There is no cookie or header auth to ride here — the secret is in the
-  // path — so this is not the CSRF barrier, it is the cheap check that a form on another site
-  // never reaches a control that changes where the corpus is sent.
-  //
-  // Matched against the Host header OR the request URL, because neither is reliably both: Host
-  // is absent on a synthesised Request, and req.url behind a custom domain can carry the
-  // deployment host rather than the one the browser typed. Requiring both to agree would refuse
-  // legitimate writes; accepting either still refuses every genuinely cross-site origin.
-  const origin = req.headers.get("origin");
-  if (origin) {
-    let from: string;
-    try {
-      from = new URL(origin).host;
-    } catch {
-      return bad("bad origin", 403);
-    }
-    const mine = new Set([req.headers.get("host"), new URL(req.url).host].filter(Boolean));
-    if (!mine.has(from)) return bad("cross-origin request refused", 403);
-  }
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return bad("body must be JSON");
-  }
-  // Arrays are objects; an array body carries neither field and would otherwise sail through as
-  // a no-op write that reports success.
-  if (body === null || typeof body !== "object" || Array.isArray(body)) {
-    return bad("body must be a JSON object");
-  }
-  const b = body as Record<string, unknown>;
+  const gate = await gateConsolePost(req, ctx.params);
+  if ("deny" in gate) return gate.deny;
+  const b = gate.body;
 
   const current = await readSettings();
 
