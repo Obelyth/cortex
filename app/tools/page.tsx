@@ -1,7 +1,7 @@
 import { BrandFoot, Mast } from "../mast";
 
 /**
- * The six tools, documented for a reader rather than a model. This page is documentation only:
+ * The nine tools, documented for a reader rather than a model. This page is documentation only:
  * the tools themselves are reachable exclusively over MCP, behind the bearer token or the
  * connector secret. Nothing here calls anything.
  */
@@ -49,9 +49,9 @@ export default function Tools() {
     <div className="wrap">
       <Mast active="/tools" />
 
-      <h2>The six tools <span className="count">same corpus, every surface</span></h2>
+      <h2>The nine tools <span className="count">same corpus, every surface</span></h2>
       <p className="lede">
-        One MCP server, six tools, reachable only with the bearer token or the connector
+        One MCP server, nine tools on the trusted doors (two on the guest door), reachable only with the bearer token or the connector
         secret. This page documents them; it does not expose them.
       </p>
       <div className="panel">
@@ -74,7 +74,9 @@ export default function Tools() {
         Two ways to the same corpus. <span className="mono">brain_ask</span> is for when you want
         an answer: a reader model reads the actual notes and cites its source, and a deterministic
         verifier stamps the citation — <span className="mono">VERIFIED</span>,{" "}
-        <span className="mono">SUPERSEDED</span>, <span className="mono">PARTIALLY VERIFIED</span>,{" "}
+        <span className="mono">SUPERSEDED</span>, <span className="mono">CORRECTED</span>{" "}
+        (an in-place correction: answer from the current claim),{" "}
+        <span className="mono">PARTIALLY VERIFIED</span>,{" "}
         <span className="mono">NOT IN BRAIN</span> or <span className="mono">UNVERIFIED</span>. <span className="mono">brain_corpus</span> is for when you want the material:
         the notes land in the calling conversation and the caller does its own reading. Ranking a
         generated index was retired after it measured <span className="mono num">55%</span> against
@@ -83,11 +85,14 @@ export default function Tools() {
 
       <h2>Auth</h2>
       <p className="lede">
-        Two paths onto one bearer-gated handler. A bearer token at{" "}
-        <span className="mono">/api/mcp</span> for clients that send headers; a secret URL for
-        clients that cannot. Both fail closed: a bad bearer gets a standard{" "}
-        <span className="mono num">401</span>; a wrong path secret gets an empty{" "}
-        <span className="mono num">404</span> — the secret door does not advertise that
+        Two paths onto one bearer-gated handler, and a third onto a smaller one. A bearer token
+        at <span className="mono">/api/mcp</span> for clients that send headers; a secret URL
+        for clients that cannot; a guest door at{" "}
+        <span className="mono">/api/g/&lt;secret&gt;/mcp</span> that registers only a scoped{" "}
+        <span className="mono">brain_ask</span> and <span className="mono">brain_propose</span> —
+        off until <span className="mono">GUEST_PATH_SECRET</span> is set. All fail closed: a bad
+        bearer gets a standard <span className="mono num">401</span>; a wrong path secret gets an
+        empty <span className="mono num">404</span> — the secret doors do not advertise that
         anything lives there.
       </p>
 

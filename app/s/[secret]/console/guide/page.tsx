@@ -30,6 +30,12 @@ export default async function Guide({
 
   const guestOpen = Boolean(process.env.GUEST_PATH_SECRET?.trim());
   const bearerSet = Boolean(process.env.MCP_TOKEN?.trim());
+  // The guest door hard-requires the KV store: budget metering (lib/guest.ts) and proposals
+  // (lib/proposals.ts) both throw without one, so a secret with no KV is a door that errors on
+  // every call. Presence of both vars is the same test lib/kv.ts applies before constructing
+  // its client — checked here directly because this screen reads presence only, never values.
+  const kvSet = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+  const guestServes = guestOpen && kvSet;
 
   // One KV read, so the roles strip names the ACTUAL reader rather than describing the idea of
   // one. A resolution failure renders as its sentence elsewhere; here the cell degrades to the
@@ -68,7 +74,7 @@ export default async function Guide({
     },
     {
       name: "Guests",
-      who: guestOpen ? "door open" : "door closed",
+      who: guestOpen ? (kvSet ? "door open" : "door cannot serve") : "door closed",
       does: "ask (scoped) · propose",
       detail: `read for them by ${guestReader}, from the areas you share — never the pen`,
     },
@@ -102,8 +108,12 @@ export default async function Guide({
       name: "Guest",
       who: "Assistants you do not control — another person's model, or one you use but do not trust with the pen.",
       grants: "asks · proposes — never writes",
-      open: guestOpen,
-      state: guestOpen ? "open · scoped on the readers screen" : "closed · set GUEST_PATH_SECRET",
+      open: guestServes,
+      state: guestServes
+        ? "open · scoped on the readers screen"
+        : guestOpen
+          ? "secret set · KV missing — door cannot serve"
+          : "closed · set GUEST_PATH_SECRET",
       wire: `https://<host>/api/g/<GUEST_PATH_SECRET>/mcp`,
       note: "Questions are answered by a Claude reader from the areas you share; suggestions wait on the attention screen until accepted. The corpus itself is never handed over.",
       // The only path with a policy attached, so it is the only one that links onward.

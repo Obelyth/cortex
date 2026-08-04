@@ -26,7 +26,15 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://obelyth-cortex.vercel.app"),
+  // Derived from the deployment so every self-hosted instance emits canonical and Open Graph
+  // URLs for its own host. Vercel injects VERCEL_PROJECT_PRODUCTION_URL (bare hostname, no
+  // scheme) into every build; the literal below is only the final fallback for builds that
+  // run outside Vercel, where absolute metadata URLs have no host to resolve against.
+  metadataBase: new URL(
+    process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "https://obelyth-cortex.vercel.app",
+  ),
   title: "Cortex by Obelyth — one memory, every surface",
   description:
     "Your notes, in one place, available to Claude everywhere you use it. Ask a question and get the answer plus the exact line it came from — checked automatically, or an honest “that isn't in here.”",
