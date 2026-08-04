@@ -17,11 +17,11 @@ export function Reveal({
   label,
   children,
   compact = false,
-}: {
+}: Readonly<{
   label: string;
   children: ReactNode;
   compact?: boolean;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
   return (
     <span className={compact ? "revWrap revCompact" : "revWrap"}>
