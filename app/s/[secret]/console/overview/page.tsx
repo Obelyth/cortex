@@ -1,15 +1,36 @@
 import { requireSecret } from "@/lib/gate";
 import { health } from "@/lib/health";
 import { listCommits, type CommitInfo } from "@/lib/github";
+import { readCalls, SCOPE_NOTE } from "@/lib/calls";
+import { readSettings, safeActiveReader } from "@/lib/settings";
+import { providerOf, providerConfigured } from "@/lib/reader";
 import styles from "../console.module.css";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export const metadata = { title: "Overview · Cortex console" };
 
-/** Overview — the instrument row, the write rhythm, the corpus split and the ingest feed.
- *  All real: panels for telemetry cortex does not keep (calls/hour, verdict stream,
- *  last-seen surfaces) are cut rather than faked. */
+const VERDICT_ORDER = [
+  { tag: "Verified", stamp: "VERIFIED", cls: styles.vPass },
+  { tag: "Superseded", stamp: "SUPERSEDED", cls: styles.vWarn },
+  // Its own row, not folded into Superseded: "answered from dead text" and "answered from a
+  // passage that records its own correction" are different events, and only the first is a
+  // problem. Counting them together is what let the stamp start crying wolf.
+  { tag: "Corrected", stamp: "CORRECTED", cls: styles.vCyan },
+  { tag: "Partially verified", stamp: "PARTIALLY VERIFIED", cls: styles.vWarn },
+  { tag: "Not in brain", stamp: "NOT IN BRAIN", cls: styles.vCyan },
+  { tag: "Unverified", stamp: "UNVERIFIED", cls: styles.vFail },
+  { tag: "Error", stamp: "ERROR", cls: styles.vFail },
+];
+
+/**
+ * Overview — corpus load and the three counts, then what the server has actually seen: calls
+ * per hour, the verdict split, which doors are in use, and the ingest feed.
+ *
+ * The call panels read the in-process log, which starts empty on a cold boot. Every one of them
+ * states the window it really covers rather than claiming a flat 24 hours — an empty chart
+ * labelled "24 hours" would read as silence when it means "no log yet".
+ */
 export default async function Overview({
   params,
 }: {
@@ -19,108 +40,304 @@ export default async function Overview({
   const h = await health();
   let commits: CommitInfo[] = [];
   try {
-    commits = await listCommits(100);
+    commits = await listCommits(20);
   } catch {
-    /* feed degrades to empty */
+    /* the ingest feed degrades to empty */
   }
 
   const t = h.totals;
   const pct = Math.round((t.tokens / t.ceiling) * 100);
   const crit = h.triage.filter((q) => q.sev === "crit").length;
 
-  const byDay = new Map<string, number>();
-  for (const c of commits) {
-    const d = c.date.slice(0, 10);
-    byDay.set(d, (byDay.get(d) ?? 0) + 1);
-  }
-  const days: { label: string; n: number }[] = [];
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
-    days.push({ label: d.slice(5), n: byDay.get(d) ?? 0 });
-  }
-  const maxDay = Math.max(1, ...days.map((d) => d.n));
-  const maxDir = Math.max(1, ...h.byDir.map((d) => d.tokens));
-  const ago = (iso: string) => {
-    const t = new Date(iso).getTime();
-    if (!Number.isFinite(t)) return "—";
-    const m = Math.floor((Date.now() - t) / 60_000);
+  const now = Date.now();
+  const { rows, partial, covers, durable, source } = await readCalls(86_400_000, now);
+  const hours = Array.from({ length: 24 }, (_, i) => {
+    // (24 - i), not (23 - i): the last bucket must end at now, or the bar the axis calls
+    // "now" covers the next hour and is structurally always empty.
+    const from = now - (24 - i) * 3_600_000;
+    const to = from + 3_600_000;
+    const inHour = rows.filter((r) => r.ts >= from && r.ts < to);
+    return {
+      total: inHour.length,
+      verified: inHour.filter((r) => r.stamp === "VERIFIED").length,
+    };
+  });
+  const peak = Math.max(1, ...hours.map((x) => x.total));
+  const verdictRows = VERDICT_ORDER.map((v) => ({
+    ...v,
+    n: rows.filter((r) => r.stamp === v.stamp).length,
+  }));
+  const verdictMax = Math.max(1, ...verdictRows.map((v) => v.n));
+  // Only stamps with a bar. READ / COMMITTED / BOOT are real calls with no verdict, so
+  // counting them in this header would read as verdicts that came back blank.
+  const verdictTotal = verdictRows.reduce((a, v) => a + v.n, 0);
+
+  // Which reader answered, per model. The verdict panel above is an aggregate across every
+  // model that ran in the window, and once more than one can read the brain an aggregate stops
+  // being a fact about trustworthiness — it is a blend whose mix nobody stated. This is the
+  // mix. Rows logged before the model field shipped are counted OUT LOUD as unattributed
+  // rather than folded into whichever model happens to be reading today.
+  const asks = rows.filter((r) => r.tool === "brain_ask");
+  const attributed = asks.filter((r) => r.model);
+  const unattributed = asks.length - attributed.length;
+  const byReader = [...new Set(attributed.map((r) => r.model as string))]
+    .map((m) => {
+      const mine = attributed.filter((r) => r.model === m);
+      return {
+        model: m,
+        calls: mine.length,
+        verified: mine.filter((r) => r.stamp === "VERIFIED").length,
+        bad: mine.filter((r) => r.stamp === "UNVERIFIED" || r.stamp === "ERROR").length,
+      };
+    })
+    .sort((a, b) => b.calls - a.calls);
+  const byMax = Math.max(1, ...byReader.map((b) => b.calls));
+
+  const settings = await readSettings();
+  const { active, error: resolveError } = await safeActiveReader(settings);
+  const activeProvider = active ? providerOf(active.model)! : null;
+  // Presence only — the secret itself never reaches a rendered page.
+  const guestOpen = Boolean(process.env.GUEST_PATH_SECRET?.trim());
+
+  const doors = (
+    [
+      { name: "Terminal", auth: "bearer", key: "terminal" as const, trust: "writes" },
+      { name: "Connectors", auth: "secret url", key: "connector" as const, trust: "writes" },
+      // Listed even when unconfigured, so the panel answers "is there a guest door open?"
+      // rather than only ever showing doors that happen to have traffic.
+      { name: "Guest", auth: "guest url", key: "guest" as const, trust: "proposes only" },
+    ]
+  ).map((d) => {
+    const mine = rows.filter((r) => r.surface === d.key);
+    return {
+      ...d,
+      last: mine.length ? Math.max(...mine.map((r) => r.ts)) : null,
+      calls: mine.length,
+    };
+  });
+
+  const ago = (ms: number) => {
+    const m = Math.floor((now - ms) / 60_000);
     return m < 1 ? "now" : m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} hr` : `${Math.floor(m / 1440)} d`;
   };
+  const agoIso = (iso: string) => {
+    const ts = new Date(iso).getTime();
+    return Number.isFinite(ts) ? ago(ts) : "—";
+  };
+  const window =
+    covers < 60_000
+      ? "log just started"
+      : `log covers ${covers < 3_600_000 ? `${Math.round(covers / 60_000)} min` : `${Math.round(covers / 3_600_000)} hr`}`;
 
   return (
-    <>
-      <div className={styles.instruments}>
-        <div className={styles.cell}>
-          <div className={styles.cellLabel}>Corpus load</div>
-          <div className={styles.big}>{pct}<span className={styles.unit}>%</span></div>
-          <div className={styles.meter}><i style={{ width: `${pct}%` }} /></div>
-          <div className={styles.cellNote}>
-            {t.tokens.toLocaleString()} of {t.ceiling.toLocaleString()} tok · one tarball, one head lookup
+    <div className={styles.screen}>
+      <div className={styles.headRow}>
+        <div>
+          <div className={styles.label}>Corpus load</div>
+          <div className={styles.bigRow}>
+            <span className={styles.big}>{pct}</span>
+            <span className={styles.bigUnit}>%</span>
+          </div>
+          <div className={styles.meter}><i style={{ width: `${Math.min(100, pct)}%` }} /></div>
+          <div className={styles.note}>
+            {t.tokens.toLocaleString()} of {t.ceiling.toLocaleString()} tokens · one tarball, one head lookup
           </div>
         </div>
-        <div className={styles.cell}>
-          <div className={styles.cellLabel}>Notes live</div>
-          <div className={styles.big}>{t.notes}</div>
-          <div className={styles.cellNote}>{t.blocks.toLocaleString()} blocks · {h.byDir.length} directories</div>
-        </div>
-        <div className={styles.cell}>
-          <div className={styles.cellLabel}>Retracted</div>
-          <div className={styles.big}>{t.retractedBlocks}</div>
-          <div className={styles.cellNote}>kept on the page, in {t.notesWithRetracted} notes</div>
-        </div>
-        <div className={`${styles.cell} ${crit ? styles.cellCrit : styles.cellWarn}`}>
-          <div className={styles.cellLabel}>Attention</div>
-          <div className={styles.big}>{h.triage.length}</div>
-          <div className={styles.cellNote}>{crit} critical · {h.triage.length - crit} warnings</div>
+        <div className={styles.statTrio}>
+          <div className={styles.stat}>
+            <div className={styles.label}>Notes live</div>
+            <div className={styles.statN}>{t.notes}</div>
+            <div className={styles.note}>{t.blocks.toLocaleString()} blocks</div>
+          </div>
+          <div className={styles.stat}>
+            <div className={styles.label}>Retracted</div>
+            <div className={styles.statN}>{t.retractedBlocks}</div>
+            <div className={styles.note}>in {t.notesWithRetracted} notes</div>
+          </div>
+          <div className={styles.stat}>
+            <div className={styles.label}>Attention</div>
+            <div className={`${styles.statN} ${styles.statWarn}`}>{h.triage.length}</div>
+            <div className={styles.note}>{crit} critical</div>
+          </div>
         </div>
       </div>
 
-      <section className={styles.block}>
-        <div className={styles.blockHead}>
-          <span>Writes · last 30 days</span>
-          <span className={styles.dim}>
-            every bar is commits, not calls — cortex keeps no call log
-            {commits.length === 100 ? " · newest 100 writes shown" : ""}
-          </span>
-        </div>
-        <div className={styles.chart} role="img"
-          aria-label={`Commit activity, last 30 days, peak ${maxDay} per day`}>
-          {days.map((d) => (
-            <i key={d.label} style={{ height: `${Math.max(4, (d.n / maxDay) * 100)}%` }}
-              className={d.n ? styles.barOn : styles.barOff} title={`${d.label}: ${d.n}`} />
-          ))}
-        </div>
-        <div className={styles.chartAxis}>
-          <span>{days[0].label}</span><span>{days[15].label}</span><span>now</span>
-        </div>
-      </section>
+      <div className={styles.rule} />
 
-      <div className={styles.twoCol}>
-        <section className={styles.block}>
-          <div className={styles.blockHead}><span>Corpus by directory</span></div>
-          {h.byDir.map((d) => (
-            <div key={d.dir} className={styles.distRow}>
-              <span className={styles.distLabel}>{d.dir}</span>
-              <span className={styles.distBar}><i style={{ width: `${(d.tokens / maxDir) * 100}%` }} /></span>
-              <span className={styles.distN}>{d.tokens.toLocaleString()} tok · {d.notes}</span>
+      <div className={styles.split}>
+        <div className={styles.splitMain}>
+          <section>
+            <div className={styles.sectionHead}>
+              <span className={styles.label}>Calls · last 24 hours</span>
+              <span className={styles.note}>
+                cyan = verified · steel = everything else{partial ? ` · ${window}` : ""}
+                {source === "store" ? "" : source === "unconfigured"
+                  ? " · no durable store configured"
+                  : " · in-memory fallback (store unreachable)"}
+              </span>
             </div>
-          ))}
-        </section>
+            <div className={styles.chart} role="img"
+              aria-label={`Calls per hour, peak ${peak}${partial ? `, ${window}` : ""}`}>
+              {hours.map((x, i) => (
+                <div key={i} className={styles.barCol}>
+                  <i className={styles.barRest}
+                    style={{ height: `${((x.total - x.verified) / peak) * 100}%` }} />
+                  <i className={styles.barVerified}
+                    style={{ height: `${(x.verified / peak) * 100}%` }} />
+                </div>
+              ))}
+            </div>
+            <div className={styles.chartAxis}>
+              {/* Relative, because the window is: absolute clock labels are only true for a
+                  page loaded exactly at midnight. */}
+              <span>-24h</span><span>-18h</span><span>-12h</span><span>-6h</span><span>now</span>
+            </div>
+            {rows.length === 0 && (
+              <div className={styles.empty}>
+                {durable
+                  ? partial
+                    ? `No calls in the ${window.replace("log covers ", "")} the store covers — collection began too recently to attest the full 24 hours.`
+                    : "No calls in this window. This is the shared record — every instance writes to the cortex-calls store, so an empty chart means the server really was quiet."
+                  : source === "unconfigured"
+                    ? `No durable store is configured, so this is one instance's in-memory log — ${SCOPE_NOTE}. An empty chart here does not mean the server was idle.`
+                    : `The shared store was unreachable this render, so this is the in-memory fallback — ${SCOPE_NOTE}. An empty chart here does not mean the server was idle.`}
+              </div>
+            )}
+          </section>
 
-        <section className={styles.block}>
-          <div className={styles.blockHead}>
-            <span>Ingest · every write is a commit</span>
-            <span className={styles.dim}>{commits[0] ? `last write ${ago(commits[0].date)} ago` : ""}</span>
-          </div>
-          {commits.slice(0, 8).map((c) => (
-            <div key={c.sha} className={styles.commitRow}>
-              <span className={styles.sha}>{c.sha}</span>
-              <span className={styles.msg}>{c.message}</span>
-              <span className={styles.agoCol}>{ago(c.date)}</span>
+          <section>
+            <div className={styles.sectionHead}>
+              <span className={styles.label}>
+                Verdicts · {verdictTotal} of {rows.length} calls returned one
+              </span>
+              <span className={styles.note}>
+                {byReader.length > 1 ? `blended across ${byReader.length} readers` : "every reader, together"}
+              </span>
             </div>
-          ))}
-        </section>
+            {verdictRows.map((v) => (
+              <div key={v.tag} className={styles.verdictRow}>
+                <span className={`${styles.verdictTag} ${v.cls}`}>{v.tag}</span>
+                <span className={styles.verdictBar}>
+                  <i className={v.cls} style={{ width: `${(v.n / verdictMax) * 100}%` }} />
+                </span>
+                <span className={styles.verdictN}>{v.n}</span>
+              </div>
+            ))}
+          </section>
+
+          <section>
+            <div className={styles.sectionHead}>
+              <span className={styles.label}>By reader</span>
+              <span className={styles.note}>
+                {byReader.length === 0
+                  ? asks.length === 0
+                    ? "no asks in this window"
+                    : `${asks.length} ask${asks.length === 1 ? "" : "s"}, none attributed — logged before the model field shipped`
+                  : `green = verified · red = unverified or error · steel = other verdicts${unattributed > 0 ? ` · ${unattributed} unattributed` : ""}`}
+              </span>
+            </div>
+            {byReader.map((b) => (
+              <div key={b.model} className={styles.byRow}>
+                <span className={styles.byName}>{b.model}</span>
+                <span className={styles.rdTrack} style={{ width: `${(b.calls / byMax) * 100}%` }}>
+                  <i className={styles.rdPass} style={{ flex: b.verified }} />
+                  <i className={styles.rdFail} style={{ flex: b.bad }} />
+                  <i className={styles.rdRest} style={{ flex: Math.max(0, b.calls - b.verified - b.bad) }} />
+                </span>
+                <span className={`${styles.right} ${styles.fig}`}>{b.calls}</span>
+              </div>
+            ))}
+            {byReader.length === 0 && (
+              <div className={styles.empty}>
+                Nothing to compare yet. Once more than one reader has answered, this panel is
+                where their records diverge — and the aggregate above stops being the whole story.
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className={styles.rail}>
+          <section>
+            <div className={styles.label}>Reading as</div>
+            <div className={styles.doorRow}>
+              <span
+                className={
+                  active && activeProvider && providerConfigured(activeProvider)
+                    ? styles.dotLive
+                    : styles.dotWarn
+                }
+              />
+              <span className={styles.doorName}>
+                <span className={styles.byName}>{active ? active.model : "unresolved"}</span>
+                <span className={styles.note}>
+                  {active && activeProvider
+                    ? `${activeProvider} · ${
+                        active.source === "console"
+                          ? "set in the console"
+                          : active.source === "env"
+                            ? "from READER_MODEL"
+                            : "built-in default"
+                      }`
+                    : "no reader resolves"}
+                </span>
+              </span>
+              <a className={styles.railLink} href="readers">readers</a>
+            </div>
+            {resolveError && <div className={styles.railNote}>{resolveError}</div>}
+            {active && activeProvider && !providerConfigured(activeProvider) && (
+              <div className={styles.railNote}>
+                This reader&rsquo;s provider key is missing, so brain_ask will error on the next
+                call. Set it, or change the default on the readers screen.
+              </div>
+            )}
+            {settings.disabledProviders.length > 0 && (
+              <div className={styles.railNote}>
+                {settings.disabledProviders.join(", ")} switched off — callers cannot select
+                those models.
+              </div>
+            )}
+          </section>
+
+          <section>
+            <div className={styles.sectionHead}>
+              <span className={styles.label}>Doors</span>
+              {/* The panel says which doors exist; the guide says how to wire one. Relative
+                  href, so the secret stays out of markup like every other console link. */}
+              <a className={styles.railLink} href="guide">set up</a>
+            </div>
+            {doors.map((d) => (
+              <div key={d.key} className={styles.doorRow}>
+                <span className={d.last ? styles.dotLive : styles.dotIdle} />
+                <span className={styles.doorName}>
+                  <span>{d.name}</span>
+                  <span className={styles.note}>
+                    {d.auth} · {d.trust}
+                    {d.key === "guest" && !guestOpen && " · not configured"}
+                  </span>
+                </span>
+                <span className={styles.note}>{d.last ? ago(d.last) : "no calls"}</span>
+              </div>
+            ))}
+            <div className={styles.railNote}>
+              The server sees which door a call used, not which app sent it — bearer is a
+              terminal client, the secret URL is a connector, the guest URL is an assistant
+              the operator does not control. The first two may write; the guest may only propose.
+              {durable ? "" : ` Counts are ${SCOPE_NOTE}.`}
+            </div>
+          </section>
+
+          <section>
+            <div className={styles.label}>Ingest · every write is a commit</div>
+            {commits.slice(0, 6).map((c) => (
+              <div key={c.sha} className={styles.commitRow}>
+                <span className={styles.sha}>{c.sha}</span>
+                <span className={styles.msg}>{c.message}</span>
+                <span className={styles.agoCol}>{agoIso(c.date)}</span>
+              </div>
+            ))}
+          </section>
+        </div>
       </div>
-    </>
+    </div>
   );
 }

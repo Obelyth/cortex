@@ -2,10 +2,14 @@
 import { usePathname } from "next/navigation";
 
 /**
- * Five sibling screens; every href is RELATIVE so the secret never appears in markup. The
+ * Six sibling screens; every href is RELATIVE so the secret never appears in markup. The
  * active tab comes from the pathname's last segment.
+ *
+ * Readers sits second, next to overview, because it answers the question the overview now
+ * raises: the numbers there are an aggregate over several models, and this is where you find
+ * out which ones.
  */
-const TABS = ["overview", "corpus", "attention", "map", "guide"] as const;
+const TABS = ["overview", "readers", "corpus", "attention", "map", "guide"] as const;
 
 export function Tabs({ attention }: { attention: number }) {
   const last = (usePathname() ?? "").split("/").filter(Boolean).pop();

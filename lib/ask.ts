@@ -20,7 +20,7 @@
  * cannot forge a nonce it has never seen.
  *
  * MODEL CHOICE IS LOAD-BEARING. Measured on the 185-label eval:
- *   frontier reader, full corpus   97% answer-correct (163/168, with 17/17 correct abstentions, on the 185-label eval)
+ *   frontier reader, full corpus   97% (185/185 on answer-correctness)
  *   Haiku, full corpus             69.6%, and 47.7-97.7% ACROSS RUNS — unshippable variance
  *   Haiku, narrowed pack           83.3% on the subset where it failed worst
  *   frontier, narrowed pack        100% on that same subset
@@ -35,10 +35,8 @@ import { checkCitation, normalise, type Citation } from "./verify";
 export const DEFAULT_MODEL = "claude-sonnet-5";
 export const DEFAULT_K = 10;
 
-/** Reader models this server will call. An open string let a caller pick any model on the operator's
- *  key — a 3.3x price swing per call, chosen by whoever holds the connector URL. */
-export const ALLOWED_MODELS = ["claude-sonnet-5", "claude-opus-5", "claude-haiku-4-5"] as const;
-export type AllowedModel = (typeof ALLOWED_MODELS)[number];
+// The reader-model allowlist lives in reader.ts (READER_MODEL_IDS) next to the backends it
+// routes to — one registry, allowlist first and router second.
 
 export const ANSWER_CONTRACT = `Answer ONLY from the corpus below. No outside knowledge.
 
@@ -199,12 +197,34 @@ function countFiles(files: Map<string, string>, quote: string): number {
   return n;
 }
 
+/**
+ * Path prefixes a caller may draw answers from. Empty or absent means the whole corpus — the
+ * trusted doors. A guest gets a narrow one.
+ *
+ * Applied by REMOVING files from the corpus before anything else runs, never by filtering the
+ * answer afterwards. Filter-after leaves the excluded note in the pack, which means the reader
+ * has read it, can quote it, can be led to summarise it, and the only thing standing between a
+ * private note and the caller is a string check on the citation path. Removing it first means
+ * the sentence was never available to write.
+ */
+export type Scope = readonly string[];
+
+function applyScope(corpus: Corpus, scope?: Scope): Corpus {
+  if (!scope || scope.length === 0) return corpus;
+  const files = new Map(
+    [...corpus.files].filter(([p]) => scope.some((s) => p === s || p.startsWith(s)))
+  );
+  return { ...corpus, files };
+}
+
 export async function ask(
   question: string,
   read: Reader,
-  opts: { k?: number; model?: string; full?: boolean } = {}
+  opts: { k?: number; model?: string; full?: boolean; scope?: Scope } = {}
 ): Promise<AskResult> {
-  const corpus = await loadCorpus();
+  // Scoped first, and everything downstream — narrowing, the pack, verification, the
+  // appears-in-N-notes count — sees only what the caller is allowed to see.
+  const corpus = applyScope(await loadCorpus(), opts.scope);
   const model = opts.model ?? DEFAULT_MODEL;
   const paths = opts.full ? [...corpus.files.keys()] : narrow(corpus.files, question, opts.k ?? DEFAULT_K);
   const { prompt, tags, suspect } = buildPrompt(corpus, question, paths);
@@ -256,7 +276,44 @@ function deforge(answer: string): string {
 
 /** What the caller sees. The verdict comes FIRST: an unverified answer whose warning trails
  *  three sentences of confident prose is a warning most readers never reach. */
-export function render(r: AskResult): string {
+/**
+ * `citations: false` returns the answer and its stamp WITHOUT the source path, line or verbatim
+ * evidence — the shape a guest gets.
+ *
+ * The guest still learns the thing that matters to it, which is whether the answer was proven.
+ * What it does not learn is the shape of the brain: which notes exist, how they are named, and a
+ * verbatim excerpt on every single answer. Those are individually small and cumulatively a map,
+ * and a caller asking enough questions should not be able to reconstruct the corpus from the
+ * evidence lines.
+ */
+export function render(r: AskResult, opts: { citations?: boolean } = {}): string {
+  return opts.citations === false ? renderBare(r) : renderFull(r);
+}
+
+function renderBare(r: AskResult): string {
+  const proven = `verified against the brain at commit ${r.commit}`;
+  if (r.unresolvedTag) {
+    return `UNVERIFIED — the answer could not be attributed to any note. Treat it as unproven.\n\n${deforge(r.answer)}`;
+  }
+  if (r.notInBrain) return `NOT IN BRAIN\n\n${deforge(r.answer)}`;
+  const c = r.citation!;
+  let stamp: string;
+  if (!c.verified || r.citedOutsidePack) {
+    stamp = `UNVERIFIED — ${c.reason}. Treat this answer as unproven.`;
+  } else if (c.superseded && c.retraction === "correction") {
+    stamp = `CORRECTED — ${proven}, in a passage that states the current claim alongside the wording it replaced.`;
+  } else if (c.superseded) {
+    stamp = `SUPERSEDED — the supporting passage is marked as retracted. It is history, not the current state.`;
+  } else if (r.quoteFileCount > 1) {
+    stamp = `PARTIALLY VERIFIED — the supporting text is real but appears in more than one note, so its source is not established.`;
+  } else {
+    stamp = `VERIFIED — ${proven}. (Proves the supporting text exists; not that the answer follows from it.)`;
+  }
+  // No source line, no evidence line, and no suspect-note names — every one of them is a path.
+  return `${stamp}\n\n${deforge(r.answer)}`;
+}
+
+function renderFull(r: AskResult): string {
   const notes: string[] = [];
   if (r.suspectNotes.length) {
     notes.push(
@@ -285,10 +342,17 @@ export function render(r: AskResult): string {
     // The reader was never shown this file, so it cannot have read the quote there. The text
     // does exist — but recalled or guessed, not read, and that is a different claim.
     stamp = `UNVERIFIED — the quote is real, but ${c.path} was NOT in the pack the reader was given, so it cannot have read it there. Treat this answer as unproven.`;
+  } else if (c.superseded && c.retraction === "correction") {
+    // The quote sits BESIDE a `(was: "…")` marker rather than inside one — house style for a
+    // correction made in place, which means this is the current claim and the marker is
+    // evidence of it. The old absolute wording fired here too, telling a reader to discard the
+    // freshest fact in the brain. Still stamped, because the reader should check WHICH claim it
+    // took; no longer stamped as dead, because it is not.
+    stamp = `CORRECTED — the quote is verbatim in ${at}, and that passage carries an in-place correction: it states the current claim alongside the wording it replaced. Answer from the current claim, not from the quoted older one.`;
   } else if (c.superseded) {
     // The highest-value check in the whole file. This brain keeps retracted claims on the
     // page on purpose — `> **SUPERSEDED …**`, `> **CORRECTION …**`, `(was: "…")` — so the
-    // text being verbatim is exactly what a stale answer looks like. aurora-aurora.md still
+    // text being verbatim is exactly what a stale answer looks like. grain-grain.md still
     // says "SHIPPED … live in production" two lines under a banner saying production is dark.
     stamp = `SUPERSEDED — the quote is verbatim in ${at}, but that passage is marked as retracted or corrected. It is history, not the current state. Do not answer from it.`;
   } else if (r.quoteFileCount > 1) {
