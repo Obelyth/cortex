@@ -25,7 +25,6 @@ export function Appearance() {
 
   return (
     <>
-      <span className="conApLabel">Appearance</span>
       <span className="conAp">
         {(["dark", "light"] as const).map((k) => (
           <button key={k} type="button" aria-pressed={theme === k}

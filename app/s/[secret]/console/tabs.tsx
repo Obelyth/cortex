@@ -9,7 +9,7 @@ import { usePathname } from "next/navigation";
  * raises: the numbers there are an aggregate over several models, and this is where you find
  * out which ones.
  */
-const TABS = ["overview", "readers", "corpus", "attention", "map", "guide"] as const;
+const TABS = ["overview", "readers", "corpus", "attention", "map", "guide", "settings"] as const;
 
 export function Tabs({ attention }: { attention: number }) {
   const last = (usePathname() ?? "").split("/").filter(Boolean).pop();

@@ -13,7 +13,7 @@ const settings = vi.hoisted(() => ({
 }));
 vi.mock("../lib/settings", () => settings);
 
-import { POST } from "../app/s/[secret]/console/settings/route";
+import { POST } from "../app/s/[secret]/console/settings/save/route";
 
 const SECRET = "a".repeat(64);
 

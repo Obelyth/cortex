@@ -20,6 +20,12 @@ const RETIRED = ["brain_recall", "brain_search", "brain-index.md", "build_index"
  * would ask the operator to falsify their own diary.
  */
 const DATED_ENTRY = /(^|\/)\d{4}-\d{2}-\d{2}\.md$/;
+/**
+ * The same rule for headings: a section titled "… found on the Linux box 2026-07-31" is a
+ * record OF that date. A cleanup story that names the tool it deleted is not a live claim,
+ * and flagging it asks the operator to falsify their own history.
+ */
+const DATED_HEADING = /\b\d{4}-\d{2}-\d{2}\b/;
 
 
 export interface NoteRow {
@@ -31,6 +37,15 @@ export interface NoteRow {
   /** One character per block: "." live, "x" retracted. Rendered as the corpus strip. */
   strip: string;
   age: number | null;
+  /**
+   * What the note would say about itself if asked: its first heading, its first sentence of
+   * prose, and its outline. The ledger showed only sizes for weeks and read as a parts list —
+   * a row you cannot interrogate is furniture. All three fields pass through redact() before
+   * leaving, same as retractedList: the console is an egress too.
+   */
+  title: string;
+  desc: string;
+  headings: Array<{ h: string; line: number }>;
 }
 
 export interface Retracted {
@@ -74,6 +89,25 @@ export interface Health {
   byDir: Array<{ dir: string; notes: number; tokens: number }>;
 }
 
+const SECRETISH_KEY = /(TOKEN|SECRET|KEY|PASS|PWD|CREDENTIAL|AUTH)/i;
+const PLACEHOLDER_VALUE =
+  /^(<[^>]*>?|\[[^\]]*\]?|\$\{?[A-Za-z_(][^\s]*|your[-_]\S*|changeme|xxx+|\.{3,}|\*+|•+)$/i;
+
+/** Does a generic key=value line plausibly hold a REAL secret? See the alert-precision note. */
+export function plausibleSecret(line: string): boolean {
+  const m = /([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("[^"]*"|'[^']*'|`[^`]*`|\S+)/.exec(line);
+  if (!m) return false;
+  if (!SECRETISH_KEY.test(m[1])) return false;
+  const value = m[2].replace(/^[`"']|[`"',.;]+$/g, "");
+  if (value.length < 16) return false;
+  // $(…) and ${…} are indirection, not secrets — a note documenting `TOKEN="$(security
+  // find-generic-password …)"` is describing Keychain hygiene, the exact practice the
+  // alert exists to encourage. Quoted substitutions carry spaces, so this is a prefix
+  // test rather than part of the single-token placeholder regex.
+  if (/^\$[({]/.test(value)) return false;
+  return !PLACEHOLDER_VALUE.test(value);
+}
+
 const CEILING = 150_000;
 
 export async function health(now = new Date()): Promise<Health> {
@@ -100,7 +134,7 @@ export async function health(now = new Date()): Promise<Health> {
       // so this counts the passages brain_ask could actually answer from. Counting raw mentions
       // ranked the changelog of the retirement above the note that still believed in it: the
       // page that documents killing a tool necessarily names it most.
-      if (!dated) {
+      if (!dated && !DATED_HEADING.test(blocks[i].heading)) {
         const found = RETIRED.filter((t) => blocks[i].text.includes(t));
         if (found.length) {
           // `hit` is verify.ts's verdict, reused rather than re-derived. A mention already under a
@@ -141,6 +175,12 @@ export async function health(now = new Date()): Promise<Health> {
       const kind = out.includes("<redacted-token>") ? "vendor token"
         : out.includes("<redacted-jwt>") ? "jwt"
         : out.includes("<redacted-url>") ? "url secret" : "key=value";
+      // Egress redaction is recall; this alert is precision. The generic key=value shape
+      // matched sudoers lines (NOPASSWD: ALL=...), documented placeholders, and 10-char
+      // shell examples — none a credential. It only alerts when the key NAME is secret-ish
+      // and the value is long enough to be one and not a placeholder. Vendor tokens, JWTs
+      // and URL secrets keep alerting unconditionally — those shapes don't false-positive.
+      if (kind === "key=value" && !plausibleSecret(probe)) continue;
       secrets.push({ path, line: ln + 1, kind });
       found++;
     }
@@ -151,7 +191,9 @@ export async function health(now = new Date()): Promise<Health> {
       const d = new Date(`${stamp[1]}T00:00:00Z`);
       if (!Number.isNaN(d.getTime())) {
         age = Math.round((now.getTime() - d.getTime()) / 86_400_000);
-        if (age > 2) stale.push({ path, verified: stamp[1], age });
+        // Two weeks, not two days: at >2 the queue flagged pages re-verified three days
+        // earlier, and an alert that fires on freshly checked work teaches you to ignore it.
+        if (age > 14) stale.push({ path, verified: stamp[1], age });
       }
     }
 
@@ -165,7 +207,45 @@ export async function health(now = new Date()): Promise<Health> {
       });
     }
 
+    // The note's self-description, straight from its own first lines. Parsed off the raw text
+    // rather than the block list so heading LINES (not "the heading a block sits under") come
+    // out with exact line numbers the operator can jump to.
+    const headings: NoteRow["headings"] = [];
+    let title = "";
+    let desc = "";
+    let inFence = false;
+    const rawLines = text.split("\n");
+    for (let li = 0; li < rawLines.length; li++) {
+      const line = rawLines[li];
+      // Fence state first: a "# comment" inside a code block is not a heading, and the first
+      // line of a fenced example is not the note's description.
+      if (line.trimStart().startsWith("```")) {
+        inFence = !inFence;
+        continue;
+      }
+      if (inFence) continue;
+      const h = /^#{1,4}\s+(.+)/.exec(line);
+      if (h) {
+        if (!title) title = h[1].trim();
+        if (headings.length < 14) headings.push({ h: redact(h[1].trim()).slice(0, 90), line: li + 1 });
+        continue;
+      }
+      if (!desc) {
+        const t = line.trim();
+        // First real prose: skip blanks and quotes; a list item counts — plenty of notes open
+        // with one, and "no description" must mean the note has none, not that the parser was
+        // picky.
+        if (t && !t.startsWith(">")) {
+          desc = redact(t.replace(/^[-*]\s+/, "")).slice(0, 150);
+        }
+      }
+    }
+    title = redact(title || path.split("/").pop()!.replace(/\.md$/, "")).slice(0, 90);
+
     notes.push({
+      title,
+      desc,
+      headings,
       path,
       dir: path.includes("/") ? path.split("/")[0] : "root",
       tokens: Math.round(text.length / 4),

@@ -4,6 +4,7 @@ import { listCommits, type CommitInfo } from "@/lib/github";
 import { readCalls, SCOPE_NOTE } from "@/lib/calls";
 import { readSettings, safeActiveReader } from "@/lib/settings";
 import { providerOf, providerConfigured } from "@/lib/reader";
+import { Reveal } from "../reveal";
 import styles from "../console.module.css";
 
 export const dynamic = "force-dynamic";
@@ -169,11 +170,20 @@ export default async function Overview({
           <section>
             <div className={styles.sectionHead}>
               <span className={styles.label}>Calls · last 24 hours</span>
-              <span className={styles.note}>
-                cyan = verified · steel = everything else{partial ? ` · ${window}` : ""}
-                {source === "store" ? "" : source === "unconfigured"
-                  ? " · no durable store configured"
-                  : " · in-memory fallback (store unreachable)"}
+              {/* Symbols first; the qualifying sentence lives one caret down. The two states a
+                  glance must not miss — a partial window, a non-durable log — stay visible, as
+                  two words rather than a clause. Honesty is not the same thing as paragraphs. */}
+              <span className="swatches">
+                <span className="swatch"><i style={{ background: "var(--accent)" }} />verified</span>
+                <span className="swatch"><i style={{ background: "var(--ob-ink-600)" }} />other</span>
+                {partial && <span className={styles.note}>{window}</span>}
+                {source !== "store" && (
+                  <Reveal label={source === "unconfigured" ? "no store" : "store down"}>
+                    {source === "unconfigured"
+                      ? `No durable store is configured, so this is one instance's in-memory log — ${SCOPE_NOTE}.`
+                      : `The shared store was unreachable this render, so this is the in-memory fallback — ${SCOPE_NOTE}.`}
+                  </Reveal>
+                )}
               </span>
             </div>
             <div className={styles.chart} role="img"
@@ -194,13 +204,17 @@ export default async function Overview({
             </div>
             {rows.length === 0 && (
               <div className={styles.empty}>
-                {durable
-                  ? partial
-                    ? `No calls in the ${window.replace("log covers ", "")} the store covers — collection began too recently to attest the full 24 hours.`
-                    : "No calls in this window. This is the shared record — every instance writes to the cortex-calls store, so an empty chart means the server really was quiet."
-                  : source === "unconfigured"
-                    ? `No durable store is configured, so this is one instance's in-memory log — ${SCOPE_NOTE}. An empty chart here does not mean the server was idle.`
-                    : `The shared store was unreachable this render, so this is the in-memory fallback — ${SCOPE_NOTE}. An empty chart here does not mean the server was idle.`}
+                {/* The verdict stays visible in five words; the reasoning waits behind the
+                    caret. What must never hide is WHICH of the two claims is being made —
+                    "quiet" and "can't tell" are different sentences on purpose. */}
+                {durable && !partial ? "No calls — the server was quiet." : "No calls shown — the log cannot attest the full day."}{" "}
+                <Reveal label="why">
+                  {durable
+                    ? partial
+                      ? `Collection began too recently: the store covers ${window.replace("log covers ", "")} of the last 24 hours.`
+                      : "This is the shared record — every instance writes to the cortex-calls store, so an empty chart means the server really was quiet."
+                    : `This is one instance's in-memory view — ${SCOPE_NOTE}. An empty chart here does not mean the server was idle.`}
+                </Reveal>
               </div>
             )}
           </section>
@@ -228,16 +242,26 @@ export default async function Overview({
           <section>
             <div className={styles.sectionHead}>
               <span className={styles.label}>By reader</span>
-              <span className={styles.note}>
-                {byReader.length === 0
-                  ? asks.length === 0
-                    ? "no asks in this window"
-                    : `${asks.length} ask${asks.length === 1 ? "" : "s"}, none attributed — logged before the model field shipped`
-                  : `green = verified · red = unverified or error · steel = other verdicts${unattributed > 0 ? ` · ${unattributed} unattributed` : ""}`}
+              <span className="swatches">
+                {byReader.length > 0 && (
+                  <>
+                    <span className="swatch"><i style={{ background: "var(--ok)" }} />verified</span>
+                    <span className="swatch"><i style={{ background: "var(--crit)" }} />failed</span>
+                    <span className="swatch"><i style={{ background: "var(--ob-ink-600)" }} />other</span>
+                  </>
+                )}
+                {unattributed > 0 && (
+                  <Reveal label={`${unattributed} unattributed`}>
+                    Logged before the per-model field shipped — they belong to no reader row, and
+                    counting them into one would rewrite history.
+                  </Reveal>
+                )}
               </span>
             </div>
+            {/* A row per reader, and each row goes somewhere: the readers screen is where this
+                mix becomes a control. Mute rows teach people to stop clicking. */}
             {byReader.map((b) => (
-              <div key={b.model} className={styles.byRow}>
+              <a key={b.model} href="readers" className={styles.byRow}>
                 <span className={styles.byName}>{b.model}</span>
                 <span className={styles.rdTrack} style={{ width: `${(b.calls / byMax) * 100}%` }}>
                   <i className={styles.rdPass} style={{ flex: b.verified }} />
@@ -245,12 +269,15 @@ export default async function Overview({
                   <i className={styles.rdRest} style={{ flex: Math.max(0, b.calls - b.verified - b.bad) }} />
                 </span>
                 <span className={`${styles.right} ${styles.fig}`}>{b.calls}</span>
-              </div>
+              </a>
             ))}
             {byReader.length === 0 && (
               <div className={styles.empty}>
-                Nothing to compare yet. Once more than one reader has answered, this panel is
-                where their records diverge — and the aggregate above stops being the whole story.
+                {asks.length === 0 ? "No asks in this window." : "Asks exist, but none carry a reader yet."}{" "}
+                <Reveal label="why this panel matters">
+                  Once more than one reader has answered, this is where their records diverge —
+                  and the aggregate above stops being the whole story.
+                </Reveal>
               </div>
             )}
           </section>
@@ -319,10 +346,12 @@ export default async function Overview({
               </div>
             ))}
             <div className={styles.railNote}>
-              The server sees which door a call used, not which app sent it — bearer is a
-              terminal client, the secret URL is a connector, the guest URL is an assistant
-              the operator does not control. The first two may write; the guest may only propose.
-              {durable ? "" : ` Counts are ${SCOPE_NOTE}.`}
+              <Reveal label="what a door can tell you">
+                The server sees which door a call used, not which app sent it — bearer is a
+                terminal client, the secret URL is a connector, the guest URL is an assistant
+                the operator does not control. The first two may write; the guest may only propose.
+                {durable ? "" : ` Counts are ${SCOPE_NOTE}.`}
+              </Reveal>
             </div>
           </section>
 

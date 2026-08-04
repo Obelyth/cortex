@@ -1,12 +1,18 @@
 import { requireSecret } from "@/lib/gate";
 import { health } from "@/lib/health";
+import { LedgerClient, type LedgerRetracted } from "./ledger-client";
 import styles from "../console.module.css";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export const metadata = { title: "Corpus · Cortex console" };
 
-/** Corpus — the directory strip and the full ledger, straight from NoteRow.strip. */
+/**
+ * Corpus — the directory strip and the ledger. Every ledger row expands to the note's own
+ * account of itself: title, first sentence, outline, and the retracted passages behind its
+ * amber ticks. The prose that used to sit under the table lives inside the rows now — the
+ * screen shows numbers until asked a question.
+ */
 export default async function Corpus({
   params,
 }: {
@@ -15,6 +21,16 @@ export default async function Corpus({
   await requireSecret(params);
   const h = await health();
   const maxDir = Math.max(1, ...h.byDir.map((d) => d.tokens));
+
+  // Grouped once here so the client gets a plain serializable map, capped per note — an
+  // expansion is a glance, not the attention screen.
+  const retractedByPath: Record<string, LedgerRetracted[]> = {};
+  for (const r of h.retractedList) {
+    (retractedByPath[r.path] ??= []).push({ line: r.line, heading: r.heading, text: r.text });
+  }
+  for (const k of Object.keys(retractedByPath)) {
+    retractedByPath[k] = retractedByPath[k].slice(0, 6);
+  }
 
   return (
     <>
@@ -33,33 +49,22 @@ export default async function Corpus({
         <div className={styles.blockHead}>
           <span>Corpus ledger · live @{h.sha}</span>
           <span className={styles.dim}>
-            every live note, largest first · each tick is one block · amber ticks are retracted
+            each tick one block · amber retracted · click a row to read its note&rsquo;s account
           </span>
         </div>
-        <div className={styles.thead}>
-          <div>note</div><div>blocks</div>
-          <div className={styles.right}>tokens</div><div className={styles.right}>ret</div>
-        </div>
-        {h.notes.map((n) => {
-          const cut = n.path.lastIndexOf("/");
-          return (
-            <div key={n.path} className={styles.row}>
-              <div className={styles.path}>
-                {cut >= 0 && <span>{n.path.slice(0, cut + 1)}</span>}
-                <b>{cut >= 0 ? n.path.slice(cut + 1) : n.path}</b>
-              </div>
-              <div className={styles.blocks}>
-                {[...n.strip].map((c, i) => (
-                  <i key={i} className={c === "x" ? styles.ret : undefined} />
-                ))}
-              </div>
-              <div className={`${styles.right} ${styles.fig}`}>{n.tokens.toLocaleString()}</div>
-              <div className={`${styles.right} ${styles.fig} ${n.retracted ? styles.figWarn : styles.figNil}`}>
-                {n.retracted || "·"}
-              </div>
-            </div>
-          );
-        })}
+        <LedgerClient
+          rows={h.notes.map((n) => ({
+            path: n.path,
+            title: n.title,
+            desc: n.desc,
+            headings: n.headings,
+            strip: n.strip,
+            tokens: n.tokens,
+            blocks: n.blocks,
+            retracted: n.retracted,
+          }))}
+          retractedByPath={retractedByPath}
+        />
         <div className={styles.footNote}>
           archive, tools and generated indexes excluded — the same filter the reader uses
         </div>
