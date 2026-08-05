@@ -1,0 +1,262 @@
+/**
+ * frontmatter — the router's raw material.
+ *
+ * The router is one line per note: path, a one-sentence description, tags, last-updated. The
+ * description lives in the note's own YAML frontmatter rather than in a database, because the
+ * brain has to stay self-describing — a bare `git clone` must carry its own routing layer with no
+ * dependency on this server or on any store. Nine notes already use this shape
+ * the rest are backfilled.
+ *
+ * WHY A HAND-ROLLED PARSER. The frontmatter this reads is three scalar keys and a tag list, on
+ * files this server already trusts. A YAML dependency would add a parser with its own alias,
+ * anchor and merge-key semantics to the load path of every write — surface area bought for
+ * nothing. What is here reads the keys it knows and ignores everything else, including the nested
+ * `metadata:` blocks the existing feedback notes carry.
+ *
+ * ABSENCE IS A NON-EVENT, and that is the load-bearing rule. On day one most notes have no
+ * frontmatter at all. A parser that threw, or a router that skipped what it could not describe,
+ * would make those notes invisible in the one surface that is supposed to list everything — the
+ * silent-loss failure the rest of this system is built to prevent. So every path here degrades to
+ * "no description", never to "no note".
+ */
+
+import { isLogPath, logDigest, dateFromLogPath } from "./digest";
+
+export interface Frontmatter {
+  /** One sentence describing the note. "" when the note has none yet. */
+  description: string;
+  /** Lowercased, de-duplicated, order-preserved. Empty when absent. */
+  tags: string[];
+  /**
+   * The note minus its frontmatter block, byte-for-byte — including any blank line that followed
+   * the closing fence. Never trimmed: note text is what citations are proven against, so this
+   * function does not get to rewrite it.
+   */
+  body: string;
+}
+
+const EMPTY = (text: string): Frontmatter => ({ description: "", tags: [], body: text });
+
+/**
+ * Strip one layer of matching quotes.
+ *
+ * Only when BOTH ends match, so `a brain's notes` keeps its apostrophe and `'it: works'` loses its
+ * wrapper. A naive strip of any leading or trailing quote mangles the median description in this
+ * corpus, which is prose with punctuation in it.
+ */
+function unquote(s: string): string {
+  const t = s.trim();
+  if (t.length >= 2 && ((t[0] === '"' && t.endsWith('"')) || (t[0] === "'" && t.endsWith("'")))) {
+    return t.slice(1, -1);
+  }
+  return t;
+}
+
+function normaliseTags(raw: string[]): string[] {
+  const out: string[] = [];
+  for (const t of raw) {
+    const v = unquote(t).toLowerCase().trim();
+    if (v && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+/**
+ * Parse a note's YAML frontmatter.
+ *
+ * The fence must open on line 1 — a `---` anywhere else is a horizontal rule or, in this corpus,
+ * a `--- log/2026-08-04.md ---` banner inside a context dump. Treating those as frontmatter would
+ * silently truncate the note body at an arbitrary point.
+ */
+export function parseFrontmatter(text: string): Frontmatter {
+  // One match decides both halves, so the fence can never be measured two different ways. The
+  // body is sliced from the ORIGINAL text, so a CRLF note round-trips byte-for-byte: the verifier
+  // proves quotes against file bytes, and a parser that quietly rewrote line endings would break
+  // citations on exactly those files. The inner group is optional so an empty frontmatter block
+  // is still recognised as one rather than left in the body.
+  // An unterminated fence simply does not match — guessing where it ends would eat the note.
+  const m = text.match(/^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/);
+  if (!m) return EMPTY(text);
+
+  const block = m[1] ?? "";
+  const after = text.slice(m[0].length);
+
+  let description = "";
+  let tags: string[] = [];
+  const lines = block.split(/\r?\n/);
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Top-level keys only. Indented lines belong to a nested block — `metadata:` in the existing
+    // feedback notes — and a `description:` nested under one is not this note's description.
+    if (/^\s/.test(line)) continue;
+
+    const m = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    if (!m) continue;
+    const [, key, rest] = m;
+
+    if (key === "description" && !description) {
+      description = unquote(rest);
+    } else if (key === "tags" && tags.length === 0) {
+      const inline = rest.trim();
+      if (inline.startsWith("[")) {
+        tags = normaliseTags(inline.replace(/^\[|\]$/g, "").split(","));
+      } else if (inline) {
+        tags = normaliseTags(inline.split(","));
+      } else {
+        // Block sequence: consume the following `  - value` lines.
+        const seq: string[] = [];
+        for (let j = i + 1; j < lines.length; j++) {
+          const item = lines[j].match(/^\s+-\s+(.*)$/);
+          if (!item) break;
+          seq.push(item[1]);
+        }
+        tags = normaliseTags(seq);
+      }
+    }
+  }
+
+  return { description, tags, body: after };
+}
+
+/**
+ * Add a description to a note that lacks one, without disturbing anything else.
+ *
+ * This is the one function here that WRITES note text, so it is the one that can do damage. Three
+ * rules keep it safe:
+ *
+ *   1. It never overwrites an existing description. The nine notes that already carry one were
+ *      written deliberately; a backfill that clobbered them would be a backfill that destroys the
+ *      very thing it exists to create. Re-running over a described note is a no-op.
+ *   2. It refuses input it cannot represent rather than emitting YAML it cannot read back. A
+ *      description containing a double quote or a newline parses as something shorter than what
+ *      was written — a silent truncation, in a file nobody will re-read.
+ *   3. The body is concatenated, never rewritten, so a CRLF note keeps its line endings and every
+ *      byte a citation might be proven against survives untouched.
+ */
+export function applyDescription(text: string, description: string, tags: string[]): string {
+  const d = description.trim();
+  if (!d) throw new Error("applyDescription: description is empty");
+  if (d.includes('"') || /[\r\n]/.test(d)) {
+    throw new Error(`applyDescription: description contains a quote or newline: ${JSON.stringify(d)}`);
+  }
+  for (const t of tags) {
+    if (!/^[a-z0-9][a-z0-9._-]*$/.test(t)) {
+      throw new Error(`applyDescription: unusable tag ${JSON.stringify(t)}`);
+    }
+  }
+
+  const tagLine = tags.length ? `\ntags: [${tags.join(", ")}]` : "";
+  const existing = parseFrontmatter(text);
+
+  // No frontmatter at all: prepend a fresh block. `text` is appended verbatim.
+  if (existing.body === text) {
+    return `---\ndescription: "${d}"${tagLine}\n---\n\n${text}`;
+  }
+  // Has a block and already describes itself: leave it exactly as it is.
+  if (existing.description) return text;
+
+  // Has a block with no description: splice the key in after the opening fence, so the keys
+  // already there — including nested `metadata:` — keep their order and indentation.
+  const open = text.indexOf("\n") + 1;
+  return `${text.slice(0, open)}description: "${d}"${tagLine}\n${text.slice(open)}`;
+}
+
+export interface RouterEntry {
+  path: string;
+  description: string;
+  tags: string[];
+  /** ISO date the note was last modified, or "" when unknown. */
+  updated: string;
+  /** The note moved after its description was written, so the description is unproven. */
+  stale: boolean;
+}
+
+/**
+ * One router line.
+ *
+ * A note with no description STILL GETS A LINE. It is marked, not omitted: the router is the
+ * complete list of what exists, and a note missing from it is a note the reader has no way to
+ * discover. Same rule for a stale description — marked, never hidden, because a description that
+ * has fallen behind its note is worth less than a fresh one but far more than nothing.
+ */
+export function routerLine(e: RouterEntry): string {
+  if (!e.description) return `- ${e.path} · (no description yet)`;
+  const parts = [e.path, e.description];
+  if (e.tags.length) parts.push(e.tags.join(", "));
+  if (e.updated) parts.push(e.updated);
+  const line = `- ${parts.join(" · ")}`;
+  return e.stale ? `${line} · STALE` : line;
+}
+
+/** Directory order, matching the listing INDEX.md has always used. */
+const ORDER = ["Root", "projects", "notes", "log", "archive"];
+
+/**
+ * A router row for one file.
+ *
+ * Day-logs are derived, never authored (see `lib/digest.ts`): there is one per day forever, so a
+ * convention requiring someone to describe each of them is a convention that rots. Everything else
+ * reads its description from its own frontmatter. A derived row is never stale by construction —
+ * it is recomputed from the file on every render — so the staleness flag does not apply to it.
+ */
+export function entryFor(path: string, text: string, updated = "", stale = false): RouterEntry {
+  if (isLogPath(path)) {
+    const d = logDigest(text);
+    return { path, description: d.description, tags: [], updated: dateFromLogPath(path), stale: false };
+  }
+  const fm = parseFrontmatter(text);
+  return { path, description: fm.description, tags: fm.tags, updated, stale };
+}
+
+/**
+ * The router table, rendered.
+ *
+ * Every live note gets a row. What varies with scale is how much of this table is rendered into
+ * context — all of it while the corpus is small; past a few hundred notes the hot/warm
+ * split governs. That split is not implemented here: this function is the complete table, and
+ * bounding it is a separate decision made where the budget lives.
+ *
+ * Coverage is reported out loud. A router that quietly described 9 notes and shrugged at 74 would
+ * read as complete, and the gap is the single most useful thing to know while the backfill is in
+ * progress.
+ */
+export function buildRouter(
+  files: Map<string, string>,
+  meta: Map<string, { updated?: string; stale?: boolean }> = new Map()
+): string {
+  const groups = new Map<string, RouterEntry[]>();
+  let described = 0;
+
+  for (const [path, text] of files) {
+    const m = meta.get(path);
+    const entry = entryFor(path, text, m?.updated ?? "", m?.stale ?? false);
+    if (entry.description) described++;
+    const dir = path.includes("/") ? path.split("/")[0] : "Root";
+    if (!groups.has(dir)) groups.set(dir, []);
+    groups.get(dir)!.push(entry);
+  }
+
+  // Deterministic: known directories first in their canonical order, anything else alphabetically
+  // after. Two calls on the same corpus must produce byte-identical output or every write commits
+  // a spurious diff.
+  const dirs = [
+    ...ORDER.filter((d) => groups.has(d)),
+    ...[...groups.keys()].filter((d) => !ORDER.includes(d)).sort(),
+  ];
+
+  const body = dirs
+    .map((d) => {
+      const rows = groups
+        .get(d)!
+        .slice()
+        .sort((a, b) => a.path.localeCompare(b.path))
+        .map(routerLine)
+        .join("\n");
+      return `## ${d}\n${rows}`;
+    })
+    .join("\n\n");
+
+  const coverage = `_${described} of ${files.size} notes carry a description._`;
+  return `# ROUTER\n\n_Auto-generated by cortex on every write — do not edit by hand._\n${coverage}\n\n${body}`;
+}

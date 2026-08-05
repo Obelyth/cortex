@@ -4,12 +4,21 @@ vi.mock("../lib/github", () => ({
   getFile: vi.fn(),
   putFile: vi.fn(),
   listTree: vi.fn(),
+  // getContext resolves the branch head before serving the corpus. Answering with the fixture's
+  // own SHA makes loadCorpus return the seeded cache on its clean path; without it these tests
+  // pass through the head-resolution-failed fallback instead, which is a different code path than
+  // the one they mean to exercise.
+  gh: vi.fn(async () => ({ ok: true, json: async () => ({ sha: "deadbeefcafe0000" }) })),
+  repo: () => "owner/brain",
+  branch: () => "main",
 }));
 
 import { getFile, putFile, listTree } from "../lib/github";
+import { __setCache } from "../lib/corpus";
 import {
   capture,
   getContext,
+  lastNDates,
   readNote,
   todayStamp,
   validatePath,
@@ -24,6 +33,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("BRAIN_TZ", "America/Los_Angeles");
   mPut.mockResolvedValue({ commitSha: "c0" });
+  // The corpus cache is module-level and keyed on SHA, so a fixture left behind by one test would
+  // be served to the next one.
+  __setCache(null);
 });
 
 describe("validatePath", () => {
@@ -47,69 +59,95 @@ describe("todayStamp", () => {
 });
 
 describe("getContext", () => {
-  it("assembles profile + index + recent logs, skipping missing days", async () => {
+  function corpusOf(files: Record<string, string>) {
+    __setCache({
+      files: new Map(Object.entries(files)),
+      sidecar: new Map(),
+      sha: "deadbeefcafe0000",
+      bytes: 0,
+      fetchedAt: Date.now(),
+    });
+  }
+
+  it("assembles profile + router + recent logs, skipping missing days", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
-    mGet.mockImplementation(async (p: string) => {
-      if (p === "profile.md") return { path: p, content: "PROFILE", sha: "s" };
-      if (p === "INDEX.md") return { path: p, content: "INDEX", sha: "s" };
-      if (p === "log/2026-07-24.md") return { path: p, content: "today log", sha: "s" };
-      if (p === "log/2026-07-20.md") return { path: p, content: "older log", sha: "s" };
-      return null;
+    corpusOf({
+      "profile.md": "PROFILE",
+      "notes/a.md": '---\ndescription: "a described note"\n---\n\nbody',
+      "log/2026-07-24.md": "# Log\n\n## 09:00 · aurora\n\ntoday log",
+      "log/2026-07-20.md": "# Log\n\n## 09:00 · older\n\nolder log",
     });
     const ctx = await getContext();
     expect(ctx).toContain("PROFILE");
-    expect(ctx).toContain("INDEX");
+    expect(ctx).toContain("# ROUTER");
+    expect(ctx).toContain("a described note");
     expect(ctx).toContain("today log");
     expect(ctx).toContain("older log");
-    expect(ctx).not.toContain("2026-07-23.md"); // missing days silently skipped
+    expect(ctx).not.toContain("2026-07-23.md"); // missing days are simply absent
     vi.useRealTimers();
+  });
+
+  it("digests a day that would blow the budget, and says how to open it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    const huge = `# Log\n\n## 09:00 · aurora, beacon\n\n${"x".repeat(9000)}`;
+    corpusOf({
+      "profile.md": "P",
+      "log/2026-07-24.md": huge,
+      "log/2026-07-23.md": "# Log\n\n## 08:00 · small\n\nshort day",
+    });
+    const ctx = await getContext();
+    expect(ctx).not.toContain("x".repeat(9000));
+    expect(ctx).toContain("aurora, beacon");
+    expect(ctx).toContain("brain_read log/2026-07-24.md");
+    // The oversized day must not hide the small one behind it.
+    expect(ctx).toContain("short day");
+    vi.useRealTimers();
+  });
+
+  it("reports its own size and commit so the cost is never invisible", async () => {
+    corpusOf({ "profile.md": "P" });
+    const ctx = await getContext();
+    expect(ctx).toMatch(/brain @deadbeefcafe · 1 notes routed/);
+    expect(ctx).toMatch(/~\d+ tokens/);
   });
 });
 
-describe("getContext DST boundaries", () => {
-  it("spring-forward: does not skip the day after the DST jump", async () => {
+/**
+ * These used to assert which files getContext happened to fetch. getContext no longer fetches per
+ * file — it reads the corpus once — so the assertions now target `lastNDates`, which is where the
+ * date arithmetic actually lives. Same coverage, aimed at the code that can be wrong.
+ */
+describe("lastNDates across DST boundaries", () => {
+  it("spring-forward: does not skip the day after the DST jump", () => {
     vi.useFakeTimers();
     // 00:30 America/Los_Angeles — first hour after local midnight following the Mar 8 spring-forward
     vi.setSystemTime(new Date("2026-03-09T07:30:00Z"));
-    mGet.mockImplementation(async (p: string) => {
-      if (p === "profile.md") return { path: p, content: "PROFILE", sha: "s" };
-      if (p === "INDEX.md") return { path: p, content: "INDEX", sha: "s" };
-      return null;
-    });
-    await getContext();
-    const logPaths = mGet.mock.calls.map((c) => c[0]).filter((p) => p.startsWith("log/"));
-    expect(logPaths).toEqual([
-      "log/2026-03-09.md",
-      "log/2026-03-08.md",
-      "log/2026-03-07.md",
-      "log/2026-03-06.md",
-      "log/2026-03-05.md",
-      "log/2026-03-04.md",
-      "log/2026-03-03.md",
+    expect(lastNDates(7)).toEqual([
+      "2026-03-09",
+      "2026-03-08",
+      "2026-03-07",
+      "2026-03-06",
+      "2026-03-05",
+      "2026-03-04",
+      "2026-03-03",
     ]);
     vi.useRealTimers();
   });
 
-  it("fall-back: does not duplicate today or drop the oldest day", async () => {
+  it("fall-back: does not duplicate today or drop the oldest day", () => {
     vi.useFakeTimers();
     // 23:30 America/Los_Angeles on Nov 1 — last hour of the fall-back day
     vi.setSystemTime(new Date("2026-11-02T07:30:00Z"));
-    mGet.mockImplementation(async (p: string) => {
-      if (p === "profile.md") return { path: p, content: "PROFILE", sha: "s" };
-      if (p === "INDEX.md") return { path: p, content: "INDEX", sha: "s" };
-      return null;
-    });
-    await getContext();
-    const logPaths = mGet.mock.calls.map((c) => c[0]).filter((p) => p.startsWith("log/"));
-    expect(logPaths).toEqual([
-      "log/2026-11-01.md",
-      "log/2026-10-31.md",
-      "log/2026-10-30.md",
-      "log/2026-10-29.md",
-      "log/2026-10-28.md",
-      "log/2026-10-27.md",
-      "log/2026-10-26.md",
+    expect(lastNDates(7)).toEqual([
+      "2026-11-01",
+      "2026-10-31",
+      "2026-10-30",
+      "2026-10-29",
+      "2026-10-28",
+      "2026-10-27",
+      "2026-10-26",
     ]);
     vi.useRealTimers();
   });
