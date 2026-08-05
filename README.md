@@ -160,7 +160,7 @@ Your notes never touch this repo — they stay in *your* private brain repo and 
 | `GITHUB_TOKEN` | yes | every tool — 401 from the Contents API. Fine-grained PAT, Contents R/W, only the brain repo |
 | `MCP_TOKEN` | yes | all requests 401 |
 | `CONNECTOR_PATH_SECRET` | for claude.ai | the header-less alias and both gated pages 404 |
-| `ANTHROPIC_API_KEY` | for `brain_ask` | `brain_ask` errors; everything else works. Each `brain_ask` bills this key — order of $0.25–$0.80/call depending on corpus size and model |
+| `ANTHROPIC_API_KEY` | yes, for `brain_ask` | `brain_ask` errors; everything else works. Each `brain_ask` bills this key — order of $0.25–$0.80/call depending on corpus size and model |
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` | no | those readers error on selection; unset, they simply cannot be chosen |
 | `READER_MODEL` | no | deployment default reader; outranked by the console's own setting |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | for settings, guest, proposals, call log | console controls degrade to env defaults and say so; the guest door refuses every call — a budget that cannot be metered is not a budget |
