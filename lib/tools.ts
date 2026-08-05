@@ -6,7 +6,6 @@ import { modelReader, READER_MODEL_IDS } from "./reader";
 import { activeReader, readSettings } from "./settings";
 import { readGuestPolicy, spendGuestAsk, guestReaderModel } from "./guest";
 import { loadCorpus } from "./corpus";
-import { narrow } from "./narrow";
 import { selectNotes } from "./select";
 import { record, currentSurface, stampOf } from "./calls";
 import {

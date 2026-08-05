@@ -22,6 +22,17 @@
 
 import { isLogPath, logDigest, dateFromLogPath } from "./digest";
 
+/**
+ * The one string comparator this module sorts with.
+ *
+ * A bare `.sort()` orders by UTF-16 code unit, which is deterministic but reads as an accident;
+ * a bare `localeCompare()` follows the HOST locale, which is the opposite problem — the router is
+ * regenerated on every write, so a comparator that varies by machine would commit a spurious diff
+ * every time a different box wrote a note. Pinning the locale gives a defined order that is the
+ * same everywhere.
+ */
+export const byName = (a: string, b: string): number => a.localeCompare(b, "en");
+
 export interface Frontmatter {
   /** One sentence describing the note. "" when the note has none yet. */
   description: string;
@@ -75,7 +86,7 @@ export function parseFrontmatter(text: string): Frontmatter {
   // citations on exactly those files. The inner group is optional so an empty frontmatter block
   // is still recognised as one rather than left in the body.
   // An unterminated fence simply does not match — guessing where it ends would eat the note.
-  const m = text.match(/^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/);
+  const m = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)/.exec(text);
   if (!m) return EMPTY(text);
 
   const block = m[1] ?? "";
@@ -91,7 +102,7 @@ export function parseFrontmatter(text: string): Frontmatter {
     // feedback notes — and a `description:` nested under one is not this note's description.
     if (/^\s/.test(line)) continue;
 
-    const m = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
+    const m = /^([A-Za-z0-9_-]+)[ \t]*:[ \t]*(.*)$/.exec(line);
     if (!m) continue;
     const [, key, rest] = m;
 
@@ -107,7 +118,7 @@ export function parseFrontmatter(text: string): Frontmatter {
         // Block sequence: consume the following `  - value` lines.
         const seq: string[] = [];
         for (let j = i + 1; j < lines.length; j++) {
-          const item = lines[j].match(/^\s+-\s+(.*)$/);
+          const item = /^[ \t]+-[ \t]+(.*)$/.exec(lines[j]);
           if (!item) break;
           seq.push(item[1]);
         }
@@ -180,11 +191,56 @@ export interface RouterEntry {
  * discover. Same rule for a stale description — marked, never hidden, because a description that
  * has fallen behind its note is worth less than a fresh one but far more than nothing.
  */
+/** Longest description a row will render. Comfortably above the ~21-word house style. */
+export const MAX_DESCRIPTION = 200;
+/** Most tags a row will show; the remainder is counted rather than dropped in silence. */
+export const MAX_ROW_TAGS = 6;
+
+/**
+ * Make note-authored text safe to render into the always-loaded router.
+ *
+ * WHY THIS EXISTS AT RENDER TIME rather than at write time. `applyDescription` already refuses
+ * hostile input on the way in — but it is not the only way text reaches a description. Notes are
+ * hand-edited, restored from backups, written by earlier versions of this code, and on the guest
+ * door *proposed by a model this server does not control*. The read path has to hold by itself.
+ *
+ * Doing it here also keeps the note's own bytes untouched, which is load-bearing: the verifier
+ * proves quotes against file bytes, so a sanitiser that rewrote notes would break citations on
+ * exactly the files it touched.
+ *
+ * Three properties, each earning its place:
+ *
+ *   1. NO CONTROL CHARACTERS. Line-based parsing already blocks a literal newline, but a lone CR
+ *      is not a line break to the parser and *is* a cursor-return to a terminal — enough to redraw
+ *      one row over another. U+2028/2029 are line breaks to some renderers and not to others.
+ *   2. NO FIELD SEPARATOR. A row is `- path · description · tags · date`. A description carrying
+ *      `·` can make a reader see fields, and a path, that no note ever declared. This is the same
+ *      boundary-forgery problem `lib/ask.ts` solves with per-request nonces; here the row is short
+ *      and structural, so neutralising the separator is the proportionate fix.
+ *   3. A LENGTH BOUND. The router is the one tier loaded on every call, and without this a single
+ *      note decides what every session costs — a 100 KB description is a 100 KB boot call. The
+ *      budget this whole design rests on cannot be one note away from meaningless.
+ */
+function safeText(s: string, max: number): string {
+  const clean = s
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001F\u007F\u2028\u2029]/g, " ")
+    .replace(/·/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+  return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
+}
+
 export function routerLine(e: RouterEntry): string {
-  if (!e.description) return `- ${e.path} · (no description yet)`;
-  const parts = [e.path, e.description];
-  if (e.tags.length) parts.push(e.tags.join(", "));
-  if (e.updated) parts.push(e.updated);
+  const description = safeText(e.description, MAX_DESCRIPTION);
+  if (!description) return `- ${e.path} · (no description yet)`;
+  const parts = [e.path, description];
+  if (e.tags.length) {
+    const shown = e.tags.slice(0, MAX_ROW_TAGS).map((t) => safeText(t, 40));
+    const rest = e.tags.length - MAX_ROW_TAGS;
+    parts.push(rest > 0 ? `${shown.join(", ")}, +${rest} more` : shown.join(", "));
+  }
+  if (e.updated) parts.push(safeText(e.updated, 20));
   const line = `- ${parts.join(" · ")}`;
   return e.stale ? `${line} · STALE` : line;
 }
@@ -242,7 +298,7 @@ export function buildRouter(
   // a spurious diff.
   const dirs = [
     ...ORDER.filter((d) => groups.has(d)),
-    ...[...groups.keys()].filter((d) => !ORDER.includes(d)).sort(),
+    ...[...groups.keys()].filter((d) => !ORDER.includes(d)).sort(byName),
   ];
 
   const body = dirs
@@ -250,7 +306,7 @@ export function buildRouter(
       const rows = groups
         .get(d)!
         .slice()
-        .sort((a, b) => a.path.localeCompare(b.path))
+        .sort((a, b) => byName(a.path, b.path))
         .map(routerLine)
         .join("\n");
       return `## ${d}\n${rows}`;

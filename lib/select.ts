@@ -20,6 +20,7 @@
  * nothing would reason as though it had read the brain.
  */
 import { narrow } from "./narrow";
+import { byName } from "./frontmatter";
 
 export interface Selection {
   /** Notes to return, in order. */
@@ -46,7 +47,7 @@ export interface SelectOptions {
 }
 
 export function selectNotes(files: Map<string, string>, opts: SelectOptions): Selection {
-  const all = [...files.keys()].sort();
+  const all = [...files.keys()].sort(byName);
 
   let chosen: string[];
   let missing: string[] = [];
@@ -79,6 +80,6 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
     dropped,
     missing,
     bytes,
-    cursor: dropped > 0 ? paths[paths.length - 1] : null,
+    cursor: dropped > 0 ? paths.at(-1)! : null,
   };
 }

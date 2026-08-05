@@ -26,6 +26,9 @@ const LOG_PATH = /^log\/(\d{4}-\d{2}-\d{2})\.md$/;
  * and counting those inflates the entry count on exactly the busiest days.
  */
 const ENTRY = /^##[ \t]+(\d{2}:\d{2})(?:[ \t]*·[ \t]*(.*))?$/;
+// `[ \t]+` immediately followed by an optional `[ \t]*` lets the engine split a run of spaces
+// between the two quantifiers many ways before failing — super-linear on a line of nothing but
+// spaces, which a note can contain. Anchoring the separator to a single class removes the split.
 
 /** Enough tags to identify a day; beyond this the line stops being a signpost and starts being a
  *  wall. The overflow is counted out loud rather than silently dropped. */
