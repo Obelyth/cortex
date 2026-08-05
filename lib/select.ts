@@ -58,14 +58,38 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
   } else if (opts.question) {
     chosen = narrow(files, opts.question, opts.k ?? opts.defaultK);
   } else {
-    // THE CURSOR MUST USE THE SAME COMPARATOR AS THE SORT. It once used `>`, which is codepoint
-    // order, while the listing above was sorted by `byName`, which is locale collation. Those
-    // disagree on real note names: collation puts `readme-draft.md` before `README.md`, codepoint
-    // puts it after. So the cursor handed back after a page pointed BACKWARDS into that page —
-    // paging returned the same two notes forever and never reached the notes behind them, which is
-    // silent loss dressed up as a full listing.
-    const start = opts.after ? all.findIndex((p) => byName(p, opts.after!) > 0) : 0;
-    chosen = start === -1 ? [] : all.slice(start);
+    // Sorted, so a cursor is a stable position rather than a bet on map insertion order.
+    chosen = all;
+  }
+
+  /**
+   * THE CURSOR APPLIES IN EVERY MODE, because the reply advertises it in every mode.
+   *
+   * It used to be read only in the listing branch, while lib/tools.ts printed
+   * `call again with after="…"` whenever anything was dropped. A caller in `paths` or `question`
+   * mode did exactly what it was told, hit a branch that never looked at `after`, and got a
+   * byte-identical page back — forever, with the dropped notes unreachable through any argument the
+   * schema allows. An interface that instructs a caller into an infinite loop is worse than one
+   * that never offered a cursor.
+   *
+   * The position is resolved INSIDE `chosen` rather than in the sorted corpus, because `paths` and
+   * `question` order their results differently — the caller's own argument order, and relevance
+   * rank — and a position taken from a different ordering is a different coordinate system.
+   *
+   * THE COMPARATOR IN THE FALLBACK MUST MATCH THE SORT. `>` is codepoint order; the listing is
+   * collated. Those disagree on real note names — collation puts readme-draft.md before README.md,
+   * codepoint puts it after — so a cursor compared the wrong way points backwards into the page it
+   * just returned, and paging repeats two notes forever while the rest stay unreachable.
+   */
+  if (opts.after) {
+    const at = chosen.indexOf(opts.after);
+    chosen =
+      at >= 0
+        ? chosen.slice(at + 1)
+        : // Not in this result set: the corpus moved under a paging caller, or the caller changed
+          // its own request mid-walk. Fall back to the sorted position so a listing still makes
+          // progress instead of restarting at the top and looping.
+          chosen.filter((p) => byName(p, opts.after!) > 0);
   }
 
   const paths: string[] = [];

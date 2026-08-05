@@ -37,7 +37,7 @@ describe("selectNotes — by question", () => {
   it("ranks and caps at k", () => {
     const files = new Map([
       ["notes/metrics.md", "metrics warehouse query"],
-      ["notes/camera.md", "camera ble cohn"],
+      ["notes/camera.md", "camera link protocol"],
       ["notes/other.md", "unrelated words"],
     ]);
     const s = selectNotes(files, { ...OPTS, question: "metrics", k: 1 });
@@ -128,7 +128,7 @@ describe("selectNotes — the cursor advances in the sort's own order", () => {
   // The exact case that looped forever: case-insensitive collation reorders these two, and
   // everything after them was unreachable.
   it("walks a corpus whose collation order differs from its codepoint order", () => {
-    const names = ["notes/README.md", "notes/readme-draft.md", "notes/redash.md", "notes/setup.md"];
+    const names = ["notes/README.md", "notes/readme-draft.md", "notes/metrics.md", "notes/setup.md"];
     const seen = fullWalk(names, 900);
     expect(new Set(seen)).toEqual(new Set(names));
     expect(seen.length).toBe(names.length); // no repeats

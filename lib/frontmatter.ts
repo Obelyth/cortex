@@ -4,8 +4,8 @@
  * The router is one line per note: path, a one-sentence description, tags, last-updated. The
  * description lives in the note's own YAML frontmatter rather than in a database, because the
  * brain has to stay self-describing — a bare `git clone` must carry its own routing layer with no
- * dependency on this server or on any store. Nine notes already use this shape
- * the rest are backfilled.
+ * dependency on this server or on any store. Notes that already use this shape keep it
+ * (`notes/feedback-*.md`); the rest are backfilled.
  *
  * WHY A HAND-ROLLED PARSER. The frontmatter this reads is three scalar keys and a tag list, on
  * files this server already trusts. A YAML dependency would add a parser with its own alias,
@@ -68,6 +68,21 @@ function unquote(s: string): string {
   return t;
 }
 
+/**
+ * Join the indented lines under a block-scalar key into one line.
+ *
+ * Folded (`>`) and literal (`|`) are both flattened to spaces: a router row is one line by
+ * construction, so preserving literal newlines here would only hand safeText something to strip.
+ */
+function foldBlockScalar(lines: string[], keyIndex: number): string {
+  const out: string[] = [];
+  for (let j = keyIndex + 1; j < lines.length; j++) {
+    if (!/^\s+\S/.test(lines[j])) break;
+    out.push(lines[j].trim());
+  }
+  return out.join(" ");
+}
+
 function normaliseTags(raw: string[]): string[] {
   const out: string[] = [];
   for (const t of raw) {
@@ -104,7 +119,7 @@ export function parseFrontmatter(text: string): Frontmatter {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Top-level keys only. Indented lines belong to a nested block — `metadata:` in the existing
-    // feedback notes — and a `description:` nested under one is not this note's description.
+    // a nested block — and a `description:` inside one is not this note's description.
     if (/^\s/.test(line)) continue;
 
     const m = /^([A-Za-z0-9_-]+)[ \t]*:[ \t]*(.*)$/.exec(line);
@@ -112,7 +127,14 @@ export function parseFrontmatter(text: string): Frontmatter {
     const [, key, rest] = m;
 
     if (key === "description" && !description) {
-      description = unquote(rest);
+      // A block scalar (`>`, `>-`, `|`, `|+`) puts the value on the lines BELOW the key. Reading
+      // `rest` here yielded the indicator itself, so the router rendered a row whose description
+      // was the literal text ">-" — and worse, counted the note as described and made
+      // applyDescription refuse to fix it, since ">-" is truthy. Not a hypothetical: a YAML
+      // serialiser folds any one-line description past its line width into exactly this shape.
+      description = /^[|>][-+]?\d*$/.test(rest.trim())
+        ? foldBlockScalar(lines, i)
+        : unquote(rest);
     } else if (key === "tags" && tags.length === 0) {
       const inline = rest.trim();
       if (inline.startsWith("[")) {
@@ -141,7 +163,7 @@ export function parseFrontmatter(text: string): Frontmatter {
  * This is the one function here that WRITES note text, so it is the one that can do damage. Three
  * rules keep it safe:
  *
- *   1. It never overwrites an existing description. The nine notes that already carry one were
+ *   1. It never overwrites an existing description. Notes that already carry one were
  *      written deliberately; a backfill that clobbered them would be a backfill that destroys the
  *      very thing it exists to create. Re-running over a described note is a no-op.
  *   2. It refuses input it cannot represent rather than emitting YAML it cannot read back. A
@@ -226,7 +248,7 @@ export const MAX_ROW_TAGS = 6;
  *      note decides what every session costs — a 100 KB description is a 100 KB boot call. The
  *      budget this whole design rests on cannot be one note away from meaningless.
  */
-function safeText(s: string, max: number): string {
+export function safeText(s: string, max: number): string {
   const clean = s
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F\u2028\u2029]/g, " ")
@@ -278,7 +300,7 @@ export function entryFor(path: string, text: string, updated = "", stale = false
  * split governs. That split is not implemented here: this function is the complete table, and
  * bounding it is a separate decision made where the budget lives.
  *
- * Coverage is reported out loud. A router that quietly described 9 notes and shrugged at 74 would
+ * Coverage is reported out loud. A router that quietly described some notes and shrugged at the rest would
  * read as complete, and the gap is the single most useful thing to know while the backfill is in
  * progress.
  */

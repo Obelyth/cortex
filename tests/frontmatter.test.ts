@@ -2,23 +2,23 @@ import { describe, expect, it } from "vitest";
 import { parseFrontmatter, routerLine, buildRouter } from "../lib/frontmatter";
 
 describe("parseFrontmatter", () => {
-  it("reads description and tags from a real feedback-note shape", () => {
+  it("reads description and tags alongside a nested metadata block", () => {
     const text = [
       "---",
-      "name: feedback-no-lazy-use-agents",
-      'description: "Don\'t stall mid-build; delegate to agent teams."',
+      "name: convention-keep-building",
+      'description: "A convention note, with a nested metadata block."',
       "metadata:",
-      "  type: feedback",
+      "  type: convention",
       "---",
       "",
-      "When there's an approved plan, keep building.",
+      "Body text below the fence.",
     ].join("\n");
     const fm = parseFrontmatter(text);
-    expect(fm.description).toBe("Don't stall mid-build; delegate to agent teams.");
+    expect(fm.description).toBe("A convention note, with a nested metadata block.");
     // Byte-faithful: everything after the closing fence is kept verbatim, blank line included.
     // Trimming would be a silent rewrite of note text, and note text is what quotes are proven
     // against.
-    expect(fm.body).toBe("\nWhen there's an approved plan, keep building.");
+    expect(fm.body).toBe("\nBody text below the fence.");
   });
 
   it("reads tags as a YAML flow sequence and as a comma list", () => {
@@ -33,7 +33,7 @@ describe("parseFrontmatter", () => {
     expect(parseFrontmatter(text).tags).toEqual(["cortex", "supabase"]);
   });
 
-  // The 74 notes that predate the convention must not become invisible or throw. Absence is
+  // Notes that predate the convention must not become invisible or throw. Absence is
   // the common case on day one, and it has to be a non-event.
   it("degrades to an empty record when there is no frontmatter", () => {
     const fm = parseFrontmatter("# Beacon\n\n## Status\nRetired.");
@@ -58,7 +58,7 @@ describe("parseFrontmatter", () => {
 
   it("strips matching quotes but keeps apostrophes and inner colons", () => {
     expect(parseFrontmatter("---\ndescription: 'it: works'\n---\nb").description).toBe("it: works");
-    expect(parseFrontmatter("---\ndescription: the operator's brain\n---\nb").description).toBe("the operator's brain");
+    expect(parseFrontmatter("---\ndescription: an operator's brain\n---\nb").description).toBe("an operator's brain");
   });
 
   it("tolerates CRLF line endings", () => {
@@ -71,13 +71,13 @@ describe("routerLine", () => {
   it("renders path, description, tags and date", () => {
     const line = routerLine({
       path: "projects/beacon.md",
-      description: "Retired 3-tier relay; Relay replaced it.",
+      description: "Retired relay; Beacon replaced it.",
       tags: ["beacon", "retired"],
       updated: "2026-07-24",
       stale: false,
     });
     expect(line).toBe(
-      "- projects/beacon.md · Retired 3-tier relay; Relay replaced it. · beacon, retired · 2026-07-24"
+      "- projects/beacon.md · Retired relay; Beacon replaced it. · beacon, retired · 2026-07-24"
     );
   });
 
@@ -147,5 +147,28 @@ describe("buildRouter", () => {
 
   it("is deterministic — same input, byte-identical output", () => {
     expect(buildRouter(files)).toBe(buildRouter(new Map([...files].reverse())));
+  });
+});
+
+describe("parseFrontmatter — YAML block scalars", () => {
+  // A serialiser folds any one-line description past its line width into this shape, so it is not
+  // a hypothetical. Reading the indicator as the value put the literal ">-" in the router, counted
+  // the note as described, and made applyDescription refuse to fix it — permanently, because ">-"
+  // is truthy.
+  it.each([">-", ">", "|", "|-", "|+"])("folds a %s block scalar onto its indented lines", (ind) => {
+    const t = `---\ndescription: ${ind}\n  A one-sentence description that a serialiser folded.\ntags: [cortex]\n---\nbody`;
+    const fm = parseFrontmatter(t);
+    expect(fm.description).toBe("A one-sentence description that a serialiser folded.");
+    expect(fm.tags).toEqual(["cortex"]);
+  });
+
+  it("joins a multi-line block scalar into one line", () => {
+    const t = `---\ndescription: >-\n  first part\n  second part\n---\nbody`;
+    expect(parseFrontmatter(t).description).toBe("first part second part");
+  });
+
+  it("never renders a bare indicator as the description", () => {
+    const t = `---\ndescription: >-\n---\nbody`;
+    expect(parseFrontmatter(t).description).toBe("");
   });
 });

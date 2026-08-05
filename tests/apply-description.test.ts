@@ -12,7 +12,7 @@ describe("applyDescription", () => {
     expect(parseFrontmatter(out).body).toBe(`\n${body}`);
   });
 
-  // The nine feedback-* notes already carry name/description/metadata. Re-running the backfill
+  // Notes that already carry name/description/metadata. Re-running the backfill
   // over them must not stack a second fence or reorder what is there.
   it("leaves an existing description alone", () => {
     const existing = '---\nname: x\ndescription: "already here"\n---\n\nbody\n';
@@ -20,11 +20,11 @@ describe("applyDescription", () => {
   });
 
   it("inserts into an existing block that has no description, preserving the other keys", () => {
-    const existing = "---\nname: x\nmetadata:\n  type: feedback\n---\n\nbody\n";
+    const existing = "---\nname: x\nmetadata:\n  type: convention\n---\n\nbody\n";
     const out = applyDescription(existing, "added", ["a"]);
     expect(parseFrontmatter(out).description).toBe("added");
     expect(out).toContain("name: x");
-    expect(out).toContain("  type: feedback");
+    expect(out).toContain("  type: convention");
     expect(parseFrontmatter(out).body).toBe("\nbody\n");
     expect(out.match(/^---$/gm)?.length).toBe(2);
   });

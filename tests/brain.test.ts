@@ -75,7 +75,7 @@ describe("getContext", () => {
     corpusOf({
       "profile.md": "PROFILE",
       "notes/a.md": '---\ndescription: "a described note"\n---\n\nbody',
-      "log/2026-07-24.md": "# Log\n\n## 09:00 · aurora\n\ntoday log",
+      "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\ntoday log",
       "log/2026-07-20.md": "# Log\n\n## 09:00 · older\n\nolder log",
     });
     const ctx = await getContext();
@@ -91,15 +91,11 @@ describe("getContext", () => {
   it("digests a day that would blow the budget, and says how to open it", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
-    const huge = `# Log\n\n## 09:00 · aurora, beacon\n\n${"x".repeat(9000)}`;
-    corpusOf({
-      "profile.md": "P",
-      "log/2026-07-24.md": huge,
-      "log/2026-07-23.md": "# Log\n\n## 08:00 · small\n\nshort day",
-    });
+    const huge = `# Log\n\n## 09:00 · ops, aurora\n\n${"x".repeat(9000)}`;
+    corpusOf({ "profile.md": "P", "log/2026-07-24.md": huge, "log/2026-07-23.md": "# Log\n\n## 08:00 · small\n\nshort day" });
     const ctx = await getContext();
     expect(ctx).not.toContain("x".repeat(9000));
-    expect(ctx).toContain("aurora, beacon");
+    expect(ctx).toContain("ops, aurora");
     expect(ctx).toContain("brain_read log/2026-07-24.md");
     // The oversized day must not hide the small one behind it.
     expect(ctx).toContain("short day");
@@ -186,6 +182,69 @@ describe("writeNote", () => {
     expect(mPut.mock.calls.filter(([p]) => p === "INDEX.md")).toHaveLength(0);
   });
 
+  describe("edit mode — the staleness fix", () => {
+    // The failure this mode retires: corrections were appended, so the stale claim stayed
+    // standing above the new truth, verbatim and quotable. These tests hold the two properties
+    // that make in-place editing safe to trust: it refuses ambiguity loudly, and it never
+    // mangles a replacement that happens to look like a substitution pattern.
+    const note = { path: "notes/a.md", content: "The port is 3000.\n\nThe host is prod.", sha: "s1" };
+    beforeEach(() => {
+      mGet.mockImplementation(async (p: string) => (p === "notes/a.md" ? { ...note } : null));
+      mList.mockResolvedValue(["notes/a.md"]);
+    });
+
+    it("splices the one match and commits as an edit", async () => {
+      const res = await writeNote("notes/a.md", "The port is 3310.", "edit", "The port is 3000.");
+      expect(res.commitSha).toBe("c0");
+      const call = mPut.mock.calls.find(([p]) => p === "notes/a.md")!;
+      expect(call[1]).toBe("The port is 3310.\n\nThe host is prod.");
+      expect(call[2]).toBe("brain: edit notes/a.md");
+    });
+
+    it("refuses zero matches with instructions, not a silent append", async () => {
+      await expect(
+        writeNote("notes/a.md", "x", "edit", "The port is 9999.")
+      ).rejects.toThrow(/not found in notes\/a\.md — read the note first/);
+      expect(mPut).not.toHaveBeenCalled();
+    });
+
+    it("refuses an ambiguous match and names the count", async () => {
+      mGet.mockResolvedValue({ ...note, content: "same line\n\nsame line" });
+      await expect(writeNote("notes/a.md", "x", "edit", "same line")).rejects.toThrow(
+        /appears 2 times/
+      );
+      expect(mPut).not.toHaveBeenCalled();
+    });
+
+    it("refuses edit without find, and edit of a missing file", async () => {
+      await expect(writeNote("notes/a.md", "x", "edit")).rejects.toThrow(/needs `find`/);
+      mGet.mockResolvedValue(null);
+      await expect(writeNote("notes/a.md", "x", "edit", "y")).rejects.toThrow(/does not exist/);
+    });
+
+    it("does not interpret $-patterns in the replacement", async () => {
+      // String.replace would turn $& into the matched text and $' into the tail — and a
+      // correction quoting shell or regex is the median note in this corpus, not an edge case.
+      await writeNote("notes/a.md", "costs $& and then $' more.", "edit", "The port is 3000.");
+      const call = mPut.mock.calls.find(([p]) => p === "notes/a.md")!;
+      expect(call[1]).toBe("costs $& and then $' more.\n\nThe host is prod.");
+    });
+
+    it("re-applies against fresh content on a conflict retry, and re-checks uniqueness", async () => {
+      const res = await writeNote("notes/a.md", "NEW", "edit", "The port is 3000.");
+      expect(res.commitSha).toBe("c0");
+      const refresher = mPut.mock.calls.find(([p]) => p === "notes/a.md")![4] as
+        | ((f: { content: string } | null) => string)
+        | undefined;
+      expect(refresher).toBeTypeOf("function");
+      // Fresh content still has one match → splice against the FRESH text.
+      expect(refresher!({ content: "prefix\n\nThe port is 3000." })).toBe("prefix\n\nNEW");
+      // A concurrent write removed the target → the retry fails loudly instead of guessing.
+      expect(() => refresher!({ content: "someone replaced everything" })).toThrow(/not found/);
+      expect(() => refresher!(null)).toThrow(/disappeared mid-write/);
+    });
+  });
+
   it("create writes INDEX when the tree gains a file", async () => {
     mGet.mockImplementation(async (p: string) =>
       p === "INDEX.md" ? { path: p, content: "# INDEX (stale)", sha: "s2" } : null
@@ -232,9 +291,9 @@ describe("capture", () => {
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
     mGet.mockResolvedValue(null);
     mList.mockResolvedValue(["profile.md", "INDEX.md"]);
-    await capture("first thought", ["beacon"]);
+    await capture("first thought", ["relay"]);
     const call = mPut.mock.calls.find(([p]) => p === "log/2026-07-24.md")!;
-    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · beacon\n\nfirst thought\n");
+    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · relay\n\nfirst thought\n");
     vi.useRealTimers();
   });
 
@@ -326,3 +385,64 @@ describe("readNote", () => {
   });
 });
 
+
+/**
+ * Two mutation tests, added because a review demonstrated that neither behaviour was pinned:
+ * dropping the running total from the budget check, and reversing the day order, both left the
+ * entire brain suite green. A budget nothing measures is a comment, and "newest first" that
+ * nothing asserts is a coincidence.
+ */
+describe("getContext holds its ceiling and its ordering", () => {
+  function seed(days: Record<string, number>) {
+    const files = new Map<string, string>([["profile.md", "P"]]);
+    for (const [d, size] of Object.entries(days)) {
+      files.set(`log/${d}.md`, `# Log\n\n## 09:00 · ops\n\n${"y".repeat(size)}`);
+    }
+    __setCache({ files, sidecar: new Map(), sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
+  }
+
+  // Mutation: `spent + text.length` -> `text.length`. Seven ordinary days each fit alone, so
+  // without the running total all seven expand and the boot call is ~56 KB.
+  it("bounds the WHOLE recent section, not each day against the budget separately", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    seed(Object.fromEntries(
+      ["2026-07-24", "2026-07-23", "2026-07-22", "2026-07-21", "2026-07-20", "2026-07-19", "2026-07-18"].map((d) => [d, 7_900])
+    ));
+    const ctx = await getContext();
+    const recent = ctx.slice(ctx.indexOf("# RECENT"));
+    expect(recent.length).toBeLessThan(20_000);
+    expect(ctx).toMatch(/[1-3] days? expanded, [4-6] digested/);
+    vi.useRealTimers();
+  });
+
+  // Mutation: `.reverse()` on the day list. Without this the operator boots into last week and
+  // gets a one-line digest of the day they are actually working in.
+  it("spends the budget on the NEWEST days, not the oldest", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    seed({ "2026-07-24": 3_000, "2026-07-23": 3_000, "2026-07-22": 3_000, "2026-07-21": 3_000, "2026-07-20": 3_000 });
+    const ctx = await getContext();
+    expect(ctx).toContain("--- log/2026-07-24.md ---"); // today expanded
+    expect(ctx).toContain("brain_read log/2026-07-20.md"); // the oldest digested
+    expect(ctx).not.toContain("--- log/2026-07-20.md ---");
+    vi.useRealTimers();
+  });
+
+  // The digest line replaces an oversized day, so it is the budget's own escape hatch. It used to
+  // interpolate note-derived text with no ceiling: one huge tag on one heading produced a 200 KB
+  // boot call from a day the budget had just declined to expand.
+  it("bounds the digest line that stands in for an oversized day", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    const files = new Map<string, string>([
+      ["profile.md", "P"],
+      ["log/2026-07-24.md", `# Log\n\n## 09:00 · ${"z".repeat(200_000)}\n\n${"y".repeat(9_000)}`],
+    ]);
+    __setCache({ files, sidecar: new Map(), sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
+    const ctx = await getContext();
+    expect(ctx.length).toBeLessThan(15_000);
+    expect(ctx).toContain("brain_read log/2026-07-24.md");
+    vi.useRealTimers();
+  });
+});

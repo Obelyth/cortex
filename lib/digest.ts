@@ -34,6 +34,16 @@ const ENTRY = /^##[ \t]+(\d{2}:\d{2})(?:[ \t]*·[ \t]*(.*))?$/;
  *  wall. The overflow is counted out loud rather than silently dropped. */
 const MAX_TAGS = 8;
 
+/**
+ * And a ceiling on each tag's LENGTH, not only on how many there are.
+ *
+ * Capping the count alone left the digest unbounded: a tag is whatever text follows the `·` on an
+ * entry heading, and nothing constrains its size. One 200 KB tag on a single heading turned an
+ * 8,000-byte boot budget into a 200,686-byte boot call — from a day the budget had explicitly
+ * declined to expand. The count was bounded; the bytes were not.
+ */
+const MAX_TAG_CHARS = 40;
+
 export function isLogPath(path: string): boolean {
   return LOG_PATH.test(path);
 }
@@ -59,7 +69,7 @@ export function logDigest(text: string): Digest {
     if (!m) continue;
     entries++;
     for (const t of (m[2] ?? "").split(",")) {
-      const v = t.trim().toLowerCase();
+      const v = t.trim().toLowerCase().slice(0, MAX_TAG_CHARS);
       if (v && !tags.includes(v)) tags.push(v);
     }
   }
