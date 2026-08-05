@@ -1,147 +1,190 @@
-# Cortex
+<div align="center">
+  <img src="public/brand/obelyth-emblem.png" alt="OBELYTH" width="96" />
 
-**One memory, every surface.** Cortex is a self-hosted MCP server that turns a private git
-repository of markdown notes into a brain your AI assistants share — readable from Claude Code,
-claude.ai, Cursor, Gemini CLI, ChatGPT, or anything else that speaks MCP, on permissions you
-set per client.
+# CORTEX <sub><sup>by OBELYTH</sup></sub>
 
-What makes it worth running is the verifier: every answer out of your brain carries a stamp —
-`VERIFIED`, `CORRECTED`, `SUPERSEDED`, `NOT IN BRAIN` — proven deterministically against the
-file at its exact commit, not asserted by a model. A confident fabrication becomes a visible
-event. An honest "not in brain" beats a plausible guess. That rule shapes everything here.
+**One memory, every surface.**
+
+A private markdown brain, served to every Claude surface over MCP —
+with a read path that proves its own citations instead of asking to be trusted.
+
+*Read. Cite. Abstain.*
+
+</div>
+
+---
+
+Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same nine tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
+
+```
+        iOS      Web      Desktop      Claude Code      Cursor · CLIs
+          \       |          |            /                /
+           `------+----------+-----------+---------------'
+                        YOUR ORCHESTRATOR                      guests
+                  Claude first-class · any MCP client        ask · propose
+                    reads · writes · reviews                   (scoped)
+                          |                                      |
+                        CORTEX  ·  MCP  ·  verify  ←─────────────'
+                          |             this repo, deployed on Vercel
+                     your brain         ← private repo · markdown · git
+```
 
 ## Quickstart
 
-Prerequisites: Node ≥ 20, the [GitHub CLI](https://cli.github.com) (`gh auth status` clean),
-the [Vercel CLI](https://vercel.com/cli) (`vercel whoami` clean), and an Anthropic API key.
-
 ```bash
+# needs Node >= 20, plus gh and vercel CLIs (both logged in)
 git clone https://github.com/Obelyth/cortex && cd cortex
 npm install
 npm run onboard
 ```
 
-The onboard script does the whole first run: creates your **private** brain repository from
-`brain-template/`, generates the two secrets, sets every required Vercel environment variable,
-deploys to production, verifies the deployment by calling it (trust the check, not the deploy
-log), and prints the exact wiring commands for your clients — Claude Code, claude.ai, Cursor,
-and the console URL. Have notes already? `npm run ingest -- --from <folder>` carries them in.
+The onboarding walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run.
+
+Already have notes? Bring them in afterwards — dry-run by default:
+
+```bash
+npm run ingest -- --from ~/my-notes --repo <you>/brain            # preview
+npm run ingest -- --from ~/my-notes --repo <you>/brain --commit   # file it
+```
+
+Every ingested note gets a provenance line, because a brain that cannot say where a claim came from cannot be trusted to answer with it.
 
 ## The nine tools
 
-Trusted doors get all nine; the guest door gets exactly two (`brain_ask` scoped + `brain_propose`).
+Trusted doors get all nine. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`.
 
-| tool | what |
+| tool | what it does |
 |---|---|
-| `brain_ask` | a reader answers, cites, and the verifier stamps the citation |
-| `brain_corpus` | hands the notes to the calling model instead — no reader, no egress |
-| `brain_context` | profile · index · the last week of logs, one call |
-| `brain_read` | one note by path |
-| `brain_write` | create, replace, append — or `edit`: surgical in-place replacement, refused loudly if ambiguous |
-| `brain_capture` | timestamped append to today's log, from any device |
-| `brain_propose` | guest-only: leave a suggestion for review — commits nothing |
-| `brain_proposals` · `brain_accept` · `brain_reject` | review what guests left; accepting is what commits |
+| `brain_ask` | The flagship. Fetches the whole live corpus as one tarball, hands a reader model the actual notes, then checks the quote it cited against the file — deterministically, no model in that loop. The reader is pluggable per call or per deployment: an allowlisted registry of Claude, OpenAI and Gemini models, all held to one contract — a refusal or truncation throws rather than masquerading as `NOT IN BRAIN`. |
+| `brain_corpus` | Returns the notes into the calling conversation instead. No model call; nothing leaves your storage. |
+| `brain_context` | The boot call: profile, index, and the last week of logs. |
+| `brain_read` | One note, by path. Paths are allowlisted by shape. |
+| `brain_write` | Create, replace, append — or `edit`: surgical in-place replacement, refused loudly if the target is absent or ambiguous. Returns the commit SHA — a save without a SHA did not happen. |
+| `brain_capture` | Timestamped append to today's log. The zero-friction path from a phone. |
+| `brain_propose` | Guest-only. Leaves a suggestion in a review queue — commits nothing, ever. |
+| `brain_proposals` · `brain_accept` · `brain_reject` | The review half, trusted doors only. Accepting is what commits. |
 
-## The three doors
+## What a stamp means
 
-Which door a client uses is the permission model. Two questions decide it: do you trust the
-client, and can it send a header?
+The verifier is deterministic — no model, no network. It compares text to a file at a commit and reports exactly what that proves:
 
-| door | URL | who | may |
-|---|---|---|---|
-| Terminal | `/api/mcp` + `Authorization: Bearer <MCP_TOKEN>` | your orchestrator — any header-capable MCP client | read · write |
-| Connector | `/api/s/<CONNECTOR_PATH_SECRET>/mcp` | trusted clients that cannot send headers (claude.ai connectors) | read · write |
-| Guest | `/api/g/<GUEST_PATH_SECRET>/mcp` | assistants you do **not** control | ask (scoped) · propose — never write |
-
-A guest never receives your notes. Its questions are answered server-side by a Claude reader,
-drawn only from the note areas you share, without source paths or verbatim excerpts, under a
-daily budget. Its suggestions wait in a review queue until you accept — accepting is what
-commits. The guest door does not exist until `GUEST_PATH_SECRET` is set, and it requires the KV
-store (the budget must be meterable, or it is not a budget).
-
-## The stamps
-
-| stamp | means |
+| stamp | meaning |
 |---|---|
-| `VERIFIED` | The cited quote is verbatim in that file at that commit. Proves the text exists — not that the answer follows from it, and the wording says so. |
-| `CORRECTED` | The quote sits beside an in-place correction marker: it *is* the current claim, kept with the wording it replaced. Answer from the current claim. |
-| `SUPERSEDED` | The quote is real but the passage is retracted. History, not the current state. |
-| `PARTIALLY VERIFIED` | The quote is real but appears in more than one note, so its source is not established. |
-| `NOT IN BRAIN` | The corpus does not contain the answer. Said plainly instead of guessed around. |
-| `UNVERIFIED` | The citation could not be proven. Treat the answer as unproven. |
+| `VERIFIED` | This exact text is in that file at that commit. Proves the text exists — **not** that the answer follows from it, and the stamp says so. |
+| `CORRECTED` | The quote sits *beside* an in-place correction marker — it **is** the current claim, kept with the wording it replaced. Answer from the current claim. Split out of `SUPERSEDED` because telling a reader to discard the freshest fact in the brain is how a stamp loses its credibility. |
+| `SUPERSEDED` | The quote is real and the passage is retracted. The brain keeps corrections *on the page* (`SUPERSEDED`, `CORRECTION`, `DEPRECATED`, `(was: "…")`, `Do not answer`), and the verifier enforces them — verbatim is exactly what a stale answer looks like. |
+| `PARTIALLY VERIFIED` | Verbatim in more than one note; the source is ambiguous. |
+| `NOT IN BRAIN` | The reader found nothing and said so. The abstain case — an honest no beats a confident guess. |
+| `UNVERIFIED` | Not in the cited file, spans a boundary, too short to prove, real text the reader was never shown, or a citation of a file that is not in the corpus. Shown anyway, labelled. |
 
-## The readers
+Why this architecture: measured on its own labelled eval, **ranking a generated index answered correctly 55% of the time; a frontier model reading the actual notes, 97%**. So this server does not rank summaries — it ships the notes.
 
-Which model reads your brain is a setting, not an assumption. The allowlist spans Claude,
-OpenAI and Gemini models behind one contract: schema-constrained JSON out, and a refusal,
-truncation or empty completion **throws** rather than masquerading as `NOT IN BRAIN`.
-Resolution order: the call's own `model` argument → the console default → `READER_MODEL` → the
-built-in. Guest questions are always read by a Claude model regardless of the default.
+## What deploys
 
-Honesty note you should keep: the Claude readers carry a measured eval result; the OpenAI and
-Gemini readers are wired but **unmeasured**, and every surface says so until you run
-`scripts/eval.ts` against your own corpus.
+- **The MCP endpoint**, three doors: `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` for clients that send headers (Claude Code, Cursor, the CLIs), `/api/s/<CONNECTOR_PATH_SECRET>/mcp` for trusted clients that cannot (claude.ai custom connectors — add once on the web and iOS and desktop inherit it), and `/api/g/<GUEST_PATH_SECRET>/mcp` for assistants you do not control — a smaller handler that registers only the scoped ask and the propose, so its `tools/list` is the honest answer to "what may I do here". All fail closed: a bad bearer gets a standard `401`; a wrong path secret gets an **empty 404**, because a secret door does not advertise that anything lives there; the guest door does not exist until its secret is set.
+- **A public site** — Overview, Tools, Guide, and a demo map (the real ring renderer over synthetic placeholders; nothing real ships on it).
+- **The secret-gated console** — seven screens at `/s/<CONNECTOR_PATH_SECRET>/console`: overview (corpus load, calls, verdicts per reader, ingest feed of real commits), readers (each model's own record on your corpus, eval states, who is reading now), corpus (every note expandable to its own title, outline and retracted passages, tick by tick), attention (a triaged queue plus the guest proposal review), the live map (your machine's rings, memory ring rebuilt from the corpus on every request — also standalone at `/s/<secret>/map`), a setup guide that reads your deployment's real state and emits ready-to-paste client configs, and settings — every control in one place: default reader, provider switches, guest scope and budgets, appearance; secrets render as presence, never values. Gated because they are inventories; linked from nothing public. `/s/<secret>/health` survives as a redirect into the console.
 
-## The console
+### Machine rings on the map (optional)
 
-`/s/<CONNECTOR_PATH_SECRET>/console` — six screens: **overview** (calls, verdicts, per-reader
-record), **readers** (default, provider switches, guest policy), **corpus** (every note,
-expandable to its own outline and retracted passages), **attention** (triage + the guest
-proposal queue), **map**, **guide** (a setup chooser that reads your deployment's real state
-and emits ready-to-paste client configs). Secrets never render — presence only, always.
+The map's outer rings render from an optional sidecar committed to **your brain repo** at
+`tools/atlas-snapshot.json`. Without it the map still works: you get the live memory ring and a
+"machine rings absent" caption — absence is a supported state, not an error. To add rings,
+commit a snapshot shaped like this (only `capturedAt`, `layers[].key`, `layers[].ring`, and
+`nodes[].id`/`nodes[].layer` are validated; a malformed file is rejected whole and the map
+degrades to memory-only):
+
+```json
+{
+  "capturedAt": "2026-08-01",
+  "center": "claude",
+  "layers": [{ "key": "applications", "label": "APPLICATIONS", "ring": 1, "color": "#aeb8c4" }],
+  "nodes": [{ "id": "app:zsh", "label": "zsh", "layer": "applications", "group": "shell", "machine": "all" }],
+  "edges": [{ "source": "app:zsh", "target": "claude", "kind": "uses" }]
+}
+```
+
+The console map's machine filter (all / mac / linux …) appears only when nodes carry per-machine
+tags — a snapshot that tags everything `"all"` hides it. The sidecar rides the same authenticated
+tarball as your notes, and the corpus loader routes it to the map only: the reader tools never see it.
+
+## Not just Claude
+
+Cortex speaks **standard MCP over streamable HTTP** — Claude is its first-class client, not a
+dependency. Any MCP-capable agent connects through one of the same two doors:
+
+- **Header-capable clients** (Cursor, Codex CLI, Gemini CLI, most IDE agents): point them at
+  `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` — the same wiring as Claude Code, in each
+  client's own MCP config syntax. Cursor (`~/.cursor/mcp.json`), full read + write:
+
+  ```json
+  {
+    "mcpServers": {
+      "cortex": {
+        "url": "https://<host>/api/mcp",
+        "headers": { "Authorization": "Bearer <MCP_TOKEN>" }
+      }
+    }
+  }
+  ```
+
+- **Header-less clients** (ChatGPT custom connectors, and anything else that only takes a URL):
+  the secret-URL door, `/api/s/<CONNECTOR_PATH_SECRET>/mcp` — the same mechanism claude.ai uses,
+  subject to each vendor's own connector availability and policies.
+- **Assistants you do not control** — a collaborator's model, or one you use without trusting it
+  with the pen: the guest door, `/api/g/<GUEST_PATH_SECRET>/mcp`. They ask (answered server-side
+  by a Claude reader, drawn only from the note areas you share, under a daily budget, without
+  source paths or excerpts) and they propose (into a review queue — accepting is what commits).
+  The corpus itself is never handed over.
+
+The reader behind `brain_ask` is pluggable — Claude, OpenAI and Gemini models on an allowlist,
+chosen per call or from the console, so a GPT or Gemini shop can run an all-one-vendor stack.
+`ANTHROPIC_API_KEY` still earns its place: it is the default reader and the one that answers
+guests. `brain_corpus` remains the no-egress path — the *calling* model reads the notes itself,
+whoever it is. The verifier never involves a model at all, which is why swapping readers never
+touches the trust story.
+
+## Privacy posture, in one paragraph
+
+Your notes never touch this repo — they stay in *your* private brain repo and are fetched at request time with a PAT scoped to that one repo. Credential-shaped strings are redacted at egress on every read path. `brain_ask` is the only model egress, its tool description discloses exactly what is sent, and the reader model list is allowlisted so a caller cannot pick an arbitrary model on your key. The site never links the gated pages; the demo map strips the icon roster and fails its own build if that strip ever drifts. Reporting and the full trust model: [SECURITY.md](SECURITY.md).
+
+## Upkeep
+
+`ops/groundskeeper/` is a nightly maintenance task template for Claude Code's scheduler: health-check both auth paths (set-equality against `lib/tool-roster.json`, the one canonical roster, pinned to the server by its own test — a hardcoded count once silently disabled the reference deployment for four nights), absorb daily logs into project pages, fact-check pages against live state, leave a digest. The gated console's attention screen is the same story on demand.
 
 ## Environment
 
-`npm run onboard` sets the required rows. Full reference in [.env.example](.env.example):
-
 | var | required | what breaks without it |
 |---|---|---|
-| `BRAIN_REPO` | yes | everything — no repo to read (`owner/name`, private) |
-| `GITHUB_TOKEN` | yes | every tool — 401 from the Contents API |
-| `MCP_TOKEN` | yes | all bearer requests 401; whitespace-only fails closed |
-| `CONNECTOR_PATH_SECRET` | yes | the connector door and the console 404 |
-| `ANTHROPIC_API_KEY` | yes, for `brain_ask` | the ask tool errors on every call |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | for settings, guest, proposals, call log | controls degrade to env defaults and say so; the guest door refuses |
-| `GUEST_PATH_SECRET` | no | guest door inert (must differ from the connector secret) |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` | no | those readers error on selection |
-| `READER_MODEL` | no | default reader falls to the built-in |
-| `BRAIN_BRANCH` / `BRAIN_TZ` | no | default `main` / `UTC` |
-| `SENTRY_DSN` | no | error reporting off |
-
-## Scheduled upkeep
-
-`ops/groundskeeper/` is the nightly maintenance runbook: a healthcheck script that verifies
-both doors against the canonical tool roster (`lib/tool-roster.json` — pinned to the server by
-`tests/tool-roster.test.ts`, so a roster change that forgets a verifier fails the build, not
-your night), and a skill file for an agent that absorbs daily logs into project pages and
-fact-checks drift. Wire it to any scheduler you like; it degrades safely — if the healthcheck
-fails, the groundskeeper writes nothing and reports.
-
-## Rotating a secret
-
-The URL-borne secrets are credentials; treat a leak like a leak.
-
-```bash
-vercel env rm CONNECTOR_PATH_SECRET production   # same flow for MCP_TOKEN / GUEST_PATH_SECRET
-vercel env add CONNECTOR_PATH_SECRET production  # paste a fresh `openssl rand -hex 32`
-vercel deploy --prod --yes
-```
-
-Then re-wire the clients that used the old value (the guide screen re-emits the configs).
-Revoking guest access entirely is `vercel env rm GUEST_PATH_SECRET production` + redeploy —
-the door 404s from the next request.
-
-Security policy and reporting: [SECURITY.md](SECURITY.md). License: [AGPL-3.0](LICENSE).
+| `BRAIN_REPO` | yes | every tool — no repo to read |
+| `GITHUB_TOKEN` | yes | every tool — 401 from the Contents API. Fine-grained PAT, Contents R/W, only the brain repo |
+| `MCP_TOKEN` | yes | all requests 401 |
+| `CONNECTOR_PATH_SECRET` | for claude.ai | the header-less alias and both gated pages 404 |
+| `ANTHROPIC_API_KEY` | for `brain_ask` | `brain_ask` errors; everything else works. Each `brain_ask` bills this key — order of $0.25–$0.80/call depending on corpus size and model |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` | no | those readers error on selection; unset, they simply cannot be chosen |
+| `READER_MODEL` | no | deployment default reader; outranked by the console's own setting |
+| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | for settings, guest, proposals, call log | console controls degrade to env defaults and say so; the guest door refuses every call — a budget that cannot be metered is not a budget |
+| `GUEST_PATH_SECRET` | no | guest door inert. Must differ from the connector secret |
+| `BRAIN_BRANCH` | no | defaults to `main` |
+| `BRAIN_TZ` | no | defaults to `UTC` — set your IANA zone or daily logs date to the wrong day |
+| `SENTRY_DSN` | no | error reporting disabled |
 
 ## Development
 
 ```bash
-npm install
-npm test          # vitest — the suites are the spec
-npm run typecheck
-npm run dev       # needs at least BRAIN_REPO, GITHUB_TOKEN, MCP_TOKEN, CONNECTOR_PATH_SECRET
+npm run dev          # http://localhost:3000
+npm test             # vitest
+npm run build
 ```
 
-The design laws, if you contribute: a claim must be true or absent; secrets never render;
-detection may be broad but wording must be honest; and every verifier consumes
-`lib/tool-roster.json` instead of hardcoding a roster. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Design: the surface follows the **OBELYTH** design system — deep-slate foundation, matte off-white text, one restrained electric-cyan accent reserved for focus, links and live data, 1px hairlines doing the work of separation. Dark-only. Hanken Grotesk (UI) and JetBrains Mono (every ID and metric) are self-hosted — no third-party font CDN in the loading path. The display slot ships empty (the reference deployment's display face is licensed and not redistributable); `app/layout.tsx` documents how to wire your own. For local development, copy `.env.example` values into `.env.local` (already gitignored).
+
+## License
+
+[AGPL-3.0](LICENSE) — Copyright (c) 2026 OBELYTH. Deploy it, fork it, run your own brain on it. If you offer a modified Cortex to others over a network, the AGPL asks you to share your changes the same way.
+
+---
+
+<div align="center">
+  <sub>CORTEX BY OBELYTH — DATA. INFRASTRUCTURE. ASSURED.</sub>
+</div>
