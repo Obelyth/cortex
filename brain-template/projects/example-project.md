@@ -1,3 +1,8 @@
+---
+description: "Example project page — the three-section shape every project keeps: status, decisions, next steps"
+tags: [example, template]
+---
+
 # Example project
 
 Every project page keeps exactly these three sections. The nightly upkeep and

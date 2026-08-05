@@ -1,3 +1,8 @@
+---
+description: "Boot file — who the operator is, how they work, and the conventions every session loads"
+tags: [profile, conventions]
+---
+
 # Profile
 
 Who you are and how you work. This is the boot file — every session that calls
