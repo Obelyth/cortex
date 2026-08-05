@@ -12,6 +12,8 @@ with a read path that proves its own citations instead of asking to be trusted.
 
 *Any model may read it. Claude earned the default.*
 
+[**Roadmap →**](ROADMAP.md)
+
 </div>
 
 ---
