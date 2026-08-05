@@ -16,7 +16,7 @@ import styles from "./welcome.module.css";
 
 const HERO_STATS = [
   { n: "68", label: "notes in your brain" },
-  { n: "6", label: "things Claude can do" },
+  { n: "9", label: "things your brain can do" },
   { n: "4", label: "places you can ask" },
   { n: "0", label: "things to keep in sync" },
 ];
@@ -410,7 +410,8 @@ export default function Welcome() {
             </div>
             <h1 data-reveal="" className={styles.h1}>One memory,<br />every surface.</h1>
             <p data-reveal="" className={styles.lede}>
-              Your notes, in one place, available to Claude everywhere you use it. Ask a question
+              Your notes, in one place, available to every assistant you trust — Claude first among
+              them, by measurement rather than allegiance. Ask a question
               and you get the answer plus the exact line it came from — or an honest
               &ldquo;that isn&rsquo;t in here.&rdquo;
             </p>
@@ -503,7 +504,8 @@ export default function Welcome() {
             <div data-reveal="" className={styles.kicker}>Getting started</div>
             <h2 data-reveal="" id="connect-title" className={styles.h2}>Set up in one command</h2>
             <p data-reveal="" className={styles.sectionLede}>
-              Two ways to connect, depending on where you use Claude. Both are locked down: get
+              Two ways to connect, depending on what your client can send — Claude, Cursor, the CLIs,
+              or anything that speaks MCP. Both are locked down: get
               the credentials wrong and the page simply does not exist. There is also a third
               door for people who are not you — a guest link that can only ask (scoped to what
               you share) and propose a note for your review. It stays closed until you open it.

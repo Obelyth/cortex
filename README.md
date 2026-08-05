@@ -5,10 +5,12 @@
 
 **One memory, every surface.**
 
-A private markdown brain, served to every Claude surface over MCP —
+A private markdown brain, served to every surface you trust over MCP —
 with a read path that proves its own citations instead of asking to be trusted.
 
 *Read. Cite. Abstain.*
+
+*Any model may read it. Claude earned the default.*
 
 </div>
 
@@ -110,8 +112,13 @@ tarball as your notes, and the corpus loader routes it to the map only: the read
 
 ## Not just Claude
 
-Cortex speaks **standard MCP over streamable HTTP** — Claude is its first-class client, not a
-dependency. Any MCP-capable agent connects through one of the same two doors:
+Cortex is **model-agnostic by architecture and Claude-first by evidence**. The reader allowlist
+spans Claude, OpenAI and Gemini; the only readers that have passed our labeled eval — 97% on 185
+questions against a live corpus — are Claude's, so Claude holds the default until another model
+earns it on the same test. That is the difference between a preference and a measurement.
+
+We didn't build Claude's second brain. We built *yours* — and chose the reader we could prove.
+Any MCP-capable agent connects through the same doors:
 
 - **Header-capable clients** (Cursor, Codex CLI, Gemini CLI, most IDE agents): point them at
   `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` — the same wiring as Claude Code, in each
