@@ -31,7 +31,12 @@ import { isLogPath, logDigest, dateFromLogPath } from "./digest";
  * every time a different box wrote a note. Pinning the locale gives a defined order that is the
  * same everywhere.
  */
-export const byName = (a: string, b: string): number => a.localeCompare(b, "en");
+export const byName = (a: string, b: string): number =>
+  // The tiebreak is not decoration. localeCompare can return 0 for strings that are not
+  // equal — different Unicode normalisations of the same text, most obviously — and a
+  // comparator that calls two distinct paths equal is not a total order. Anything paging on
+  // it then has to guess which of the two it already returned.
+  a.localeCompare(b, "en") || (a < b ? -1 : a > b ? 1 : 0);
 
 export interface Frontmatter {
   /** One sentence describing the note. "" when the note has none yet. */

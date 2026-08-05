@@ -58,8 +58,13 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
   } else if (opts.question) {
     chosen = narrow(files, opts.question, opts.k ?? opts.defaultK);
   } else {
-    // Sorted order, so a cursor is a stable position rather than a bet on map insertion order.
-    const start = opts.after ? all.findIndex((p) => p > opts.after!) : 0;
+    // THE CURSOR MUST USE THE SAME COMPARATOR AS THE SORT. It once used `>`, which is codepoint
+    // order, while the listing above was sorted by `byName`, which is locale collation. Those
+    // disagree on real note names: collation puts `readme-draft.md` before `README.md`, codepoint
+    // puts it after. So the cursor handed back after a page pointed BACKWARDS into that page —
+    // paging returned the same two notes forever and never reached the notes behind them, which is
+    // silent loss dressed up as a full listing.
+    const start = opts.after ? all.findIndex((p) => byName(p, opts.after!) > 0) : 0;
     chosen = start === -1 ? [] : all.slice(start);
   }
 

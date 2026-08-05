@@ -100,3 +100,50 @@ describe("selectNotes — precedence", () => {
     expect(s.paths).toEqual(["b.md"]);
   });
 });
+
+/**
+ * A cursor is only sound if it advances in the SAME order the listing was sorted in.
+ *
+ * These are regression tests for a real bug, and the failure mode is the worst one this system
+ * has: the listing was sorted by locale collation while the cursor advanced by codepoint
+ * comparison. Those disagree on ordinary note names — collation puts `readme-draft.md` before
+ * `README.md`, codepoint puts it after — so the cursor pointed backwards into the page it had just
+ * returned. Paging yielded the same two notes forever and never reached the notes behind them: a
+ * caller doing a full walk got a confident, complete-looking listing that was missing files.
+ */
+describe("selectNotes — the cursor advances in the sort's own order", () => {
+  function fullWalk(names: string[], budgetBytes: number) {
+    const files = new Map(names.map((p) => [p, "z".repeat(400)]));
+    const seen: string[] = [];
+    let after: string | undefined;
+    for (let guard = 0; guard < 50; guard++) {
+      const s = selectNotes(files, { budgetBytes, defaultK: 10, after });
+      seen.push(...s.paths);
+      if (!s.cursor) break;
+      after = s.cursor;
+    }
+    return seen;
+  }
+
+  // The exact case that looped forever: case-insensitive collation reorders these two, and
+  // everything after them was unreachable.
+  it("walks a corpus whose collation order differs from its codepoint order", () => {
+    const names = ["notes/README.md", "notes/readme-draft.md", "notes/redash.md", "notes/setup.md"];
+    const seen = fullWalk(names, 900);
+    expect(new Set(seen)).toEqual(new Set(names));
+    expect(seen.length).toBe(names.length); // no repeats
+  });
+
+  // `/` vs `-` collate differently from their codepoints, so a nested path could vanish.
+  it("does not drop a nested path whose separator collates out of codepoint order", () => {
+    const names = ["archive/2025/Q1.md", "archive/2025-old.md", "archive/2025/a.md"];
+    expect(new Set(fullWalk(names, 500))).toEqual(new Set(names));
+  });
+
+  it("terminates on every ordering of a mixed-case corpus", () => {
+    const names = ["a/B.md", "a/b-1.md", "a/A.md", "a/a-1.md", "a/C.md"];
+    const seen = fullWalk(names, 500);
+    expect(new Set(seen)).toEqual(new Set(names));
+    expect(seen.length).toBe(names.length);
+  });
+});
