@@ -1,6 +1,8 @@
 import type { BrainFile } from "./github";
 import { getFile, listTree, putFile } from "./github";
-import { isLive } from "./corpus";
+import { isLive, loadCorpus } from "./corpus";
+import { buildRouter, safeText, MAX_DESCRIPTION } from "./frontmatter";
+import { logDigest } from "./digest";
 import { redact } from "./redact";
 
 // Write policy: what a caller may create or overwrite. Deliberately narrow.
@@ -17,7 +19,7 @@ export function validatePath(path: string): void {
 }
 
 export function todayStamp(): { date: string; time: string } {
-  const tz = process.env.BRAIN_TZ ?? "UTC";
+  const tz = process.env.BRAIN_TZ ?? "America/Los_Angeles";
   const now = new Date();
   const date = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
@@ -34,8 +36,16 @@ export function todayStamp(): { date: string; time: string } {
   return { date, time };
 }
 
-function lastNDates(n: number): string[] {
-  const tz = process.env.BRAIN_TZ ?? "UTC";
+/**
+ * The last `n` local dates, newest first.
+ *
+ * Exported because the DST behaviour is the interesting part and deserves to be tested directly
+ * rather than inferred from which files something happened to fetch. Arithmetic is done in UTC on
+ * a date that was *formatted* in BRAIN_TZ, so the day boundary follows local time while the
+ * subtraction cannot be bitten by a 23- or 25-hour local day.
+ */
+export function lastNDates(n: number): string[] {
+  const tz = process.env.BRAIN_TZ ?? "America/Los_Angeles";
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -53,24 +63,93 @@ function lastNDates(n: number): string[] {
   return out;
 }
 
+/** Days of log the boot call considers at all. */
+const RECENT_DAYS = 7;
+
+/**
+ * Bytes of verbatim log the boot call will spend, newest first.
+ *
+ * A BUDGET, NOT A DAY COUNT, and the difference is not academic. The first cut of this expanded
+ * "the two most recent days" — which on a real brain can be tens of kilobytes for a single day,
+ * because one busy day is an essay. Two such days is most of the savings gone, and the boot call
+ * had barely improved on the raw dump it replaced. A day count bounds how MANY things you read; it does not
+ * bound how much you read, and the thing that costs is the second one.
+ *
+ * So days are expanded newest-first while the budget holds, and every day that does not fit gets
+ * its derived digest line instead. A quiet week shows several days in full; one enormous day shows
+ * as a digest and says so. Either way the boot call has a ceiling.
+ */
+const RECENT_BUDGET_BYTES = 8_000;
+
+/**
+ * The boot call.
+ *
+ * WHAT CHANGED AND WHY. This used to return `profile.md` + `INDEX.md` + seven raw day-logs. That
+ * grows every single day, because the logs are the fastest-growing thing in
+ * the corpus, so the price of booting rose whether or not the new material was relevant.
+ *
+ * Worse, the two big pieces were the wrong shape. `INDEX.md` was a bare path listing that describes
+ * nothing, so a reader could not tell what any note held without opening it. And seven days of
+ * verbatim log answered "what has been written down lately" when the question a boot call actually
+ * asks is "what were we doing".
+ *
+ * Now: profile in full, the router (paths WITH descriptions), the most recent days that fit a byte
+ * budget, and every older day as one derived line. Nothing became unreachable — an elided day is
+ * named, digested, and one `brain_read` away, which is stated in the output rather than left for
+ * the reader to work out.
+ *
+ * ONE COMMIT, ONE SNAPSHOT. It now reads the corpus tarball instead of making nine Contents API
+ * calls. That is fewer requests, and more importantly every part of the reply comes from the same
+ * commit — the old version could interleave a profile from one commit with a log from the next.
+ * The SHA is printed, so a reader can always tell what it was handed.
+ */
 export async function getContext(): Promise<string> {
-  const days = lastNDates(7);
-  const [profile, index, ...logs] = await Promise.all([
-    getFile("profile.md"),
-    getFile("INDEX.md"),
-    ...days.map((d) => getFile(`log/${d}.md`)),
-  ]);
+  const corpus = await loadCorpus();
   const parts: string[] = [];
-  parts.push("# PROFILE\n\n" + (profile?.content ?? "(profile.md missing)"));
-  parts.push("# INDEX\n\n" + (index?.content ?? "(INDEX.md missing)"));
-  const found = logs.filter((l): l is NonNullable<typeof l> => l !== null);
-  if (found.length > 0) {
-    parts.push(
-      "# RECENT LOG (last 7 days)\n\n" +
-        found.map((l) => `--- ${l.path} ---\n${l.content}`).join("\n\n")
-    );
+
+  parts.push("# PROFILE\n\n" + (corpus.files.get("profile.md") ?? "(profile.md missing)"));
+  parts.push(buildRouter(corpus.files));
+
+  // Only days that exist are candidates, so a quiet weekend does not spend the budget deciding
+  // about absent files instead of the days that actually have something in them.
+  const present = lastNDates(RECENT_DAYS).filter((d) => corpus.files.has(`log/${d}.md`));
+  const expand: string[] = [];
+  const elide: string[] = [];
+  let spent = 0;
+
+  for (const d of present) {
+    const text = corpus.files.get(`log/${d}.md`)!;
+    // A day that would overflow is digested, and the walk CONTINUES — one enormous Tuesday must
+    // not hide the three short days behind it, which a `break` here would do.
+    if (spent + text.length <= RECENT_BUDGET_BYTES) {
+      expand.push(d);
+      spent += text.length;
+    } else {
+      elide.push(d);
+    }
   }
-  return parts.join("\n\n");
+
+  if (present.length > 0) {
+    const blocks = [
+      ...expand.map((d) => `--- log/${d}.md ---\n${corpus.files.get(`log/${d}.md`)}`),
+      ...elide.map((d) => {
+        const { description } = logDigest(corpus.files.get(`log/${d}.md`)!);
+        // Through safeText like every other note-derived string that reaches a caller. This was the
+        // one render site that interpolated raw, so the line the budget uses to REPLACE an
+        // oversized day had no ceiling of its own.
+        return `--- log/${d}.md · ${safeText(description, MAX_DESCRIPTION)} · not expanded — brain_read log/${d}.md for the full day ---`;
+      }),
+    ];
+    parts.push(`# RECENT (last ${RECENT_DAYS} days)\n\n${blocks.join("\n\n")}`);
+  }
+
+  const body = parts.join("\n\n");
+  return (
+    `${body}\n\n---\n` +
+    `brain @${corpus.sha.slice(0, 12)} · ${corpus.files.size} notes routed · ` +
+    `${expand.length} day${expand.length === 1 ? "" : "s"} expanded, ${elide.length} digested · ` +
+    `~${Math.round(body.length / 4)} tokens. Open any note with brain_read, or brain_corpus for a set.`
+  );
 }
 
 
@@ -122,27 +201,75 @@ async function regenerateIndexes(): Promise<void> {
   await regenerateBareIndex();
 }
 
+/**
+ * Surgical replacement inside a note: `find` must occur EXACTLY once, and the edit is refused
+ * otherwise — loudly, with the count, so the caller quotes more context instead of guessing.
+ *
+ * This mode exists because its absence was rotting the brain. Without it, every correction was
+ * an append: the new truth landed at the bottom of the file while the stale claim stayed
+ * standing above it, verbatim, still quotable — the exact shape the hard-verify landmine test
+ * kept catching in projects/cortex.md. replace-the-whole-note was the only alternative, and
+ * nobody rewrites 18,000 tokens to fix one line. Now the one line is the operation.
+ *
+ * Spliced by index, not String.replace: a replacement containing `$&` or `$'` would be
+ * interpreted as a substitution pattern, and a correction that quotes shell or regex is not
+ * an edge case in this corpus — it is the median note.
+ */
+function applyEdit(text: string, find: string, replacement: string, path: string): string {
+  const n = text.split(find).length - 1;
+  if (n === 0) {
+    throw new Error(
+      `edit failed: the text to replace was not found in ${path} — read the note first and copy the passage exactly, whitespace included`
+    );
+  }
+  if (n > 1) {
+    throw new Error(
+      `edit failed: the text to replace appears ${n} times in ${path} — include more surrounding context so it matches exactly once`
+    );
+  }
+  const i = text.indexOf(find);
+  return text.slice(0, i) + replacement + text.slice(i + find.length);
+}
+
 export async function writeNote(
   path: string,
   content: string,
-  mode: "create" | "replace" | "append"
+  mode: "create" | "replace" | "append" | "edit",
+  find?: string
 ): Promise<{ path: string; commitSha: string; indexWarning?: string }> {
   validatePath(path);
   const existing = await getFile(path);
   if (mode === "create" && existing) {
     throw new Error(`${path} already exists — use replace or append.`);
   }
-  if (mode === "replace" && !existing) {
+  if ((mode === "replace" || mode === "edit") && !existing) {
     throw new Error(`${path} does not exist — use create.`);
   }
+  if (mode === "edit" && !find) {
+    throw new Error(`edit needs \`find\` — the exact text the new content replaces.`);
+  }
   const finalContent =
-    mode === "append" ? joinAppend(existing?.content, content, content) : content;
+    mode === "append"
+      ? joinAppend(existing?.content, content, content)
+      : mode === "edit"
+        ? applyEdit(existing!.content, find!, content, path)
+        : content;
   const { commitSha } = await putFile(
     path,
     finalContent,
     `brain: ${mode} ${path}`,
     existing?.sha,
-    mode === "append" ? (fresh) => joinAppend(fresh?.content, content, content) : undefined
+    // On a sha-conflict retry the edit re-applies against the FRESH content — and re-runs the
+    // uniqueness checks, because the concurrent write may have removed or duplicated the target.
+    // Failing the retry loudly beats splicing into a file that no longer says what we read.
+    mode === "append"
+      ? (fresh) => joinAppend(fresh?.content, content, content)
+      : mode === "edit"
+        ? (fresh) => {
+            if (!fresh) throw new Error(`edit failed: ${path} disappeared mid-write`);
+            return applyEdit(fresh.content, find!, content, path);
+          }
+        : undefined
   );
   let indexWarning: string | undefined;
   try {

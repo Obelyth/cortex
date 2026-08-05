@@ -1,4 +1,16 @@
+---
+description: "The conventions this brain runs on: layout, retraction markers, and how corrections stay on the page"
+tags: [conventions, retraction]
+---
+
 # Conventions this brain runs on
+
+- **Describe every note.** Open each note with YAML frontmatter carrying a one-line
+  `description:` (10-25 words, say what is IN the note, no trailing period) and a few
+  lowercase `tags:`. The boot call assembles these into the router — the always-loaded
+  list of what this brain contains — so a note without a description is findable only
+  by its filename. Day logs are exempt: their line is derived from the `## HH:MM · tags`
+  entry headings automatically.
 
 - **Layout**: `profile.md` (boot file) · `projects/<name>.md` (one page per
   project) · `notes/<topic>.md` (evergreen) · `log/YYYY-MM-DD.md` (daily
