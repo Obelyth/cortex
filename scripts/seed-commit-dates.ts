@@ -33,6 +33,18 @@ if (!SUPA || !KEY || !REPO || !GH) {
 }
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
+/**
+ * Make a value from a response safe to print.
+ *
+ * Note paths are repo content, so anyone who can land a file in the brain chooses them. A path
+ * carrying a newline or a carriage return can forge whole lines in this script's output — invent a
+ * "0 unresolved" summary, or overwrite the line above it in a terminal — and the operator reads
+ * that output to decide whether the backfill worked. Control characters become "?" and the length
+ * is capped, so one row cannot flood the log either.
+ */
+const safe = (s: string): string =>
+  s.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?").slice(0, 200);
+
 const res = await fetch(`${SUPA}/rest/v1/notes?select=path&last_commit_at=is.null&order=path`, { headers: H });
 // Both checks are load-bearing, and neither was here. PostgREST answers a bad key with 401 and a
 // JSON *object*, so the cast below was a lie on every failure path: `rows.length` came out
@@ -47,9 +59,20 @@ if (!Array.isArray(body)) {
   console.error("postgrest returned a non-array; expected a list of notes");
   process.exit(1);
 }
-const rows = body as Array<{ path: string }>;
-const pending = rows.length;
-console.log(`${pending} note(s) with no commit date`);
+// Built element by element rather than cast. `as Array<{path: string}>` asserted a shape nothing
+// had checked: a row whose `path` was null or missing sailed through and became the string
+// "undefined" inside a GitHub URL, which then 404s and gets counted as "no commit history" -- a
+// silent miscount blamed on git. Anything that is not a non-empty string is now dropped and said
+// out loud.
+const rows: Array<{ path: string }> = [];
+let malformed = 0;
+for (const item of body) {
+  const p = (item as { path?: unknown })?.path;
+  if (typeof p === "string" && p.length > 0) rows.push({ path: p });
+  else malformed++;
+}
+if (malformed) console.error(`${malformed} row(s) had no usable path and were skipped`);
+console.log(`${rows.length} note(s) with no commit date`);
 
 let filled = 0;
 let missing = 0;
@@ -59,7 +82,7 @@ for (const { path } of rows) {
     { headers: { Authorization: `Bearer ${GH}`, Accept: "application/vnd.github+json" } }
   );
   if (!r.ok) {
-    console.error(`  ${path}: HTTP ${r.status}`);
+    console.error(`  ${safe(path)}: HTTP ${r.status}`);
     missing++;
     continue;
   }
@@ -67,7 +90,7 @@ for (const { path } of rows) {
   const at = commits[0]?.commit?.author?.date ?? commits[0]?.commit?.committer?.date ?? null;
   if (!at) {
     // A path git has no history for is a path the mirror should not have. Report, never guess.
-    console.error(`  ${path}: no commit history`);
+    console.error(`  ${safe(path)}: no commit history`);
     missing++;
     continue;
   }
@@ -78,13 +101,13 @@ for (const { path } of rows) {
       body: JSON.stringify({ last_commit_at: at }),
     });
     if (!u.ok) {
-      console.error(`  ${path}: write failed HTTP ${u.status}`);
+      console.error(`  ${safe(path)}: write failed HTTP ${u.status}`);
       missing++;
       continue;
     }
   }
   filled++;
-  if (filled <= 5) console.log(`  ${path} → ${at.slice(0, 10)}`);
+  if (filled <= 5) console.log(`  ${safe(path)} → ${safe(at).slice(0, 10)}`);
 }
 
 console.log(`\n${apply ? "filled" : "would fill"} ${filled} · ${missing} unresolved`);
