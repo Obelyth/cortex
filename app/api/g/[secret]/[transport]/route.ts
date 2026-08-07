@@ -14,7 +14,7 @@ export const maxDuration = 60;
  * `GUEST_PATH_SECRET` is its own credential and MUST NOT equal `CONNECTOR_PATH_SECRET`. The
  * check below refuses that configuration outright rather than quietly serving the reduced
  * toolset at both paths — a shared secret would mean revoking the guest's access revokes
- * the operator's, which is exactly the coupling this door exists to avoid.
+ * The operator's, which is exactly the coupling this door exists to avoid.
  *
  * 404 (not 401) on any mismatch — nothing advertises that anything lives here.
  */

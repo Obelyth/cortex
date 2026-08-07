@@ -3,14 +3,14 @@ import { redact, hasSecret } from "../lib/redact";
 
 describe("redact", () => {
   it("catches the shape actually sitting in this brain", () => {
-    // archive/memory-2026-07/dir1--project-egotaskflow-v2.md carries a live production
+    // archive/memory-2026-07/dir1--project-example-v2.md carries a live production
     // password. A plain \b(password) misses it entirely — underscore is a word character, so
     // the boundary never matches inside ADMIN_PASSWORD. That near-miss is the whole reason the
     // key-name pattern allows a prefix.
-    expect(redact("ADMIN_PASSWORD=3121 is set for Production")).toBe(
+    expect(redact("ADMIN_PASSWORD=1234 is set for Production")).toBe(
       "ADMIN_PASSWORD=<redacted> is set for Production"
     );
-    expect(redact("ADMIN_PASSWORD=3121")).not.toContain("3121");
+    expect(redact("ADMIN_PASSWORD=1234")).not.toContain("1234");
   });
 
   it("handles the separators and casings notes actually use", () => {
@@ -26,20 +26,16 @@ describe("redact", () => {
     }
   });
 
-  // Assembled at runtime: a literal matching Google's key shape trips secret scanners even
-// though it is the test's own synthetic fixture. The redactor sees the same string either way.
-const FAKE_AIZA = "AIza" + "SyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
-
-it("catches vendor-shaped tokens with no key name near them", () => {
+  it("catches vendor-shaped tokens with no key name near them", () => {
     expect(redact("use ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa here")).toContain("<redacted-token>");
     expect(redact("AKIAIOSFODNN7EXAMPLE")).toBe("<redacted-token>");
     expect(redact("xoxb-1234567890-abcdef")).toContain("<redacted-token>");
     expect(redact("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N")).toBe(
       "<redacted-jwt>"
     );
-    // Google's key shape — the one vendor form an operator's GAS/Sheets stack actually mints, and
+    // Google's key shape — the one vendor form the operator's GAS/Sheets stack actually mints, and
     // the shape a Gemini invalid-key error body echoes back.
-    expect(redact(`API key not valid: ${FAKE_AIZA}`)).toBe(
+    expect(redact("API key not valid: AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY")).toBe(
       "API key not valid: <redacted-token>"
     );
   });
@@ -75,7 +71,7 @@ it("catches vendor-shaped tokens with no key name near them", () => {
   });
 
   it("is idempotent, so redacted text is never re-mangled", () => {
-    const once = redact("ADMIN_PASSWORD=3121");
+    const once = redact("ADMIN_PASSWORD=1234");
     expect(redact(once)).toBe(once);
   });
 });

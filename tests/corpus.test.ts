@@ -56,7 +56,7 @@ describe("untar", () => {
     // Regression: any path over 100 chars is split across a `prefix` field at offset 345.
     // Reading only `name` dropped 49 entries of the real repo silently — 7 of them live
     // notes, which the reader would then have answered "not in brain" for.
-    const deep = "memory-2026-07/dir1--project-project-with-an-extremely-long-archived-name.md";
+    const deep = "memory-2026-07/dir1--project-egoyam-collection-evolution-with-a-long-name.md";
     const header = Buffer.alloc(512);
     header.write(deep.split("/").pop()!, 0, 100, "utf8");            // name field
     header.write("0".padStart(11, "0") + "\0", 124, 12, "ascii");    // size 0
@@ -85,7 +85,7 @@ describe("corpus/brain_ask parity", () => {
 
 describe("isLive", () => {
   it("keeps notes, projects, profile and logs", () => {
-    for (const p of ["profile.md", "projects/aurora.md", "notes/x.md", "log/2026-07-28.md"]) {
+    for (const p of ["profile.md", "projects/beacon.md", "notes/x.md", "log/2026-07-28.md"]) {
       expect(isLive(p)).toBe(true);
     }
   });
@@ -107,11 +107,11 @@ describe("loadCorpus", () => {
   beforeEach(() => __setCache(null));
 
   it("fetches, unpacks, filters and caches on the commit sha", async () => {
-    process.env.BRAIN_REPO = "acme/brain";
+    process.env.BRAIN_REPO = "ShootJackal/brain";
     process.env.GITHUB_TOKEN = "t";
     const tarball = makeTarball({
       "profile.md": "operator",
-      "projects/aurora.md": "production is dark",
+      "projects/beacon.md": "production is dark",
       "archive/old.md": "superseded",
       "notes/brain-index.md": "generated",
     });
@@ -128,7 +128,7 @@ describe("loadCorpus", () => {
     try {
       const c = await loadCorpus();
       expect(c.sha).toBe("deadbeef");
-      expect([...c.files.keys()].sort()).toEqual(["profile.md", "projects/aurora.md"]);
+      expect([...c.files.keys()].sort()).toEqual(["profile.md", "projects/beacon.md"]);
       expect(calls).toBe(2); // head + tarball. The old path cost ~128 per write.
 
       // A second call at the same sha must not refetch the tarball.
@@ -142,7 +142,7 @@ describe("loadCorpus", () => {
   });
 
   it("refuses to serve an empty corpus instead of answering from half a brain", async () => {
-    process.env.BRAIN_REPO = "acme/brain";
+    process.env.BRAIN_REPO = "ShootJackal/brain";
     process.env.GITHUB_TOKEN = "t";
     const orig = globalThis.fetch;
     globalThis.fetch = (async (url: string) =>
@@ -158,18 +158,18 @@ describe("loadCorpus", () => {
 });
 
 describe("verify", () => {
-  const files = new Map([["projects/aurora.md", "**The rollout is still offline** (re-checked 2030-01-15)."]]);
+  const files = new Map([["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25)."]]);
 
   it("verifies an exact quote", () => {
-    expect(checkCitation(files, "abc123def456", "projects/aurora.md", "re-checked 2030-01-15").verified).toBe(true);
+    expect(checkCitation(files, "abc123def456", "projects/beacon.md", "re-checked 2026-07-25").verified).toBe(true);
   });
 
   it("verifies through markdown wrappers", () => {
-    expect(verifyQuote("**The rollout is still offline**", "The rollout is still offline").verified).toBe(true);
+    expect(verifyQuote("**Production is still dark**", "Production is still dark").verified).toBe(true);
   });
 
   it("rejects a fabricated quote", () => {
-    const c = checkCitation(files, "abc", "projects/aurora.md", "Aurora shipped and is fully live");
+    const c = checkCitation(files, "abc", "projects/beacon.md", "Beacon shipped and is fully live");
     expect(c.verified).toBe(false);
     expect(c.reason).toMatch(/NOT FOUND/);
   });
@@ -185,38 +185,38 @@ describe("verify", () => {
   });
 
   it("does not lowercase — case is part of an identifier", () => {
-    // `By Zone` vs `By zone` is the live the ops dashboard's bug; treating them as equal would hide it.
-    expect(normalise("By Zone")).not.toBe(normalise("By zone"));
-    expect(verifyQuote("the tab is named By Zone today", "named By zone today").verified).toBe(false);
+    // `By Rig` vs `By rig` is the live OTS bug; treating them as equal would hide it.
+    expect(normalise("By Rig")).not.toBe(normalise("By rig"));
+    expect(verifyQuote("the tab is named By Rig today", "named By rig today").verified).toBe(false);
   });
 
   it("pins the proof to a commit", () => {
-    expect(checkCitation(files, "abcdef1234567890", "projects/aurora.md", "re-checked 2030-01-15").commit)
+    expect(checkCitation(files, "abcdef1234567890", "projects/beacon.md", "re-checked 2026-07-25").commit)
       .toBe("abcdef123456");
   });
 });
 
 describe("narrow", () => {
   const files = new Map([
-    ["projects/aurora.md", "aurora production is dark and the vercel deploy returns 404"],
-    ["projects/beacon.md", "beacon supabase assets backlog written to a dead database"],
+    ["projects/beacon.md", "beacon production is dark and the vercel deploy returns 404"],
+    ["projects/harbor.md", "harbor supabase plates backlog written to a dead database"],
     ["notes/mac.md", "the mac swaps when chrome and claude are both open"],
   ]);
 
   it("ranks by full text, not by filename", () => {
-    expect(rank(files, "why is the deploy returning 404")[0].path).toBe("projects/aurora.md");
+    expect(rank(files, "why is the deploy returning 404")[0].path).toBe("projects/beacon.md");
   });
 
   it("drops zero-signal files rather than padding the shortlist", () => {
     // Counting zero-score entries as "retrieved" makes recall@k mean "the file exists".
     const r = rank(files, "supabase plates");
     expect(r.every((x) => x.score > 0)).toBe(true);
-    expect(r.map((x) => x.path)).toContain("projects/beacon.md");
+    expect(r.map((x) => x.path)).toContain("projects/harbor.md");
     expect(r.map((x) => x.path)).not.toContain("notes/mac.md");
   });
 
   it("is deterministic across calls", () => {
-    expect(rank(files, "aurora deploy")).toEqual(rank(files, "aurora deploy"));
+    expect(rank(files, "beacon deploy")).toEqual(rank(files, "beacon deploy"));
   });
 
   it("falls back to the whole corpus when nothing matches", () => {
@@ -231,7 +231,7 @@ describe("narrow", () => {
     // Single chars are kept on purpose. Dropping them made "is R installed" unanswerable —
     // `r` was the only distinguishing term. Noise is handled by IDF instead: `a` occurs in
     // every note so it scores ~0, while a rare `r` scores high.
-    expect(tokenize("Aurora's deploy.yml -- a 404!")).toEqual(["aurora", "s", "deploy", "yml", "a", "404"]);
+    expect(tokenize("Beacon's deploy.yml -- a 404!")).toEqual(["beacon", "s", "deploy", "yml", "a", "404"]);
   });
 
   it("folds names that are mostly punctuation into spellable tokens", () => {

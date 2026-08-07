@@ -4,8 +4,8 @@
  * Notes get a description authored into their frontmatter. Day-logs must not: there are nine of
  * them now and there will be one per day forever, so any convention that asks a human or a nightly
  * job to write a description for each one is a convention that rots. `brain_capture` already
- * stamps every entry `## HH:MM · tag, tag`. That is routing signal already sitting in the corpus,
- * unread.
+ * stamps every entry `## HH:MM · tag, tag`, and 42 distinct tags are in use across the existing
+ * logs. That is routing signal already sitting in the corpus, unread.
  *
  * So a log's description is computed from its own headings on every render. It cannot drift from
  * the file, it needs no backfill, and a day written by any surface gets one for free.
@@ -22,7 +22,7 @@ const LOG_PATH = /^log\/(\d{4}-\d{2}-\d{2})\.md$/;
  * A timestamped entry heading, with its optional tag list.
  *
  * The `\d{2}:\d{2}` is load-bearing. Real day-logs carry prose H2s that are not entries —
- * `## linux box — brain wiring + local memory cleanup` is a section inside a day, not a new one —
+ * `## <a topic heading>` is a section inside a day, not a new entry —
  * and counting those inflates the entry count on exactly the busiest days.
  */
 const ENTRY = /^##[ \t]+(\d{2}:\d{2})(?:[ \t]*·[ \t]*(.*))?$/;

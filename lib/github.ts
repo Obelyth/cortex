@@ -102,7 +102,7 @@ export async function putFile(
   // May be async: the index's merge has to re-read the whole corpus to re-derive
   // its content, which a synchronous callback cannot do.
   merge?: (fresh: BrainFile | null) => string | Promise<string>
-): Promise<{ commitSha: string }> {
+): Promise<{ commitSha: string; content: string }> {
   let res = await putOnce(path, content, message, sha);
   // What licenses a retry is the MERGE CALLBACK, not the sha.
   //
@@ -118,14 +118,19 @@ export async function putFile(
   // rebuilt from whatever is now on the branch. A caller that passes none keeps
   // the old create-safety: no merge, no overwrite.
   const canRebuild = merge !== undefined;
+  // Track what actually reached the commit. On the retry path that is merge(fresh), not the
+  // caller's argument — and the mirror write-through needs the committed bytes, because a row
+  // holding the caller's stale content under the retry's commit SHA would be a mirror lying
+  // about provenance, silently, on exactly the writes that raced.
+  let committed = content;
   if ((res.status === 409 || res.status === 422) && (sha !== undefined || canRebuild)) {
     const fresh = await getFile(path);
-    const retryContent = merge ? await merge(fresh) : content;
-    res = await putOnce(path, retryContent, message, fresh?.sha);
+    committed = merge ? await merge(fresh) : content;
+    res = await putOnce(path, committed, message, fresh?.sha);
   }
   if (!res.ok) throw await ghError(`putFile ${path}`, res);
   const data = (await res.json()) as { commit: { sha: string } };
-  return { commitSha: data.commit.sha };
+  return { commitSha: data.commit.sha, content: committed };
 }
 
 export async function listTree(): Promise<string[]> {
@@ -168,4 +173,70 @@ export async function listCommits(limit = 20): Promise<CommitInfo[]> {
     message: redact(c.commit.message.split("\n")[0]).slice(0, 90),
     date: c.commit.author?.date ?? c.commit.committer?.date ?? "",
   }));
+}
+
+export interface CompareResult {
+  /** Paths whose content at `head` differs from `base` — added, modified, or the new name of a
+   *  rename. Fetch these and upsert. */
+  changed: string[];
+  /** Paths that no longer exist at `head`, including a rename's old name. Delete these. */
+  removed: string[];
+  /** False when the diff was too large for the compare API's file list, which silently caps at
+   *  300 entries. A reconciler that trusted a capped list would absorb part of a diff and record
+   *  the head as fully synced — the caller must full-sync instead. */
+  complete: boolean;
+  /**
+   * True only when `head` is a DESCENDANT of `base` (compare status "ahead") — the one shape a
+   * patch may be built from. Verified against the live API: "diverged" returns 200 with a
+   * MERGE-BASE diff that omits everything the rewritten commit dropped, and "behind" — a plain
+   * reset-and-force-push — returns 200 with an EMPTY file list. A patch built from either
+   * records the new head having changed nothing, and the phantom rows persist forever, because a
+   * dropped path can never appear in any future diff. The 404 defence is nearly theoretical:
+   * orphaned commits stay SHA-resolvable on GitHub more or less indefinitely.
+   */
+  ahead: boolean;
+}
+
+/**
+ * What changed between two commits, as the mirror needs it: fetch-these, delete-these, and an
+ * honest flag for "this list cannot be trusted to be everything".
+ *
+ * `keep` filters both lists. It is a parameter rather than an import from corpus.ts for two
+ * reasons: corpus.ts already imports this module, and — more importantly — the definition of
+ * "the live corpus" must have exactly one home. A second copy here is the dual-implementation
+ * drift this repo exists to delete.
+ *
+ * A 404 from the compare API usually means divergent histories — a force-push over the brain —
+ * and the caller's answer is a full sync, never a patch.
+ */
+export async function compareCommits(
+  base: string,
+  head: string,
+  keep: (path: string) => boolean = () => true
+): Promise<CompareResult> {
+  const res = await gh(`/repos/${repo()}/compare/${base}...${head}`);
+  if (!res.ok) throw await ghError("compare", res);
+  const data = (await res.json()) as {
+    status?: string;
+    files?: Array<{ filename: string; status: string; previous_filename?: string }>;
+  };
+  const files = data.files ?? [];
+  const ahead = data.status === "ahead";
+
+  const changed: string[] = [];
+  const removed: string[] = [];
+  for (const f of files) {
+    if (f.status === "removed") {
+      if (keep(f.filename)) removed.push(f.filename);
+      continue;
+    }
+    if (keep(f.filename)) changed.push(f.filename);
+    // A rename is a delete wearing a new name. The compare API reports it as one entry; the
+    // mirror must see both halves or the old row survives as a ghost note.
+    if (f.status === "renamed" && f.previous_filename && keep(f.previous_filename)) {
+      removed.push(f.previous_filename);
+    }
+  }
+  // The API caps `files` at 300 with no explicit truncation flag; at the cap, assume the worst.
+  return { changed, removed, complete: files.length < 300, ahead };
 }

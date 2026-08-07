@@ -2,7 +2,7 @@
  * atlas — the operating map: what the brain is made of, and what reaches it.
  *
  * Two of the four rings describe things cortex cannot see. MCP servers, hooks and skills live on
- * the operator's machine; a server in Vercel has no view of them, so they ship as a dated snapshot and
+ * The operator's machine; a server in Vercel has no view of them, so they ship as a dated snapshot and
  * the page says so rather than implying freshness it cannot back.
  *
  * The memory ring is the one cortex owns, so it is rebuilt from the live corpus on every request.

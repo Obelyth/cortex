@@ -66,6 +66,9 @@ export interface AskResult {
   commit: string;
   candidates: string[];
   packTokens: number;
+  /** The whole (scoped) corpus, same chars/4 estimate as packTokens — what narrowing avoided
+   *  hauling into a context. The call log keeps the difference as `saved`. */
+  corpusTokens: number;
   notInBrain: boolean;
   /** The reader cited a file that was not in its pack — it cannot have read it. */
   citedOutsidePack: boolean;
@@ -257,6 +260,9 @@ export async function ask(
     // Measured on the prompt actually sent: the contract, the question and the per-file
     // banners are billed too. Counting only file bodies under-reported by 5-8%.
     packTokens: Math.round(prompt.length / 4),
+    corpusTokens: Math.round(
+      [...corpus.files.values()].reduce((a, t) => a + t.length, 0) / 4
+    ),
     notInBrain,
     citedOutsidePack: Boolean(path) && !paths.includes(path),
     unresolvedTag,
@@ -352,7 +358,7 @@ function renderFull(r: AskResult): string {
   } else if (c.superseded) {
     // The highest-value check in the whole file. This brain keeps retracted claims on the
     // page on purpose — `> **SUPERSEDED …**`, `> **CORRECTION …**`, `(was: "…")` — so the
-    // text being verbatim is exactly what a stale answer looks like. grain-grain.md still
+    // text being verbatim is exactly what a stale answer looks like. beacon-beacon.md still
     // says "SHIPPED … live in production" two lines under a banner saying production is dark.
     stamp = `SUPERSEDED — the quote is verbatim in ${at}, but that passage is marked as retracted or corrected. It is history, not the current state. Do not answer from it.`;
   } else if (r.quoteFileCount > 1) {

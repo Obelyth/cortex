@@ -24,17 +24,17 @@ describe("note self-description", () => {
     mLoad.mockResolvedValue(
       corpus([
         [
-          "projects/tandem.md",
-          "# Tandem — plates intake\n\nThe plates backlog went into a deleted database.\n\n## Recovery\n\ndetails here\n\n## Status\n\nmore\n",
+          "projects/harbor.md",
+          "# Harbor — plates intake\n\nThe plates backlog went into a deleted database.\n\n## Recovery\n\ndetails here\n\n## Status\n\nmore\n",
         ],
       ])
     );
     const h = await health();
     const n = h.notes[0];
-    expect(n.title).toBe("Tandem — plates intake");
+    expect(n.title).toBe("Harbor — plates intake");
     expect(n.desc).toBe("The plates backlog went into a deleted database.");
     expect(n.headings).toEqual([
-      { h: "Tandem — plates intake", line: 1 },
+      { h: "Harbor — plates intake", line: 1 },
       { h: "Recovery", line: 5 },
       { h: "Status", line: 9 },
     ]);
@@ -53,14 +53,14 @@ describe("note self-description", () => {
       corpus([
         [
           "notes/ops.md",
-          "# Ops ADMIN_PASSWORD=3121\n\nThe admin password: hunter2 is set for prod.\n\n## Rotate token=abc123 soon\n\nx\n",
+          "# Ops ADMIN_PASSWORD=1234\n\nThe admin password: hunter2 is set for prod.\n\n## Rotate token=abc123 soon\n\nx\n",
         ],
       ])
     );
     const h = await health();
     const n = h.notes[0];
     for (const s of [n.title, n.desc, ...n.headings.map((x) => x.h)]) {
-      expect(s).not.toContain("3121");
+      expect(s).not.toContain("1234");
       expect(s).not.toContain("hunter2");
       expect(s).not.toContain("abc123");
     }

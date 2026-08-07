@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { capture, getContext, readNote, writeNote } from "./brain";
+import { capture, getContext, readNote, validatePath, writeNote } from "./brain";
 import { ask, buildPrompt, render, DEFAULT_MODEL, DEFAULT_K } from "./ask";
 import { modelReader, READER_MODEL_IDS } from "./reader";
 import { activeReader, readSettings } from "./settings";
@@ -8,6 +8,8 @@ import { readGuestPolicy, spendGuestAsk, guestReaderModel } from "./guest";
 import { loadCorpus } from "./corpus";
 import { selectNotes } from "./select";
 import { record, currentSurface, stampOf } from "./calls";
+import { logNoteAccess } from "./access";
+import { bubbleStore, renderBubbleList, type BubbleKind } from "./bubble";
 import {
   propose,
   listProposals,
@@ -50,6 +52,8 @@ function err(e: unknown): ToolResult {
  */
 interface CallMeta {
   model?: string;
+  /** brain_ask only: corpusTokens - packTokens, what narrowing spared the caller. */
+  saved?: number;
 }
 
 async function logged(
@@ -68,6 +72,7 @@ async function logged(
       stamp: res.isError ? "ERROR" : tool === "brain_ask" ? stampOf(text) : OUTCOME[tool] ?? "OK",
       ms: Date.now() - started,
       ...(meta.model ? { model: meta.model } : {}),
+      ...(meta.saved !== undefined ? { saved: meta.saved } : {}),
     });
   } catch {
     /* the log is an observation, never the product */
@@ -84,6 +89,7 @@ const OUTCOME: Record<string, string> = {
   brain_corpus: "READ",
   brain_proposals: "READ",
   brain_context: "BOOT",
+  brain_bubble: "BUBBLE",
   // Its own word, not COMMITTED: a proposal changed nothing in the brain, and a console that
   // said otherwise would be claiming a write that never happened.
   brain_propose: "PROPOSED",
@@ -121,6 +127,7 @@ export function registerTools(server: McpServer, opts: ToolOptions = {}): void {
   registerAskTool(server);
   registerReadTools(server);
   registerWriteTools(server);
+  registerBubbleTool(server);
 }
 
 function registerAskTool(server: McpServer): void {
@@ -129,7 +136,7 @@ function registerAskTool(server: McpServer): void {
     {
       title: "Ask the brain a question",
       description:
-        "Answer a question from the operator's brain, with the answer's source and a verbatim quote proving it. PREFER THIS for any factual question about the operator, their projects, machines or decisions. How it works: the whole live corpus is fetched in ONE request, a keyword pass picks the ~10 most likely notes (a cost optimisation with ~99% recall — it never decides the answer), and a reader model reads those notes and answers from them. The cited quote is then checked deterministically against the file: the reply says VERIFIED when the quote is verbatim at that commit, and UNVERIFIED when it is not, so a confident fabrication is visible rather than silent. If the corpus does not contain the answer it says NOT IN BRAIN rather than guessing. Network egress: api.github.com and codeload.github.com (the tarball redirect) for the corpus, plus ONE call to the reader's provider — Anthropic for claude-* readers, OpenAI for gpt-*, Google for gemini-*; the per-call model choice or the deployment's READER_MODEL default decides which — carrying the question and the selected notes. The answer states which model read it. Set full=true to read the entire brain instead of a shortlist (slower, more thorough, for cross-cutting questions).",
+        "Answer a question from the operator's brain, with the answer's source and a verbatim quote proving it. PREFER THIS for any factual question about the operator, his projects, machines or decisions. How it works: the whole live corpus is fetched in ONE request, a keyword pass picks the ~10 most likely notes (a cost optimisation with ~99% recall — it never decides the answer), and a reader model reads those notes and answers from them. The cited quote is then checked deterministically against the file: the reply says VERIFIED when the quote is verbatim at that commit, and UNVERIFIED when it is not, so a confident fabrication is visible rather than silent. If the corpus does not contain the answer it says NOT IN BRAIN rather than guessing. Network egress: api.github.com and codeload.github.com (the tarball redirect) for the corpus, plus ONE call to the reader's provider — Anthropic for claude-* readers, OpenAI for gpt-*, Google for gemini-*; the per-call model choice or the deployment's READER_MODEL default decides which — carrying the question and the selected notes. The answer states which model read it. Set full=true to read the entire brain instead of a shortlist (slower, more thorough, for cross-cutting questions).",
       inputSchema: {
         question: z
           .string()
@@ -164,6 +171,8 @@ function registerAskTool(server: McpServer): void {
         const active = await activeReader(model);
         meta.model = active.model;
         const r = await ask(question, modelReader, { full, k, model: active.model });
+        logNoteAccess(r.candidates, "brain_ask", full ? "full" : "narrowed");
+        meta.saved = Math.max(0, r.corpusTokens - r.packTokens);
         return ok(`${render(r)}\n\nMODEL CALL: ${r.model} read ${r.candidates.length} notes (~${r.packTokens} tokens) @${r.commit}`);
       } catch (e) {
         return err(e);
@@ -178,9 +187,9 @@ const MAX_PATHS = 40;
 /**
  * Bytes of note text one `brain_corpus` reply will carry — ~25k tokens.
  *
- * The old bare call had no ceiling: it packed the entire corpus into a single reply, and the tool
- * description spent sixty words asking the model not to do that. A limit stated in prose is a limit
- * the interface does not have. This one is enforced, reported, and resumable.
+ * The old bare call had no ceiling: it packed all 83 notes, ~113k tokens, into a single reply, and
+ * the tool description spent sixty words asking the model not to do that. A limit stated in prose
+ * is a limit the interface does not have. This one is enforced, reported, and resumable.
  */
 const CORPUS_BUDGET_BYTES = 100_000;
 
@@ -231,6 +240,7 @@ function registerReadTools(server: McpServer): void {
         // Reuse ask.ts's packer: nonced boundaries and the same boundary-forgery detection.
         // This path has NO verifier behind it — the notes land straight in the caller's
         // context — so a note that mimics a file header is more dangerous here, not less.
+        logNoteAccess(sel.paths, "brain_corpus", want?.length ? "paths" : question ? "question" : "listing");
         const { prompt, suspect } = buildPrompt(c, question ?? "", sel.paths);
         const body = sel.paths.length ? prompt.slice(prompt.indexOf("\n\n====================")) : "";
 
@@ -281,13 +291,15 @@ function registerReadTools(server: McpServer): void {
     "brain_read",
     {
       title: "Read a note",
-      description: "Read one note by path (e.g. projects/tandem.md).",
-      inputSchema: { path: z.string().describe("Note path, e.g. projects/tandem.md") },
+      description: "Read one note by path (e.g. projects/example.md).",
+      inputSchema: { path: z.string().describe("Note path, e.g. projects/example.md") },
     },
     async ({ path }) =>
       logged("brain_read", async () => {
       try {
-        return ok(await readNote(path));
+        const text = await readNote(path);
+        logNoteAccess([path], "brain_read", "read");
+        return ok(text);
       } catch (e) {
         return err(e);
       }
@@ -301,19 +313,26 @@ function registerWriteTools(server: McpServer): void {
     {
       title: "Write a note",
       description:
-        "Write to the brain. mode=create (new file only), replace (overwrite existing), append (adds to end, creates the file if missing). Search/read first so you update the right note instead of duplicating. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
+        "Write to the brain. mode=create (new file only), replace (overwrite existing), append (adds to end, creates the file if missing), edit (surgical in-place replacement: `find` names the exact existing text, `content` is what replaces it; refused loudly if `find` matches zero or more than one place). FOR CORRECTIONS, PREFER edit: appending a correction leaves the stale claim standing above it, verbatim and quotable — the exact rot the verifier keeps flagging. Read the note first and copy `find` exactly, whitespace included. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
       inputSchema: {
         path: z
           .string()
           .describe("profile.md, projects/*.md, notes/*.md, log/*.md, or archive/**.md"),
         content: z.string().min(1),
-        mode: z.enum(["create", "replace", "append"]),
+        mode: z.enum(["create", "replace", "append", "edit"]),
+        find: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "edit mode only: the exact text to replace, copied verbatim from the note — must occur exactly once."
+          ),
       },
     },
-    async ({ path, content, mode }) =>
+    async ({ path, content, mode, find }) =>
       logged("brain_write", async () => {
       try {
-        const res = await writeNote(path, content, mode);
+        const res = await writeNote(path, content, mode, find);
         return ok(withIndexWarning(`Saved ${res.path} (commit ${res.commitSha}).`, res.indexWarning));
       } catch (e) {
         return err(e);
@@ -447,6 +466,7 @@ function registerGuestAskTool(server: McpServer): void {
           k: Math.min(k ?? DEFAULT_K, policy.maxK),
           scope: policy.scope,
         });
+        meta.saved = Math.max(0, r.corpusTokens - r.packTokens);
         return ok(render(r, { citations: policy.citations }));
       } catch (e) {
         return err(e);
@@ -495,6 +515,104 @@ function registerProposeTool(server: McpServer): void {
           `Proposed ${p.path} (${p.mode}), id ${p.id}. NOTHING HAS BEEN WRITTEN to the brain — ` +
             `this is pending review by the operator or a trusted model. Tell the user it is proposed, not saved.`
         );
+      } catch (e) {
+        return err(e);
+      }
+      }),
+  );
+}
+
+/**
+ * The bubble — working memory, trusted doors only. A guest gets no working state: it is the most
+ * current, least filtered view of what the operator is doing, which is exactly what the guest
+ * door exists to withhold.
+ */
+function registerBubbleTool(server: McpServer): void {
+  server.registerTool(
+    "brain_bubble",
+    {
+      title: "Working memory — what is in progress right now",
+      description:
+        "The bubble: short structured working state that any surface can pick up — what is being worked on, decisions not yet filed into a note, open questions, handoffs. It rides brain_context at boot, budgeted. Items are corrected IN PLACE with update, and leave in three ways: file (write the durable note FIRST with brain_write, then file the item with that path), drop (it stopped mattering), or auto-age — an item untouched for 14 days is aged out on the next read, so touch (update) anything that must outlive a quiet fortnight, or file it into a note, which is where durable things belong. Nothing is deleted; filed and aged items remain as history. At a session's end, add or update a handoff so the next session starts where this one stopped.",
+      inputSchema: {
+        action: z.enum(["list", "add", "update", "file", "drop"]).describe("What to do."),
+        id: z.number().int().positive().optional().describe("The item, for update/file/drop — as shown in the listing."),
+        kind: z
+          .enum(["focus", "decision", "question", "handoff"])
+          .optional()
+          .describe("add: what kind of working state this is. update: change the kind."),
+        body: z
+          .string()
+          .min(1)
+          .max(2000)
+          .optional()
+          .describe("add/update: the item text. Short and structured — working state, not an essay."),
+        project: z.string().max(80).optional().describe("Routing key matching the brain's project names ('cortex', 'harbor'). Omit for general."),
+        note: z
+          .string()
+          .max(200)
+          .optional()
+          .describe("file: the note path the item was written into (write it with brain_write FIRST)."),
+      },
+    },
+    async ({ action, id, kind, body, project, note }) =>
+      logged("brain_bubble", async () => {
+      try {
+        const store = bubbleStore();
+        if (!store) {
+          return err(
+            new Error("the bubble needs the Supabase env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) — this deploy runs without it")
+          );
+        }
+        switch (action) {
+          case "list":
+            return ok(renderBubbleList(await store.open()));
+          case "add": {
+            if (!kind || !body) return err(new Error("add needs kind and body"));
+            const it = await store.add(kind, body, project ?? "", currentSurface());
+            return ok(`Added #${it.id} (${it.kind}${it.project ? ` · ${it.project}` : ""}). It rides every boot call until filed or dropped — or aged out if untouched for 14 days.`);
+          }
+          case "update": {
+            if (!id || (!body && !kind && project === undefined)) {
+              return err(new Error("update needs id and at least one of body, kind, project"));
+            }
+            const it = await store.update(id, {
+              ...(body ? { body } : {}),
+              ...(kind ? { kind: kind as BubbleKind } : {}),
+              ...(project !== undefined ? { project } : {}),
+            });
+            return it
+              ? ok(`Updated #${it.id}. Touch time reset — it stays hot.`)
+              : err(new Error(`#${id} is not an open bubble item — list to see what is`));
+          }
+          case "file": {
+            if (!id || !note) return err(new Error("file needs id and note (the path you already wrote with brain_write)"));
+            validatePath(note);
+            // The path must be a note that EXISTS — filing into a typo would point history at
+            // nothing and quietly retire the item. Fail OPEN on a corpus that cannot load:
+            // refusing to file during a GitHub blip would couple the one Postgres-authoritative
+            // write to a system it does not depend on.
+            try {
+              const c = await loadCorpus();
+              if (!c.files.has(note)) {
+                return err(new Error(`${note} is not a live note — write it with brain_write first, then file`));
+              }
+            } catch {
+              console.error(`[bubble] corpus unavailable during file(${id}) — accepting ${note} unverified`);
+            }
+            const it = await store.file(id, note);
+            return it
+              ? ok(`Filed #${it.id} into ${note}. It leaves the boot call; the note carries it now.`)
+              : err(new Error(`#${id} is not an open bubble item — list to see what is`));
+          }
+          case "drop": {
+            if (!id) return err(new Error("drop needs id"));
+            const it = await store.drop(id);
+            return it
+              ? ok(`Dropped #${it.id}. It ages out as not-mattered; nothing is deleted.`)
+              : err(new Error(`#${id} is not an open bubble item — list to see what is`));
+          }
+        }
       } catch (e) {
         return err(e);
       }

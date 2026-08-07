@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getFile, putFile, listTree } from "../lib/github";
+import { getFile, putFile, listTree, compareCommits } from "../lib/github";
+import { isLive, isSidecar } from "../lib/corpus";
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
@@ -12,7 +13,7 @@ function mockFetchOnce(status: number, body: unknown) {
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
   vi.stubEnv("GITHUB_TOKEN", "test-pat");
-  vi.stubEnv("BRAIN_REPO", "acme/brain");
+  vi.stubEnv("BRAIN_REPO", "ShootJackal/brain");
   vi.stubEnv("BRAIN_BRANCH", "main");
 });
 
@@ -23,7 +24,7 @@ describe("getFile", () => {
     expect(f).toEqual({ path: "profile.md", content: "hello", sha: "abc123" });
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe(
-      "https://api.github.com/repos/acme/brain/contents/profile.md?ref=main"
+      "https://api.github.com/repos/ShootJackal/brain/contents/profile.md?ref=main"
     );
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-pat");
   });
@@ -47,7 +48,7 @@ describe("getFile", () => {
 describe("putFile", () => {
   it("creates without sha, updates with sha, returns commit sha", async () => {
     mockFetchOnce(201, { commit: { sha: "c1" } });
-    expect(await putFile("notes/a.md", "body", "msg")).toEqual({ commitSha: "c1" });
+    expect(await putFile("notes/a.md", "body", "msg")).toEqual({ commitSha: "c1", content: "body" });
     const body = JSON.parse(
       (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string
     );
@@ -59,7 +60,7 @@ describe("putFile", () => {
     mockFetchOnce(409, { message: "conflict" });               // first PUT
     mockFetchOnce(200, { content: b64("old"), sha: "fresh", encoding: "base64" }); // getFile refetch
     mockFetchOnce(200, { commit: { sha: "c2" } });             // retry PUT
-    expect(await putFile("notes/a.md", "body", "msg", "stale")).toEqual({ commitSha: "c2" });
+    expect(await putFile("notes/a.md", "body", "msg", "stale")).toEqual({ commitSha: "c2", content: "body" });
     const retryBody = JSON.parse(
       (global.fetch as ReturnType<typeof vi.fn>).mock.calls[2][1].body as string
     );
@@ -105,7 +106,12 @@ describe("putFile", () => {
     mockFetchOnce(200, { content: b64("concurrent"), sha: "fresh", encoding: "base64" }); // getFile refetch
     mockFetchOnce(200, { commit: { sha: "c3" } });                  // retry PUT
     const merge = vi.fn((fresh) => `${fresh?.content}+mine`);
-    expect(await putFile("notes/a.md", "mine", "msg", "stale", merge)).toEqual({ commitSha: "c3" });
+    expect(await putFile("notes/a.md", "mine", "msg", "stale", merge)).toEqual({
+      commitSha: "c3",
+      // The committed bytes, not the argument: on a retry the mirror write-through must
+      // receive what merge(fresh) produced, or it mirrors stale content under a fresh SHA.
+      content: "concurrent+mine",
+    });
     expect(merge).toHaveBeenCalledWith({ path: "notes/a.md", content: "concurrent", sha: "fresh" });
     const retryBody = JSON.parse(
       (global.fetch as ReturnType<typeof vi.fn>).mock.calls[2][1].body as string
@@ -132,10 +138,79 @@ describe("listTree", () => {
       tree: [
         { path: "profile.md", type: "blob" },
         { path: "projects", type: "tree" },
-        { path: "projects/beacon.md", type: "blob" },
+        { path: "projects/harbor.md", type: "blob" },
         { path: "log/.gitkeep", type: "blob" },
       ],
     });
-    expect(await listTree()).toEqual(["profile.md", "projects/beacon.md"]);
+    expect(await listTree()).toEqual(["profile.md", "projects/harbor.md"]);
+  });
+});
+
+describe("compareCommits", () => {
+  it("returns changed and removed paths for an ordinary diff", async () => {
+    mockFetchOnce(200, {
+      status: "ahead",
+      files: [
+        { filename: "notes/a.md", status: "modified" },
+        { filename: "notes/new.md", status: "added" },
+        { filename: "notes/gone.md", status: "removed" },
+        { filename: "notes/moved.md", status: "renamed", previous_filename: "notes/old-name.md" },
+      ],
+    });
+    const d = await compareCommits("aaa", "bbb");
+    expect(d).toEqual({
+      changed: ["notes/a.md", "notes/new.md", "notes/moved.md"],
+      removed: ["notes/gone.md", "notes/old-name.md"],
+      complete: true,
+      ahead: true,
+    });
+    const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain("/compare/aaa...bbb");
+  });
+
+  // The compare API silently caps its file list at 300. A reconciler that trusted a capped list
+  // would sync part of a big diff and record the head as fully absorbed — silent loss, again.
+  it("reports an over-large diff as incomplete instead of pretending", async () => {
+    mockFetchOnce(200, {
+      status: "ahead",
+      files: Array.from({ length: 300 }, (_, i) => ({ filename: `notes/n${i}.md`, status: "modified" })),
+    });
+    const d = await compareCommits("aaa", "bbb");
+    expect(d.complete).toBe(false);
+  });
+
+  // Divergent histories (force-push over the brain) 404 — the caller must full-sync, not patch.
+  it("throws on a compare the API refuses", async () => {
+    mockFetchOnce(404, { message: "Not Found" });
+    await expect(compareCommits("aaa", "bbb")).rejects.toThrow(/compare/);
+  });
+
+  // The keep predicate is passed in rather than baked in, so the ONE definition of "the live
+  // corpus" stays in corpus.ts — a second definition here is exactly the dual-implementation
+  // drift this repo exists to delete.
+  it("filters through the caller's keep predicate", async () => {
+    mockFetchOnce(200, {
+      status: "ahead",
+      files: [
+        { filename: "tools/atlas-snapshot.json", status: "modified" },
+        { filename: ".github/workflows/x.yml", status: "modified" },
+        { filename: "notes/real.md", status: "removed" },
+      ],
+    });
+    const d = await compareCommits("aaa", "bbb", (p) => isLive(p) || isSidecar(p));
+    expect(d.changed).toEqual(["tools/atlas-snapshot.json"]);
+    expect(d.removed).toEqual(["notes/real.md"]);
+  });
+
+  /**
+   * Verified against the live API: a force-push shows up as status "behind" (empty file list) or
+   * "diverged" (a MERGE-BASE diff that omits what the rewrite dropped) — both HTTP 200. `ahead`
+   * is the reconciler's licence to patch; anything else means rebuild.
+   */
+  it.each(["behind", "diverged", "identical"])('reports ahead=false for status "%s"', async (status) => {
+    mockFetchOnce(200, { status, files: [] });
+    const d = await compareCommits("aaa", "bbb");
+    expect(d.ahead).toBe(false);
+    expect(d.complete).toBe(true);
   });
 });

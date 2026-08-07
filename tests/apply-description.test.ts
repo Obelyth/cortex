@@ -4,15 +4,15 @@ import { parseFrontmatter } from "../lib/frontmatter";
 
 describe("applyDescription", () => {
   it("prepends a block to a note that has none, leaving the body byte-identical", () => {
-    const body = "# Beacon\n\n## Status\nRetired.\n";
-    const out = applyDescription(body, "Retired relay app", ["beacon", "retired"]);
+    const body = "# Quarry\n\n## Status\nRetired.\n";
+    const out = applyDescription(body, "Retired relay app", ["quarry", "retired"]);
     expect(out).toBe(
-      '---\ndescription: "Retired relay app"\ntags: [beacon, retired]\n---\n\n# Beacon\n\n## Status\nRetired.\n'
+      '---\ndescription: "Retired relay app"\ntags: [quarry, retired]\n---\n\n# Quarry\n\n## Status\nRetired.\n'
     );
     expect(parseFrontmatter(out).body).toBe(`\n${body}`);
   });
 
-  // Notes that already carry name/description/metadata. Re-running the backfill
+  // The nine feedback-* notes already carry name/description/metadata. Re-running the backfill
   // over them must not stack a second fence or reorder what is there.
   it("leaves an existing description alone", () => {
     const existing = '---\nname: x\ndescription: "already here"\n---\n\nbody\n';
@@ -20,11 +20,11 @@ describe("applyDescription", () => {
   });
 
   it("inserts into an existing block that has no description, preserving the other keys", () => {
-    const existing = "---\nname: x\nmetadata:\n  type: convention\n---\n\nbody\n";
+    const existing = "---\nname: x\nmetadata:\n  type: feedback\n---\n\nbody\n";
     const out = applyDescription(existing, "added", ["a"]);
     expect(parseFrontmatter(out).description).toBe("added");
     expect(out).toContain("name: x");
-    expect(out).toContain("  type: convention");
+    expect(out).toContain("  type: feedback");
     expect(parseFrontmatter(out).body).toBe("\nbody\n");
     expect(out.match(/^---$/gm)?.length).toBe(2);
   });

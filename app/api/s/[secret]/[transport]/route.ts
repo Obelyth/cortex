@@ -1,5 +1,6 @@
 import { handler } from "@/lib/handler";
 import { safeEqualStrings } from "@/lib/auth";
+import { withSurface } from "@/lib/calls";
 
 export const maxDuration = 60;
 
@@ -32,7 +33,8 @@ async function aliased(
     // @ts-expect-error duplex is required by undici for streamed bodies and not yet in lib.dom types
     duplex: "half",
   });
-  return handler(synthetic);
+  // The door is the surface — marked here, where the rewrite happens.
+  return withSurface("connector", () => handler(synthetic));
 }
 
 export { aliased as GET, aliased as POST, aliased as DELETE };
