@@ -34,8 +34,22 @@ if (!SUPA || !KEY || !REPO || !GH) {
 const H = { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" };
 
 const res = await fetch(`${SUPA}/rest/v1/notes?select=path&last_commit_at=is.null&order=path`, { headers: H });
-const rows = (await res.json()) as Array<{ path: string }>;
-console.log(`${rows.length} note(s) with no commit date`);
+// Both checks are load-bearing, and neither was here. PostgREST answers a bad key with 401 and a
+// JSON *object*, so the cast below was a lie on every failure path: `rows.length` came out
+// undefined and the loop threw somewhere further down, reporting a destructuring error instead of
+// "your credentials are wrong". Fail here, where the cause is still legible.
+if (!res.ok) {
+  console.error(`postgrest ${res.status} listing notes — check SUPABASE_URL and the service-role key`);
+  process.exit(1);
+}
+const body: unknown = await res.json();
+if (!Array.isArray(body)) {
+  console.error("postgrest returned a non-array; expected a list of notes");
+  process.exit(1);
+}
+const rows = body as Array<{ path: string }>;
+const pending = rows.length;
+console.log(`${pending} note(s) with no commit date`);
 
 let filled = 0;
 let missing = 0;
