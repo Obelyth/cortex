@@ -39,6 +39,10 @@ export interface CallRow {
    * all and call the server idle. The console counts unattributed rows out loud instead.
    */
   model?: string;
+  /** Tokens narrowing kept out of a context on this ask: scoped corpus minus the pack actually
+   *  sent. brain_ask only; absent on rows written before the field shipped (2026-08-05) — the
+   *  trends screen counts those out loud rather than folding them into zero. */
+  saved?: number;
 }
 
 /** Two days of headroom at a heavy cadence; the console never reads more than 24h of it. */
@@ -167,6 +171,7 @@ function parseRow(raw: unknown): CallRow | null {
     tool: r.tool,
     stamp: r.stamp,
     ms: typeof r.ms === "number" ? r.ms : 0,
+    ...(typeof r.saved === "number" && r.saved >= 0 ? { saved: r.saved } : {}),
     // Passed through as the free string it is, NOT checked against the allowlist: this row is
     // history. A model retired from READER_MODEL_IDS still answered these calls, and a reader
     // that dropped the field on rename would quietly rewrite the past as unattributed.

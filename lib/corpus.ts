@@ -20,7 +20,8 @@
  */
 import zlib from "node:zlib";
 import { promisify } from "node:util";
-import { gh, repo, branch } from "./github";
+import { gh, repo, branch, compareCommits } from "./github";
+import { mirrorStore, syncMirror, fetchFileAt, commitDateOf, type MirrorStore } from "./mirror";
 
 const gunzip = promisify(zlib.gunzip);
 
@@ -45,6 +46,13 @@ const SIDECAR = new Set(["tools/atlas-snapshot.json"]);
 
 export function isSidecar(path: string): boolean {
   return SIDECAR.has(path);
+}
+
+/** The sidecar paths, for callers that must EXCLUDE them — a mirror row-count that includes a
+ *  sidecar is not a count of notes, and two cards disagreeing by one "note" reads as a broken
+ *  sync to anyone who has not read this file. */
+export function sidecarPaths(): string[] {
+  return [...SIDECAR];
 }
 
 export interface Corpus {
@@ -222,18 +230,27 @@ const inFlight = new Map<string, Promise<Corpus>>();
 /** 64 MB of decompressed tar. The brain is 325 KB; this is a zip-bomb ceiling, not a budget. */
 const MAX_TAR_BYTES = 64 * 1024 * 1024;
 
-async function build(sha: string): Promise<Corpus> {
+/**
+ * Every kept file at `sha`, from one tarball. Exported for the mirror's full-sync/backfill,
+ * which must load exactly the file set the corpus is built from — one loader, one definition of
+ * what rides the mirror, no second implementation to drift.
+ */
+export async function loadFilesAt(sha: string): Promise<Map<string, string>> {
   const res = await gh(`/repos/${repo()}/tarball/${sha}`);
   if (!res.ok) throw new Error(`tarball fetch failed: HTTP ${res.status}`);
   const gz = Buffer.from(await res.arrayBuffer());
   const tar = await gunzip(gz, { maxOutputLength: MAX_TAR_BYTES });
+  // The predicate is passed in so entries that are neither a note nor a known sidecar are never
+  // decoded into strings at all.
+  return new Map(untar(tar, (p) => isLive(p) || isSidecar(p)));
+}
 
+/** Assemble a Corpus from a flat file set, whichever loader produced it. */
+function assemble(all: Map<string, string>, sha: string): Corpus {
   const files = new Map<string, string>();
   const sidecar = new Map<string, string>();
   let bytes = 0;
-  // The predicate is passed in so entries that are neither a note nor a known sidecar are never
-  // decoded into strings at all.
-  for (const [path, text] of untar(tar, (p) => isLive(p) || isSidecar(p))) {
+  for (const [path, text] of all) {
     if (isSidecar(path)) {
       // Deliberately kept out of `files` and out of `bytes`: the reader is only ever handed the
       // corpus, and the token gauge measures the corpus.
@@ -243,8 +260,30 @@ async function build(sha: string): Promise<Corpus> {
     files.set(path, text);
     bytes += Buffer.byteLength(text, "utf8");
   }
-  if (files.size === 0) throw new Error("tarball contained no live notes — refusing to serve");
+  if (files.size === 0) throw new Error("corpus contained no live notes — refusing to serve");
   return { files, sidecar, sha, bytes, fetchedAt: Date.now() };
+}
+
+async function build(sha: string): Promise<Corpus> {
+  return assemble(await loadFilesAt(sha), sha);
+}
+
+/**
+ * The corpus served from the Postgres mirror, healed first when it is behind.
+ *
+ * The mirror never gets to be wrong quietly: sync runs before serving, rows are partitioned by
+ * the same isLive/isSidecar the tarball path uses, and an empty result throws — which the caller
+ * treats as "use the tarball", never as "the brain is empty". The keep predicate is bound HERE,
+ * so the one definition of "the live corpus" stays in this file.
+ */
+async function buildFromMirror(store: MirrorStore, sha: string): Promise<Corpus> {
+  await syncMirror(store, await store.head(), sha, {
+    compare: (base, head) => compareCommits(base, head, (p) => isLive(p) || isSidecar(p)),
+    fetchAt: fetchFileAt,
+    commitDate: commitDateOf,
+    fullLoad: loadFilesAt,
+  });
+  return assemble(new Map((await store.all()).map((r) => [r.path, r.content])), sha);
 }
 
 /**
@@ -273,7 +312,7 @@ export async function loadCorpus(force = false): Promise<Corpus> {
   const existing = inFlight.get(sha);
   if (existing) return existing;
 
-  const p = build(sha)
+  const p = buildVia(sha)
     .then((c) => {
       cached = c;
       return c;
@@ -281,6 +320,46 @@ export async function loadCorpus(force = false): Promise<Corpus> {
     .finally(() => inFlight.delete(sha));
   inFlight.set(sha, p);
   return p;
+}
+
+/**
+ * Total time the mirror path may spend before the tarball takes over. Per-request timeouts are
+ * not enough: a sync in the patch branch makes up to 2 store calls plus a compare plus 25 pinned
+ * Contents fetches, and a mirror that is slow-but-alive could stack those toward the function's
+ * own kill without this ceiling — making a degraded mirror WORSE than a dead one, since a dead
+ * one throws immediately and the tarball serves. The race's loser keeps running in the
+ * background; if it eventually completes its apply, the CAS decides as usual.
+ */
+const MIRROR_DEADLINE_MS = 20_000;
+
+/**
+ * Mirror when configured and healthy, tarball otherwise — and "otherwise" is the ordinary path,
+ * not an emergency: with no SUPABASE_URL this function IS yesterday's build(), byte for byte of
+ * behaviour. A mirror failure is logged and absorbed, because a memory server that goes dark
+ * when its cache layer hiccups has its priorities backwards.
+ */
+async function buildVia(sha: string): Promise<Corpus> {
+  const store = mirrorStore();
+  if (store) {
+    try {
+      let timer: NodeJS.Timeout | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`mirror: exceeded ${MIRROR_DEADLINE_MS}ms total budget`)),
+          MIRROR_DEADLINE_MS
+        );
+        timer.unref?.();
+      });
+      try {
+        return await Promise.race([buildFromMirror(store, sha), deadline]);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (e) {
+      console.error(`[mirror] serving tarball instead: ${String(e)}`);
+    }
+  }
+  return build(sha);
 }
 
 /** Test seam and a way to force a cold path in production if the cache is ever suspect. */

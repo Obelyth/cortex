@@ -3,13 +3,13 @@ import { logDigest, isLogPath, dateFromLogPath } from "../lib/digest";
 
 const REAL_SHAPE = `# Log 2026-08-04
 
-## 12:35 · ops, aurora, signal-capture, relay, beacon
+## 12:35 · groundskeeper, cortex, field-capture, prism, quarry
 
-Nightly sweep. Health: the gated path is fine.
+Groundskeeper 2026-08-04. Health: the secret-URL path is fine.
 
-## 20:37 · aurora, console, close-out
+## 20:37 · cortex, console, close-out
 
-The root is the board.
+Cortex: the root is the board.
 `;
 
 describe("isLogPath / dateFromLogPath", () => {
@@ -29,16 +29,16 @@ describe("logDigest", () => {
     const d = logDigest(REAL_SHAPE);
     expect(d.entries).toBe(2);
     expect(d.tags).toEqual([
-      "ops",
-      "aurora",
-      "signal-capture",
-      "relay",
-      "beacon",
+      "groundskeeper",
+      "cortex",
+      "field-capture",
+      "prism",
+      "quarry",
       "console",
       "close-out",
     ]);
     expect(d.description).toBe(
-      "2 entries: ops, aurora, signal-capture, relay, beacon, console, close-out"
+      "2 entries: groundskeeper, cortex, field-capture, prism, quarry, console, close-out"
     );
   });
 

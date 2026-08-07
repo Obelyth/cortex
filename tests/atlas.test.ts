@@ -4,7 +4,6 @@ vi.mock("../lib/corpus", () => ({ loadCorpus: vi.fn() }));
 
 import { loadCorpus } from "../lib/corpus";
 import { buildAtlas } from "../lib/atlas";
-import { GET } from "../app/s/[secret]/map/route";
 
 const mLoad = vi.mocked(loadCorpus);
 const SECRET = "a".repeat(64);
@@ -24,7 +23,7 @@ const SNAPSHOT = JSON.stringify({
     { id: "routine:hook:x", label: "hook", group: "hook", layer: "routines" },
     { id: "skill:y", label: "skill", group: "user", layer: "skills" },
   ],
-  edges: [{ source: "mcp:github", target: "projects/cortex.md", kind: "documents" }],
+  edges: [{ source: "mcp:github", target: "projects/atlas.md", kind: "documents" }],
 });
 
 function corpus(files: Array<[string, string]>, snapshot: string | null = SNAPSHOT) {
@@ -39,10 +38,6 @@ function corpus(files: Array<[string, string]>, snapshot: string | null = SNAPSH
   } as unknown as Awaited<ReturnType<typeof loadCorpus>>;
 }
 
-function call(secret: string) {
-  const req = new Request(`https://cortex.test/s/${secret}/map`);
-  return GET(req, { params: Promise.resolve({ secret }) });
-}
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -50,7 +45,7 @@ beforeEach(() => {
   mLoad.mockResolvedValue(
     corpus([
       ["log/2026-07-30.md", "# Log\n\nRan the groundskeeper.\n"],
-      ["projects/cortex.md", "# cortex\n\nThe memory server.\n\nSUPERSEDED: was on Fly.\n"],
+      ["projects/atlas.md", "# cortex\n\nThe memory server.\n\nSUPERSEDED: was on Fly.\n"],
       ["profile.md", "# profile\n\nField ops and data.\n"],
     ]),
   );
@@ -65,7 +60,7 @@ describe("buildAtlas", () => {
     expect(memory.map((n: { id: string }) => n.id).sort()).toEqual([
       "log/2026-07-30.md",
       "profile.md",
-      "projects/cortex.md",
+      "projects/atlas.md",
     ]);
     expect(meta.live).toBe(3);
     // Directories become ring groups; a bare note falls back to the "note" group.
@@ -76,7 +71,7 @@ describe("buildAtlas", () => {
   it("marks notes that carry retracted passages", async () => {
     const d = JSON.parse((await buildAtlas()).json);
     const byId = new Map(d.nodes.map((n: { id: string }) => [n.id, n]));
-    expect((byId.get("projects/cortex.md") as { status?: string }).status).toBe("retracted");
+    expect((byId.get("projects/atlas.md") as { status?: string }).status).toBe("retracted");
     expect((byId.get("profile.md") as { status?: string }).status).toBeUndefined();
   });
 
@@ -179,80 +174,16 @@ describe("buildAtlas defends the live ring", () => {
   });
 });
 
-describe("map route", () => {
-  it("404s on wrong secret without reading the corpus, with an empty body like the MCP alias", async () => {
-    const res = await call("b".repeat(64));
-    expect(res.status).toBe(404);
-    expect(await res.text()).toBe("");
-    expect(mLoad).not.toHaveBeenCalled();
-  });
-
-  it("locks the page down with a no-network CSP", async () => {
-    const res = await call(SECRET);
-    expect(res.headers.get("content-security-policy")).toContain("default-src 'none'");
-  });
-
-  it("redacts a credential-shaped first line before it reaches the detail panel", async () => {
+describe("the payload is an egress", () => {
+  // The sealed self-contained route died with the Live Board; the board is a Next page, so
+  // React owns HTML encoding and tests/gate.test.ts owns the wrong-secret behavior. What must
+  // survive the renderer swap is the redaction guarantee on the payload itself.
+  it("redacts a credential-shaped first line before it reaches the detail drawer", async () => {
     mLoad.mockResolvedValue(
       corpus([["oops.md", "# oops\n\nADMIN_PASSWORD=hunter2 was the fix.\n"]]),
     );
     const { json } = await buildAtlas();
     expect(json).not.toContain("hunter2");
     expect(json).toContain("<redacted>");
-  });
-
-  it("escapes every < in the payload, so <!-- cannot flip the parser state", async () => {
-    mLoad.mockResolvedValue(
-      corpus([["evil.md", "# evil\n\nx <!-- then <script>alert(1)</script> later\n"]]),
-    );
-    const html = await (await call(SECRET)).text();
-    const block = /<script id="data"[^>]*>([\s\S]*?)<\/script>/.exec(html);
-    expect(block).not.toBeNull();
-    // No raw "<" of any kind survives inside the data block.
-    expect(block![1]).not.toMatch(/<!--|<script/i);
-    expect(() => JSON.parse(block![1])).not.toThrow();
-  });
-
-  it("404s when no secret is configured", async () => {
-    vi.stubEnv("CONNECTOR_PATH_SECRET", "");
-    expect((await call(SECRET)).status).toBe(404);
-    expect(mLoad).not.toHaveBeenCalled();
-  });
-
-  it("serves a complete document with the data injected and nothing left to substitute", async () => {
-    const res = await call(SECRET);
-    expect(res.status).toBe(200);
-    expect(res.headers.get("content-type")).toContain("text/html");
-
-    const html = await res.text();
-    expect(html).not.toContain("__DATA__");
-    expect(html).not.toContain("__ICONS__");
-    expect(html).toContain("<canvas");
-    // The glyphs must survive the port — an icon-less map is the bug we shipped once already.
-    expect(html).toContain("const ICONS");
-
-    const block = /<script id="data"[^>]*>([\s\S]*?)<\/script>/.exec(html);
-    expect(block).not.toBeNull();
-    expect(() => JSON.parse(block![1])).not.toThrow();
-  });
-
-  it("never lets a note body break out of the data block", async () => {
-    mLoad.mockResolvedValue(
-      corpus([["evil.md", "# evil\n\nclosing </script><script>alert(1)</script> tag\n"]]),
-    );
-    const html = await (await call(SECRET)).text();
-    const block = /<script id="data"[^>]*>([\s\S]*?)<\/script>/.exec(html);
-
-    // The regex above stops at the FIRST </script>. If escaping worked, that is the real end of
-    // the block and the captured text still parses as the whole payload.
-    expect(block).not.toBeNull();
-    expect(() => JSON.parse(block![1])).not.toThrow();
-    expect(JSON.parse(block![1]).nodes.some((n: { id: string }) => n.id === "evil.md")).toBe(true);
-  });
-
-  it("tells caches and crawlers to keep the inventory to themselves", async () => {
-    const res = await call(SECRET);
-    expect(res.headers.get("cache-control")).toContain("no-store");
-    expect(res.headers.get("x-robots-tag")).toContain("noindex");
   });
 });

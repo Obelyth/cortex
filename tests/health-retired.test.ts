@@ -40,8 +40,8 @@ describe("retiredRefs ranking", () => {
   it("ranks the note that believes in the dead tools above the changelog that killed them", async () => {
     mLoad.mockResolvedValue(
       corpus([
-        ["projects/cortex.md", CHANGELOG],
-        ["notes/second-brain.md", BELIEVER],
+        ["projects/atlas.md", CHANGELOG],
+        ["notes/memory-design.md", BELIEVER],
       ]),
     );
     const h = await health();
@@ -54,17 +54,17 @@ describe("retiredRefs ranking", () => {
         0,
       ),
     }));
-    expect(rawCounts.find((r) => r.path === "projects/cortex.md")!.raw).toBeGreaterThan(
-      rawCounts.find((r) => r.path === "notes/second-brain.md")!.raw,
+    expect(rawCounts.find((r) => r.path === "projects/atlas.md")!.raw).toBeGreaterThan(
+      rawCounts.find((r) => r.path === "notes/memory-design.md")!.raw,
     );
 
     // What the panel must actually say.
-    expect(h.retiredRefs[0].path).toBe("notes/second-brain.md");
+    expect(h.retiredRefs[0].path).toBe("notes/memory-design.md");
     expect(h.retiredRefs[0].marked).toBe(0);
   });
 
   it("counts an already-marked passage as handled, not as a problem", async () => {
-    mLoad.mockResolvedValue(corpus([["projects/cortex.md", CHANGELOG]]));
+    mLoad.mockResolvedValue(corpus([["projects/atlas.md", CHANGELOG]]));
     const [ref] = (await health()).retiredRefs;
 
     expect(ref.marked).toBeGreaterThan(0);
@@ -92,7 +92,7 @@ describe("retiredRefs ranking", () => {
   });
 
   it("reports the lines to look at, and every reported line holds a retired term", async () => {
-    mLoad.mockResolvedValue(corpus([["notes/second-brain.md", BELIEVER]]));
+    mLoad.mockResolvedValue(corpus([["notes/memory-design.md", BELIEVER]]));
     const [ref] = (await health()).retiredRefs;
     const lines = BELIEVER.split("\n");
 
@@ -113,5 +113,24 @@ describe("retiredRefs ranking", () => {
       corpus([["notes/done.md", "# Done — SUPERSEDED 2026-07-30\n\nrecall.py ranked the index.\n"]]),
     );
     expect((await health()).retiredRefs).toHaveLength(0);
+  });
+});
+
+describe("triage tuning", () => {
+  it("does not alert on the shapes that were never secrets", async () => {
+    const { plausibleSecret } = await import("../lib/health");
+    // The four false positives the queue actually carried, by shape:
+    expect(plausibleSecret("sudo is ENABLED via sudoers (`itsjackal ALL=(ALL) NOPASSWD: ALL`)")).toBe(false);
+    expect(plausibleSecret("Fix: `~/.zshrc` now has `export GITHUB_PERSONAL_ACCESS_TOKEN=<your-pat-here>`")).toBe(false);
+    expect(plausibleSecret("override inline: `GITHUB_TOKEN=ghp_exampl npx tsx ...`")).toBe(false);
+    expect(plausibleSecret("MY_TOKEN=${SOME_OTHER_VAR}")).toBe(false);
+    // And the shape that IS worth a critical alert: secret-ish name, long opaque value.
+    expect(plausibleSecret("API_SECRET=k9f2mQ81xPzL04vWyTr7NnB3")).toBe(true);
+  });
+
+  it("treats command and variable substitution as indirection, not a secret", async () => {
+    const { plausibleSecret } = await import("../lib/health");
+    expect(plausibleSecret('export GITHUB_PERSONAL_ACCESS_TOKEN="$(security find-generic-password -s github-pat -w)"')).toBe(false);
+    expect(plausibleSecret('GITHUB_TOKEN="${VAULT_GITHUB_TOKEN}" gh api …')).toBe(false);
   });
 });

@@ -58,7 +58,7 @@ const CODE = /`+/g;
 // The predecessor class is "anything except space, a marker, or `/`". Naming the allowed
 // characters instead was too narrow and cost real recall: `%`, `.`, `:` and accented letters
 // were all excluded, so `**58.4%**,` normalised to `58.4%**,` and the flagship metric line in
-// projects/cortex.md stopped verifying when a reader dropped the bold. Measured before the
+// a bolded headline metric stopped verifying when a reader dropped the bold. Measured before the
 // widening: 267 of 1162 blocks kept a stray marker and 259 of 727 markdown-bearing blocks
 // failed the exact fold normalise() exists to permit. `/` stays excluded on both sides so
 // `notes/*.md` keeps its glob.
@@ -147,7 +147,7 @@ export function splitBlocks(text: string): Block[] {
     // A new list item, table row or heading starts its own block; a continuation line does not.
     // A blockquote starts its own block too. Without that, `> **SUPERSEDED ...**` merged into
     // the bullet above it and the retraction check could not see it as a neighbour — which is
-    // exactly how notes/grain-grain.md's dead SHIPPED line kept passing as current.
+    // exactly how a superseded note's dead SHIPPED line kept passing as current.
     const startsBlock =
       isHeading || /^[ \t]*([-*+]|\d+[.)])[ \t]+/.test(l) || /^[ \t]*\|/.test(l) || /^[ \t]*>/.test(l);
     if (!l.trim()) {
@@ -208,7 +208,7 @@ export type Retraction = "none" | "banner" | "correction";
  * matched block misses every one of them.
  *
  * Neighbours only, deliberately. Flagging everything below a banner until the next heading
- * would mark most of grain-grain.md, and a warning that fires on healthy text stops being
+ * would mark most of beacon-beacon.md, and a warning that fires on healthy text stops being
  * read. Erring toward over-flagging is still the right direction — a spurious "check this"
  * costs a glance, a missed retraction costs a wrong answer with a green stamp — so the radius
  * is one block, not zero.

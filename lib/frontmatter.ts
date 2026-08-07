@@ -4,7 +4,7 @@
  * The router is one line per note: path, a one-sentence description, tags, last-updated. The
  * description lives in the note's own YAML frontmatter rather than in a database, because the
  * brain has to stay self-describing — a bare `git clone` must carry its own routing layer with no
- * dependency on this server or on any store. Notes that already use this shape keep it
+ * dependency on this server or on any store. Nine notes already use this shape
  * (`notes/feedback-*.md`); the rest are backfilled.
  *
  * WHY A HAND-ROLLED PARSER. The frontmatter this reads is three scalar keys and a tag list, on
@@ -13,7 +13,7 @@
  * nothing. What is here reads the keys it knows and ignores everything else, including the nested
  * `metadata:` blocks the existing feedback notes carry.
  *
- * ABSENCE IS A NON-EVENT, and that is the load-bearing rule. On day one most notes have no
+ * ABSENCE IS A NON-EVENT, and that is the load-bearing rule. On day one, 74 of 83 notes have no
  * frontmatter at all. A parser that threw, or a router that skipped what it could not describe,
  * would make those notes invisible in the one surface that is supposed to list everything — the
  * silent-loss failure the rest of this system is built to prevent. So every path here degrades to
@@ -56,7 +56,7 @@ const EMPTY = (text: string): Frontmatter => ({ description: "", tags: [], body:
 /**
  * Strip one layer of matching quotes.
  *
- * Only when BOTH ends match, so `a brain's notes` keeps its apostrophe and `'it: works'` loses its
+ * Only when BOTH ends match, so `the operator's brain` keeps its apostrophe and `'it: works'` loses its
  * wrapper. A naive strip of any leading or trailing quote mangles the median description in this
  * corpus, which is prose with punctuation in it.
  */
@@ -119,7 +119,7 @@ export function parseFrontmatter(text: string): Frontmatter {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     // Top-level keys only. Indented lines belong to a nested block — `metadata:` in the existing
-    // a nested block — and a `description:` inside one is not this note's description.
+    // feedback notes — and a `description:` nested under one is not this note's description.
     if (/^\s/.test(line)) continue;
 
     const m = /^([A-Za-z0-9_-]+)[ \t]*:[ \t]*(.*)$/.exec(line);
@@ -163,7 +163,7 @@ export function parseFrontmatter(text: string): Frontmatter {
  * This is the one function here that WRITES note text, so it is the one that can do damage. Three
  * rules keep it safe:
  *
- *   1. It never overwrites an existing description. Notes that already carry one were
+ *   1. It never overwrites an existing description. The nine notes that already carry one were
  *      written deliberately; a backfill that clobbered them would be a backfill that destroys the
  *      very thing it exists to create. Re-running over a described note is a no-op.
  *   2. It refuses input it cannot represent rather than emitting YAML it cannot read back. A
@@ -200,10 +200,15 @@ export function applyDescription(text: string, description: string, tags: string
   return `${text.slice(0, open)}description: "${d}"${tagLine}\n${text.slice(open)}`;
 }
 
+export type Temperature = "hot" | "warm" | "cold";
+
 export interface RouterEntry {
   path: string;
   description: string;
   tags: string[];
+  /** Decides how — and whether — this row renders. Absent means hot: with no scores the router
+   *  behaves exactly as it did before temperatures existed. */
+  temperature?: Temperature;
   /** ISO date the note was last modified, or "" when unknown. */
   updated: string;
   /** The note moved after its description was written, so the description is unproven. */
@@ -258,11 +263,16 @@ export function safeText(s: string, max: number): string {
   return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
 }
 
+/** Warm rows carry a shortened description and drop their tags — presence at a fraction of the
+ *  cost. The full description is one brain_read away, and cold rows are not rendered at all. */
+const WARM_DESCRIPTION = 90;
+
 export function routerLine(e: RouterEntry): string {
-  const description = safeText(e.description, MAX_DESCRIPTION);
+  const warm = e.temperature === "warm";
+  const description = safeText(e.description, warm ? WARM_DESCRIPTION : MAX_DESCRIPTION);
   if (!description) return `- ${e.path} · (no description yet)`;
   const parts = [e.path, description];
-  if (e.tags.length) {
+  if (!warm && e.tags.length) {
     const shown = e.tags.slice(0, MAX_ROW_TAGS).map((t) => safeText(t, 40));
     const rest = e.tags.length - MAX_ROW_TAGS;
     parts.push(rest > 0 ? `${shown.join(", ")}, +${rest} more` : shown.join(", "));
@@ -296,25 +306,34 @@ export function entryFor(path: string, text: string, updated = "", stale = false
  * The router table, rendered.
  *
  * Every live note gets a row. What varies with scale is how much of this table is rendered into
- * context — all of it while the corpus is small; past a few hundred notes the hot/warm
+ * context — today all of it, since 83 notes is ~2.5k tokens; past a few hundred the hot/warm
  * split governs. That split is not implemented here: this function is the complete table, and
  * bounding it is a separate decision made where the budget lives.
  *
- * Coverage is reported out loud. A router that quietly described some notes and shrugged at the rest would
+ * Coverage is reported out loud. A router that quietly described 9 notes and shrugged at 74 would
  * read as complete, and the gap is the single most useful thing to know while the backfill is in
  * progress.
  */
 export function buildRouter(
   files: Map<string, string>,
-  meta: Map<string, { updated?: string; stale?: boolean }> = new Map()
+  meta: Map<string, { updated?: string; stale?: boolean; temperature?: Temperature }> = new Map()
 ): string {
   const groups = new Map<string, RouterEntry[]>();
   let described = 0;
+  let cold = 0;
 
   for (const [path, text] of files) {
     const m = meta.get(path);
     const entry = entryFor(path, text, m?.updated ?? "", m?.stale ?? false);
+    entry.temperature = m?.temperature;
     if (entry.description) described++;
+    // COLD IS NOT GONE — it is not RENDERED. Every live note keeps a router row; the
+    // always-loaded slice is hot + warm, and cold is reachable by search, tag, prefix or exact
+    // path. Rendering everything is what fails at a thousand notes.
+    if (entry.temperature === "cold") {
+      cold++;
+      continue;
+    }
     const dir = path.includes("/") ? path.split("/")[0] : "Root";
     if (!groups.has(dir)) groups.set(dir, []);
     groups.get(dir)!.push(entry);
@@ -341,5 +360,9 @@ export function buildRouter(
     .join("\n\n");
 
   const coverage = `_${described} of ${files.size} notes carry a description._`;
-  return `# ROUTER\n\n_Auto-generated by cortex on every write — do not edit by hand._\n${coverage}\n\n${body}`;
+  // A count with no way to act on it is an anxiety, not information.
+  const coldNote = cold
+    ? `\n_${cold} colder note${cold === 1 ? "" : "s"} not listed here — reach them with brain_corpus (question or paths) or brain_ask._`
+    : "";
+  return `# ROUTER\n\n_Auto-generated by cortex on every write — do not edit by hand._\n${coverage}${coldNote}\n\n${body}`;
 }

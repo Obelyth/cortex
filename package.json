@@ -25,11 +25,13 @@
   },
   "devDependencies": {
     "@types/node": "^22",
+    "@types/pg": "^8.20.4",
     "@types/react": "^19",
+    "pg": "^8.22.0",
     "typescript": "^5",
     "vitest": "^3"
   },
-  "description": "CORTEX by OBELYTH — a private markdown brain served to every Claude surface over MCP, with a verified read path.",
+  "description": "CORTEX by OBELYTH \u2014 a private markdown brain served to every Claude surface over MCP, with a verified read path.",
   "repository": {
     "type": "git",
     "url": "https://github.com/Obelyth/cortex"

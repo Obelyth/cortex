@@ -140,7 +140,7 @@ export async function spendGuestAsk(policy: GuestPolicy, now = Date.now()): Prom
  * Which model answers a guest. Always a Claude one.
  *
  * "Claude is orchestration always and gates other models" — made mechanical rather than left as
- * a habit. the operator can point his own default at any allowlisted reader; a guest's question is
+ * a habit. The operator can point his own default at any allowlisted reader; a guest's question is
  * still read by the model he trusts to hold the gate, and flipping his own default can never
  * quietly hand an untrusted caller's traffic to a different provider.
  */

@@ -94,7 +94,9 @@ interface Row {
 const JUDGE_CANDIDATES: { model: string; provider: Provider }[] = [
   { model: "claude-opus-5", provider: "anthropic" },
   { model: "gpt-5.6-terra", provider: "openai" },
-  { model: "gemini-3.1-pro-preview", provider: "google" },
+  // flash, not pro-preview: the pro judge 429s on keys without pro quota, and a judge that
+  // cannot answer is a smaller panel — flash quota is what an AI-Studio key actually has.
+  { model: "gemini-3.6-flash", provider: "google" },
 ];
 
 const JUDGE_CONTRACT = `You are grading one answer from a memory system against a labelled ground truth.
@@ -225,8 +227,10 @@ async function judgeOnce(
     const a = String(parsed.answer ?? "").trim();
     if (/^CORRECT\b/i.test(a)) return { correct: true, why: a.slice(0, 200) };
     if (/^INCORRECT\b/i.test(a)) return { correct: false, why: a.slice(0, 200) };
+    if (process.env.DEBUG_JUDGE) console.error(`[judge ${j.model}] unparseable: ${a.slice(0, 120)}`);
     return null;
-  } catch {
+  } catch (e) {
+    if (process.env.DEBUG_JUDGE) console.error(`[judge ${j.model}] threw: ${(e as Error).message.slice(0, 200)}`);
     return null;
   }
 }
@@ -434,8 +438,11 @@ async function main(): Promise<void> {
     answerOkPerRun: perRun,
     // Everything that did not get scored, stated rather than absorbed into a denominator.
     notScored: {
+      // Judged-attempt failures only: a row with no ground truth was never judgeable, and
+      // counting it here made a healthy run of unscorable labels read as a broken judge panel.
       unjudged: rows.filter(
-        (r) => r.expected !== "NONE" && r.answerOk === null && r.stamp !== "ERROR"
+        (r) =>
+          r.expected !== "NONE" && r.sameBlock !== null && r.answerOk === null && r.stamp !== "ERROR"
       ).length,
       noGroundTruth: all.filter((l) => !l.expect_contains && l.expected !== "NONE").length,
       staleLabels: stale.length,

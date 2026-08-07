@@ -9,12 +9,12 @@ const corpus: Corpus = {
   fetchedAt: Date.now(),
   sidecar: new Map(),
   files: new Map([
-    ["projects/grain.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
-    ["notes/grain-grain.md", "> SUPERSEDED 2026-07-25 — see projects/grain.md.\n- SHIPPED 2026-07-14: live in production."],
-    ["projects/tandem.md", "The plates backlog went into a deleted database."],
+    ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
+    ["notes/beacon-rollout.md", "> SUPERSEDED 2026-07-25 — see projects/beacon.md.\n- SHIPPED 2026-07-14: live in production."],
+    ["projects/harbor.md", "The plates backlog went into a deleted database."],
     // House style for a correction made in place: the CURRENT claim, with the wording it
     // replaced kept beside it. Both sentences are verbatim in the same block.
-    ["projects/cortex.md", 'The reader is pluggable (was: "the reader is always Claude" — updated 2026-08-03). Three providers are wired.'],
+    ["projects/atlas.md", 'The reader is pluggable (was: "the reader is always Claude" — updated 2026-08-03). Three providers are wired.'],
   ]),
 };
 
@@ -39,7 +39,7 @@ function citing(path: string, quote: string, answer = "an answer") {
 // cache is exercised without reaching the network.
 let restore: typeof globalThis.fetch;
 beforeEach(() => {
-  process.env.BRAIN_REPO = "acme/brain";
+  process.env.BRAIN_REPO = "ShootJackal/brain";
   process.env.GITHUB_TOKEN = "test";
   restore = globalThis.fetch;
   globalThis.fetch = (async (url: string) => {
@@ -78,25 +78,25 @@ describe("parseReply", () => {
 
 describe("buildPrompt", () => {
   it("carries the contract and only the chosen files", () => {
-    const { prompt } = buildPrompt(corpus, "is grain live", ["projects/grain.md"]);
+    const { prompt } = buildPrompt(corpus, "is beacon live", ["projects/beacon.md"]);
     expect(prompt).toContain(ANSWER_CONTRACT);
-    expect(prompt).toContain("FILE: projects/grain.md");
-    expect(prompt).not.toContain("FILE: projects/tandem.md");
+    expect(prompt).toContain("FILE: projects/beacon.md");
+    expect(prompt).not.toContain("FILE: projects/harbor.md");
   });
 
   it("issues a fresh unguessable tag per file per request", () => {
     // The tag is what makes a file boundary unforgeable. If it were stable, a note could
     // simply contain last request's tag.
-    const a = buildPrompt(corpus, "q", ["projects/grain.md"]);
-    const b = buildPrompt(corpus, "q", ["projects/grain.md"]);
+    const a = buildPrompt(corpus, "q", ["projects/beacon.md"]);
+    const b = buildPrompt(corpus, "q", ["projects/beacon.md"]);
     expect([...a.tags.keys()][0]).not.toBe([...b.tags.keys()][0]);
-    expect([...a.tags.values()]).toEqual(["projects/grain.md"]);
+    expect([...a.tags.values()]).toEqual(["projects/beacon.md"]);
   });
 });
 
 describe("ask", () => {
   it("verifies a true citation and reports the commit", async () => {
-    const r = await ask("is grain live", citing("projects/grain.md", "Production is still dark", "No — production is dark."));
+    const r = await ask("is beacon live", citing("projects/beacon.md", "Production is still dark", "No — production is dark."));
     expect(r.citation?.verified).toBe(true);
     expect(r.commit).toBe("eaf0a03e4849");
     expect(r.notInBrain).toBe(false);
@@ -111,7 +111,7 @@ describe("ask", () => {
     // matched the retraction pattern and got the strongest possible discard instruction.
     const r = await ask(
       "is the reader pluggable",
-      citing("projects/cortex.md", "The reader is pluggable", "Yes — three providers are wired.")
+      citing("projects/atlas.md", "The reader is pluggable", "Yes — three providers are wired.")
     );
     expect(r.citation?.verified).toBe(true);
     expect(r.citation?.retraction).toBe("correction");
@@ -125,7 +125,7 @@ describe("ask", () => {
     // Same file, same block — the difference is which side of `was:` the quote came from.
     const r = await ask(
       "is the reader always Claude",
-      citing("projects/cortex.md", "the reader is always Claude", "It is Claude.")
+      citing("projects/atlas.md", "the reader is always Claude", "It is Claude.")
     );
     expect(r.citation?.verified).toBe(true);
     expect(render(r)).toMatch(/^SUPERSEDED/);
@@ -133,7 +133,7 @@ describe("ask", () => {
   });
 
   it("flags a fabricated quote instead of passing it through", async () => {
-    const r = await ask("is grain live", citing("projects/grain.md", "Grain is fully live in production", "It shipped."));
+    const r = await ask("is beacon live", citing("projects/beacon.md", "Beacon is fully live in production", "It shipped."));
     expect(r.citation?.verified).toBe(false);
     expect(render(r)).toMatch(/UNVERIFIED/);
     expect(render(r)).toMatch(/unproven/);
@@ -150,10 +150,10 @@ describe("ask", () => {
   it("keeps a provable citation even when the answer says the words NOT IN BRAIN", async () => {
     // Absence is structural. Matching the phrase anywhere in the answer threw away a correct,
     // verified citation whenever the reader happened to mention the contract or brain-index.
-    const r = await ask("is grain live", citing(
-      "projects/grain.md",
+    const r = await ask("is beacon live", citing(
+      "projects/beacon.md",
       "Production is still dark",
-      "That detail is not in brain-index.md, but projects/grain.md covers it."
+      "That detail is not in brain-index.md, but projects/beacon.md covers it."
     ));
     expect(r.notInBrain).toBe(false);
     expect(r.citation?.verified).toBe(true);
@@ -178,7 +178,7 @@ describe("ask", () => {
   });
 
   it("reports the pack size so cost is visible per call", async () => {
-    const r = await ask("grain", async () => "{}", { k: 1 });
+    const r = await ask("beacon", async () => "{}", { k: 1 });
     expect(r.packTokens).toBeGreaterThan(0);
     expect(r.candidates).toHaveLength(1);
   });
@@ -186,10 +186,10 @@ describe("ask", () => {
   it("surfaces both sides of a contradiction in the pack", async () => {
     // The stale note outranks the live one lexically; the pack must contain BOTH so the
     // reader can see the SUPERSEDED stamp and resolve it. This is the architecture's
-    // answer to the grain contradiction — the filter does not get to decide.
-    const r = await ask("is grain shipped or is production dark", async () => "{}", { k: 2 });
-    expect(r.candidates).toContain("notes/grain-grain.md");
-    expect(r.candidates).toContain("projects/grain.md");
+    // answer to the beacon contradiction — the filter does not get to decide.
+    const r = await ask("is beacon shipped or is production dark", async () => "{}", { k: 2 });
+    expect(r.candidates).toContain("notes/beacon-rollout.md");
+    expect(r.candidates).toContain("projects/beacon.md");
   });
 
   it("propagates a reader failure instead of answering from nothing", async () => {

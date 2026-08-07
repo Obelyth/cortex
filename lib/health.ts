@@ -17,13 +17,13 @@ const RETIRED = ["brain_recall", "brain_search", "brain-index.md", "build_index"
 /**
  * A note whose filename is a date is a record OF that date, not a standing claim.
  * `log/2026-07-26.md` saying brain_recall is live was true the night it was written; flagging it
- * would ask the operator to falsify their own diary.
+ * would ask the operator to falsify his own diary.
  */
 const DATED_ENTRY = /(^|\/)\d{4}-\d{2}-\d{2}\.md$/;
 /**
  * The same rule for headings: a section titled "… found on the Linux box 2026-07-31" is a
  * record OF that date. A cleanup story that names the tool it deleted is not a live claim,
- * and flagging it asks the operator to falsify their own history.
+ * and flagging it asks the operator to falsify his own history.
  */
 const DATED_HEADING = /\b\d{4}-\d{2}-\d{2}\b/;
 

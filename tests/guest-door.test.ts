@@ -104,7 +104,7 @@ describe("the two toolsets", () => {
 
   it("gives a guest the mediated ask and the proposal, and nothing else at all", async () => {
     // Shared context ON ASK, not openly shared. Two tools, both mediated: one asks a question
-    // the operator's reader answers, one leaves something for the operator to accept.
+    // The operator's reader answers, one leaves something for the operator to accept.
     expect(await toolsFor(true)).toEqual(["brain_ask", "brain_propose"]);
   });
 

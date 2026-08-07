@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/github", () => ({
   getFile: vi.fn(),
@@ -15,6 +15,7 @@ vi.mock("../lib/github", () => ({
 
 import { getFile, putFile, listTree } from "../lib/github";
 import { __setCache } from "../lib/corpus";
+import { __setBubbleStore } from "../lib/bubble";
 import {
   capture,
   getContext,
@@ -32,14 +33,14 @@ const mList = vi.mocked(listTree);
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("BRAIN_TZ", "America/Los_Angeles");
-  mPut.mockResolvedValue({ commitSha: "c0" });
+  mPut.mockResolvedValue({ commitSha: "c0", content: "committed" });
   // The corpus cache is module-level and keyed on SHA, so a fixture left behind by one test would
   // be served to the next one.
   __setCache(null);
 });
 
 describe("validatePath", () => {
-  it.each(["profile.md", "INDEX.md", "projects/beacon.md", "notes/a-b_c.md", "log/2026-07-24.md", "archive/old/x.md"])(
+  it.each(["profile.md", "INDEX.md", "projects/harbor.md", "notes/a-b_c.md", "log/2026-07-24.md", "archive/old/x.md"])(
     "accepts %s",
     (p) => expect(() => validatePath(p)).not.toThrow()
   );
@@ -91,11 +92,11 @@ describe("getContext", () => {
   it("digests a day that would blow the budget, and says how to open it", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
-    const huge = `# Log\n\n## 09:00 · ops, aurora\n\n${"x".repeat(9000)}`;
+    const huge = `# Log\n\n## 09:00 · groundskeeper, cortex\n\n${"x".repeat(9000)}`;
     corpusOf({ "profile.md": "P", "log/2026-07-24.md": huge, "log/2026-07-23.md": "# Log\n\n## 08:00 · small\n\nshort day" });
     const ctx = await getContext();
     expect(ctx).not.toContain("x".repeat(9000));
-    expect(ctx).toContain("ops, aurora");
+    expect(ctx).toContain("groundskeeper, cortex");
     expect(ctx).toContain("brain_read log/2026-07-24.md");
     // The oversized day must not hide the small one behind it.
     expect(ctx).toContain("short day");
@@ -291,9 +292,9 @@ describe("capture", () => {
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
     mGet.mockResolvedValue(null);
     mList.mockResolvedValue(["profile.md", "INDEX.md"]);
-    await capture("first thought", ["relay"]);
+    await capture("first thought", ["harbor"]);
     const call = mPut.mock.calls.find(([p]) => p === "log/2026-07-24.md")!;
-    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · relay\n\nfirst thought\n");
+    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · harbor\n\nfirst thought\n");
     vi.useRealTimers();
   });
 
@@ -443,6 +444,89 @@ describe("getContext holds its ceiling and its ordering", () => {
     const ctx = await getContext();
     expect(ctx.length).toBeLessThan(15_000);
     expect(ctx).toContain("brain_read log/2026-07-24.md");
+    vi.useRealTimers();
+  });
+});
+
+describe("getContext with the bubble", () => {
+  function corpusOf2(files: Record<string, string>) {
+    __setCache({
+      files: new Map(Object.entries(files)),
+      sidecar: new Map(),
+      sha: "deadbeefcafe0000",
+      bytes: 0,
+      fetchedAt: Date.now(),
+    });
+  }
+  const bubbleItem = {
+    id: 1, kind: "focus" as const, project: "cortex", body: "phase 3 in flight",
+    status: "open" as const, filed_into: "", surface: "terminal", touched_at: new Date().toISOString(), created_at: new Date().toISOString(),
+  };
+
+  afterEach(() => __setBubbleStore(undefined));
+
+  it("a live bubble replaces the raw log expansion — every day rides as a digest line", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    corpusOf2({
+      "profile.md": "P",
+      "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",
+    });
+    __setBubbleStore({
+      async open() { return { items: [bubbleItem], total: 1, swept: 0 }; },
+      async add() { throw new Error("unused"); },
+      async update() { return null; },
+      async file() { return null; },
+      async drop() { return null; },
+    });
+    const ctx = await getContext();
+    expect(ctx).toContain("# BUBBLE");
+    expect(ctx).toContain("phase 3 in flight");
+    // The question "what were we doing" is answered by the bubble; the log is one read away.
+    expect(ctx).not.toContain("verbatim today text");
+    expect(ctx).toContain("brain_read log/2026-07-24.md");
+    expect(ctx).toContain("bubble live");
+    vi.useRealTimers();
+  });
+
+  it("an EMPTY bubble degrades to phase-2 behaviour — boot must never get less informative", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    corpusOf2({
+      "profile.md": "P",
+      "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",
+    });
+    __setBubbleStore({
+      async open() { return { items: [], total: 0, swept: 0 }; },
+      async add() { throw new Error("unused"); },
+      async update() { return null; },
+      async file() { return null; },
+      async drop() { return null; },
+    });
+    const ctx = await getContext();
+    expect(ctx).not.toContain("# BUBBLE");
+    expect(ctx).toContain("verbatim today text");
+    expect(ctx).not.toContain("bubble live");
+    vi.useRealTimers();
+  });
+
+  it("a FAILING bubble degrades the same way, out loud in the log, never in the reply", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    corpusOf2({
+      "profile.md": "P",
+      "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",
+    });
+    __setBubbleStore({
+      async open() { throw new Error("postgrest down"); },
+      async add() { throw new Error("unused"); },
+      async update() { return null; },
+      async file() { return null; },
+      async drop() { return null; },
+    });
+    const ctx = await getContext();
+    expect(ctx).toContain("verbatim today text");
+    expect(ctx).not.toContain("postgrest down"); // the failure never leaks into the boot reply
     vi.useRealTimers();
   });
 });

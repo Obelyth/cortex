@@ -10,13 +10,13 @@
  * common case is that the caller already knows exactly which notes it wants — so asking for them
  * by name is the primary path, and ranking is the fallback for when it does not.
  *
- * THE BUDGET IS ENFORCED, NOT REQUESTED. The bare call used to pack the ENTIRE corpus into one
- * reply, and the tool description spent sixty words asking the model not to do that. A
+ * THE BUDGET IS ENFORCED, NOT REQUESTED. The bare call used to pack all 83 notes — ~113k tokens —
+ * into one reply, and the tool description spent sixty words asking the model not to do that. A
  * limit that lives in prose is a limit the interface does not have. This one is applied after
  * selection, to every path equally, so even an explicit `paths` request is bounded.
  *
  * WHAT IS DROPPED IS COUNTED AND RESUMABLE. Silent truncation would be the same silent-loss failure
- * this system exists to prevent, one layer up: a caller that received a third of the corpus and was told
+ * this system exists to prevent, one layer up: a caller that received 30 of 83 notes and was told
  * nothing would reason as though it had read the brain.
  */
 import { narrow } from "./narrow";

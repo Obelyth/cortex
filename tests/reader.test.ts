@@ -293,9 +293,7 @@ describe("gemini reader", () => {
 
   it("redacts Google's key shape out of an invalid-key error body", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
-    // Fixture assembled at runtime so its Google-key SHAPE never sits verbatim in source.
-    const FAKE_AIZA = "AIza" + "SyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY";
-    stubFetch(`{"error":{"message":"API key not valid: ${FAKE_AIZA}"}}`, 400);
+    stubFetch('{"error":{"message":"API key not valid: AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY"}}', 400);
     const err = String(await geminiReader("p", "gemini-3.6-flash").catch((e: Error) => e));
     expect(err).toMatch(/Gemini returned 400/);
     expect(err).not.toContain("AIzaSyD");
