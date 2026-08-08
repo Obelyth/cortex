@@ -18,7 +18,7 @@ with a read path that proves its own citations instead of asking to be trusted.
 
 ---
 
-Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same nine tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
+Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same ten tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
 
 ```
         iOS      Web      Desktop      Claude Code      Cursor · CLIs
@@ -53,18 +53,19 @@ npm run ingest -- --from ~/my-notes --repo <you>/brain --commit   # file it
 
 Every ingested note gets a provenance line, because a brain that cannot say where a claim came from cannot be trusted to answer with it.
 
-## The nine tools
+## The ten tools
 
-Trusted doors get all nine. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`.
+Trusted doors get all ten. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`.
 
 | tool | what it does |
 |---|---|
 | `brain_ask` | The flagship. Fetches the whole live corpus as one tarball, hands a reader model the actual notes, then checks the quote it cited against the file — deterministically, no model in that loop. The reader is pluggable per call or per deployment: an allowlisted registry of Claude, OpenAI and Gemini models, all held to one contract — a refusal or truncation throws rather than masquerading as `NOT IN BRAIN`. |
 | `brain_corpus` | Returns the notes into the calling conversation instead. No model call; nothing leaves your storage. |
-| `brain_context` | The boot call: profile, index, and the last week of logs. |
+| `brain_context` | The boot call: profile, a one-line router entry per note, and the working bubble. Bounded on purpose — it is paid on every session on every surface, and it currently loads about 4% of the corpus. |
 | `brain_read` | One note, by path. Paths are allowlisted by shape. |
 | `brain_write` | Create, replace, append — or `edit`: surgical in-place replacement, refused loudly if the target is absent or ambiguous. Returns the commit SHA — a save without a SHA did not happen. |
 | `brain_capture` | Timestamped append to today's log. The zero-friction path from a phone. |
+| `brain_bubble` | Working memory: what is in flight right now, carried across sessions and surfaces so work resumes instead of being re-explained. The one thing Postgres is authoritative for — notes never are. |
 | `brain_propose` | Guest-only. Leaves a suggestion in a review queue — commits nothing, ever. |
 | `brain_proposals` · `brain_accept` · `brain_reject` | The review half, trusted doors only. Accepting is what commits. |
 

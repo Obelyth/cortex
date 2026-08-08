@@ -7,10 +7,10 @@ describe("redact", () => {
     // password. A plain \b(password) misses it entirely — underscore is a word character, so
     // the boundary never matches inside ADMIN_PASSWORD. That near-miss is the whole reason the
     // key-name pattern allows a prefix.
-    expect(redact("ADMIN_PASSWORD=1234 is set for Production")).toBe(
+    expect(redact("ADMIN_PASSWORD=synthetic-not-a-real-secret is set for Production")).toBe(
       "ADMIN_PASSWORD=<redacted> is set for Production"
     );
-    expect(redact("ADMIN_PASSWORD=1234")).not.toContain("1234");
+    expect(redact("ADMIN_PASSWORD=synthetic-not-a-real-secret")).not.toContain("synthetic-not-a-real-secret");
   });
 
   it("handles the separators and casings notes actually use", () => {
@@ -71,7 +71,7 @@ describe("redact", () => {
   });
 
   it("is idempotent, so redacted text is never re-mangled", () => {
-    const once = redact("ADMIN_PASSWORD=1234");
+    const once = redact("ADMIN_PASSWORD=synthetic-not-a-real-secret");
     expect(redact(once)).toBe(once);
   });
 });

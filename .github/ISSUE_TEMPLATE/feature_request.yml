@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose something Cortex should do.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth reading [the roadmap](https://github.com/Obelyth/cortex/blob/main/ROADMAP.md) first —
+        including **"Deliberately not on this roadmap"**, which records things that were considered
+        and declined, and what measurement would change the answer. If your request is one of
+        those, the most useful issue you can open is the evidence that the trigger has tripped.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What goes wrong today, from where you sit. Describe the situation rather than the feature —
+        the best proposals here have started as a description of a bad afternoon.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: Existing tools, workarounds, or another product that gets it right.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Tools / MCP surface
+        - Retrieval (narrowing, router, search)
+        - The verifier and answer stamps
+        - Storage and sync (git, the Postgres serving tier)
+        - Working memory (the bubble)
+        - Console
+        - Onboarding / docs
+        - Something else
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        **A note on how retrieval proposals get decided.** No strategy becomes the default here
+        without beating the incumbent on a labelled set — that rule has already killed a feature
+        that was built and measured (full-text search lost to BM25 and did not ship as the
+        default). If you are proposing a retrieval change, expect the same bar, and know that
+        "it was built, measured, and declined" counts as a successful outcome rather than a
+        rejection.

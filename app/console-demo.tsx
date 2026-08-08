@@ -16,6 +16,7 @@ import {
   COMMITS,
   CREDS,
   DIRS,
+  DIR_TOTAL_LABEL,
   NAV,
   POOL,
   QUOTES,
@@ -300,13 +301,12 @@ export default function ConsoleDemo() {
                     ))}
                     <div className={styles.ceiling}>
                       <div className={styles.ceilingHead}>
-                        <span>corpus ceiling</span><span>96,240 / 150,000</span>
+                        <span>corpus by directory</span><span>{DIR_TOTAL_LABEL} tokens</span>
                       </div>
                       <div className={styles.ceilingBar}>
                         {DIRS.map((d) => (
                           <div key={d.dir} style={{ width: d.w, background: d.fill }} />
                         ))}
-                        <div className={styles.ceilingRest} />
                       </div>
                       <div className={styles.legend}>
                         {DIRS.map((d) => (
