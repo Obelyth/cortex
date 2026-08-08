@@ -53,14 +53,14 @@ describe("note self-description", () => {
       corpus([
         [
           "notes/ops.md",
-          "# Ops ADMIN_PASSWORD=1234\n\nThe admin password: hunter2 is set for prod.\n\n## Rotate token=abc123 soon\n\nx\n",
+          "# Ops ADMIN_PASSWORD=synthetic-not-a-real-secret\n\nThe admin password: hunter2 is set for prod.\n\n## Rotate token=abc123 soon\n\nx\n",
         ],
       ])
     );
     const h = await health();
     const n = h.notes[0];
     for (const s of [n.title, n.desc, ...n.headings.map((x) => x.h)]) {
-      expect(s).not.toContain("1234");
+      expect(s).not.toContain("synthetic-not-a-real-secret");
       expect(s).not.toContain("hunter2");
       expect(s).not.toContain("abc123");
     }

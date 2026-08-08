@@ -1,0 +1,92 @@
+name: Bug report
+description: Something behaves differently than documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### Before you paste anything
+
+        Cortex reads your private notes, so a bug report is an unusually easy place to leak one.
+        **Redact freely.** A repro built from invented notes (`projects/example.md`, "alpha") is
+        just as useful to us as your real corpus, and nobody here will ask you to prove otherwise.
+
+        Never paste a token, a path secret, or a connector URL. If you think you already have,
+        rotate it first and tell us at support@obelyth.cloud rather than editing the issue —
+        edits do not remove the value from history.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: |
+        The smallest sequence that shows it. Invented note names and contents are preferred.
+      placeholder: |
+        1. brain_write projects/example.md with "…"
+        2. brain_ask "…"
+        3. The reply says NOT IN BRAIN, but the note is live
+    validations:
+      required: true
+
+  - type: dropdown
+    id: door
+    attributes:
+      label: Which door
+      description: The three doors have different toolsets, so this usually narrows it immediately.
+      options:
+        - Terminal (bearer token)
+        - Connector (secret URL)
+        - Guest (secret URL, ask + propose only)
+        - Not sure / not door-specific
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which client
+      options:
+        - Claude Code
+        - claude.ai (web)
+        - Claude desktop
+        - Claude iOS
+        - Cursor
+        - Other MCP client
+        - The console (browser)
+    validations:
+      required: true
+
+  - type: input
+    id: stamp
+    attributes:
+      label: The stamp on the reply, if this was a brain_ask
+      description: VERIFIED / CORRECTED / SUPERSEDED / PARTIALLY VERIFIED / NOT IN BRAIN / UNVERIFIED
+      placeholder: UNVERIFIED
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Deployment shape
+      description: |
+        Whatever applies — Vercel or self-hosted, whether `SUPABASE_URL` is set (the Postgres
+        serving tier), whether the KV store is configured, and roughly how many notes.
+      placeholder: |
+        Vercel, SUPABASE_URL set, KV set, ~90 notes
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmations
+      options:
+        - label: This report contains no secrets, tokens, or path secrets.
+          required: true
+        - label: Any note content here is invented or redacted, or is mine to share.
+          required: true

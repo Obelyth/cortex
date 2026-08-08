@@ -52,19 +52,32 @@ const DIR_FILL: Record<string, string> = {
   root: "#677483",
 };
 
-export const DIRS = [
+const DIR_RAW = [
   { dir: "projects", notes: 18, raw: 34880 },
   { dir: "notes", notes: 16, raw: 29120 },
   { dir: "log", notes: 31, raw: 28410 },
   { dir: "root", notes: 3, raw: 3830 },
-].map((d) => ({
+];
+
+/**
+ * The bar shows COMPOSITION, not fullness. It used to divide each directory by an invented
+ * 150,000-token ceiling and pad the remainder with empty track, which drew a capacity gauge for
+ * a store that has no capacity — the brain is a git repo and grows without limit. Widths are now
+ * shares of the corpus itself, so they sum to 100% and the bar answers the only question it can
+ * honestly answer: what is this brain made of.
+ */
+const DIR_TOTAL = DIR_RAW.reduce((sum, d) => sum + d.raw, 0);
+
+export const DIRS = DIR_RAW.map((d) => ({
   dir: d.dir,
   notes: d.notes,
   tokens: d.raw.toLocaleString("en-US"),
   fill: DIR_FILL[d.dir],
-  w: Math.round((d.raw / 150000) * 100) + "%",
-  share: Math.round((d.raw / 34880) * 100) + "%",
+  w: Math.round((d.raw / DIR_TOTAL) * 100) + "%",
+  share: Math.round((d.raw / DIR_TOTAL) * 100) + "%",
 }));
+
+export const DIR_TOTAL_LABEL = DIR_TOTAL.toLocaleString("en-US");
 
 export const ROWS = (
   [
