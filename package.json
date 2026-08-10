@@ -24,12 +24,12 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^26",
     "@types/pg": "^8.20.4",
     "@types/react": "^19",
     "pg": "^8.22.0",
-    "typescript": "^5",
-    "vitest": "^3"
+    "typescript": "^7",
+    "vitest": "^4"
   },
   "description": "CORTEX by OBELYTH \u2014 a private markdown brain served to every Claude surface over MCP, with a verified read path.",
   "repository": {
