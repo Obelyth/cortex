@@ -1,0 +1,228 @@
+/*
+ * OBELYTH token layer, scoped to cortex.
+ *
+ * Dark-first, and here dark-only: the brand defines a single deep-slate foundation and no light
+ * palette, so shipping one would be inventing a second design system. `color-scheme: dark` makes
+ * the UA chrome — scrollbars, form controls — follow it.
+ *
+ * The rule that shapes every page below: most of any screen carries ZERO chroma. Cyan is a
+ * signal, not decoration — links, focus, live data, and nothing else. Structure is carried by
+ * 1px hairlines rather than by shadow or fill.
+ */
+:root {
+  color-scheme: dark;
+
+  /* —— Slate ink scale ————————————————————————————————— */
+  --ob-ink-950: #0b0e12;
+  --ob-ink-900: #0f1318;
+  --ob-ink-800: #1a212b;
+  --ob-ink-700: #28323f;
+  --ob-ink-600: #33404f;
+
+  /* —— Steel / snow foreground ramp ———————————————————— */
+  --ob-steel-400: #677483;
+  --ob-steel-300: #8b97a4;
+  --ob-steel-200: #aeb8c4;
+  --ob-snow: #e9edf2;
+  --ob-snow-bright: #f6f8fb;
+
+  /* —— The single brand chroma ————————————————————————— */
+  --ob-cyan-500: #1fbdd6;
+  --ob-cyan-400: #3ed3e6;
+  --ob-cyan-dim: rgba(31, 189, 214, 0.14);
+
+  /* —— Operational status ——————————————————————————————— */
+  --ob-pass: #4cc08a;
+  --ob-warn: #e0ad48;
+  --ob-fail: #e8695f; /* lifted from #e0574f: 4.36:1 on --surface failed AA at 10px */
+
+  /* —— Semantic aliases. Pages reference these, never the raw scale. —— */
+  --ground: var(--ob-ink-900);
+  --surface: var(--ob-ink-800);
+  --sunk: var(--ob-ink-950);
+  --ink: var(--ob-snow);
+  --bright: var(--ob-snow-bright);
+  /* The text ramp sits one step up the steel scale from the raw brand aliases: steel-400 is
+     the brand's DISABLED tone and measures 3.9:1 on the app surface, which fails AA for the
+     12px captions and eyebrows that use --faint. steel-400 stays available for genuinely
+     inert states; running copy never uses it. */
+  --muted: var(--ob-steel-200);
+  --faint: var(--ob-steel-300);
+  --disabled: var(--ob-steel-400);
+  --line: var(--ob-ink-600);
+  --hair: var(--ob-ink-700);
+  --hairline-light: rgba(255, 255, 255, 0.05);
+  --accent: var(--ob-cyan-500);
+  --accent-hi: var(--ob-cyan-400);
+  --accent-soft: var(--ob-cyan-dim);
+  --warn: var(--ob-warn);
+  --crit: var(--ob-fail);
+  --ok: var(--ob-pass);
+
+  /* —— Type ————————————————————————————————————————————— */
+  /* Display slot: falls back to the UI face. See app/layout.tsx to wire your own. */
+  --display: var(--font-display, var(--font-hanken)), "Hanken Grotesk", system-ui, sans-serif;
+  --sans: var(--font-hanken), system-ui, -apple-system, sans-serif;
+  --mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --tracking-display: 0.04em;
+  --tracking-label: 0.18em;
+
+  /* —— Elevation is a hairline top-light plus a deep ambient, never a soft consumer shadow —— */
+  --elev-1: inset 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --elev-2: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 4px 14px -4px rgba(0, 0, 0, 0.55);
+  --glow-cyan: 0 0 0 1px rgba(31, 189, 214, 0.5), 0 0 18px -2px rgba(62, 211, 230, 0.35);
+  --radius-sm: 5px;
+  --radius-md: 8px;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+::selection { background: var(--accent-soft); color: var(--bright); }
+
+a { color: var(--accent); text-decoration: none; text-underline-offset: 2px; }
+a:hover { color: var(--accent-hi); text-decoration: underline; }
+:focus-visible {
+  /* An outline, not a box-shadow: forced-colors mode drops shadows entirely, and the solid
+     stroke measures 9.0:1 against the raised surface where the glow composited to 2.91:1. The
+     glow stays as an additive flourish on top of a ring that carries the contrast on its own. */
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+  box-shadow: var(--glow-cyan);
+  border-radius: var(--radius-sm);
+}
+
+.mono { font-family: var(--mono); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* The infrastructure backdrop: a 32px hairline grid, faint enough to read as texture and
+   masked to the top so it never competes with content further down the page. */
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(var(--hairline-light) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hairline-light) 1px, transparent 1px);
+  background-size: 32px 32px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 25%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 55% at 50% 0%, #000 25%, transparent 100%);
+}
+.wrap { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 30px 22px 80px; }
+
+/* masthead shared by both pages */
+.mast {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding-bottom: 14px; border-bottom: 1px solid var(--line); margin-bottom: 26px;
+}
+.mast h1 {
+  font-family: var(--display); font-weight: 700; font-size: 28px;
+  letter-spacing: var(--tracking-display); text-transform: uppercase;
+  line-height: 1.04; margin: 0; color: var(--bright);
+}
+/* the lockup: emblem + wordmark + byline. The emblem is the brand's one warm note. */
+.brand { display: inline-flex; align-items: center; gap: 11px; }
+.emblem { display: inline-block; flex: none; }
+.brandText { display: inline-flex; flex-direction: column; gap: 1px; }
+.byline {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint); line-height: 1;
+}
+.brandFoot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 44px; padding-top: 15px; border-top: 1px solid var(--line);
+}
+.brandFoot .mono {
+  font-size: 11px; letter-spacing: var(--tracking-label); text-transform: uppercase;
+  color: var(--muted);
+}
+.brandFoot .dim { color: var(--faint); }
+.eyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint);
+}
+a.eyebrow { color: var(--accent); }
+a.eyebrow:hover { color: var(--accent-hi); }
+.spacer { flex: 1; }
+
+/* public nav: uppercase mono tabs; cyan marks only the ACTIVE one — selection is a signal */
+.tabs { display: flex; gap: 18px; align-items: baseline; margin-left: 10px; }
+.tab {
+  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--muted); padding: 2px 1px;
+}
+.tab:hover { color: var(--ink); text-decoration: none; }
+.tab.on { color: var(--accent); border-bottom: 1.5px solid var(--accent); }
+
+/* code blocks (guide) */
+pre {
+  background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: 13px 15px; overflow-x: auto; font-family: var(--mono); font-size: 12.5px;
+  line-height: 1.6; color: var(--ink); margin: 0 0 14px;
+}
+pre .dim { color: var(--faint); }
+
+h2 {
+  font-family: var(--mono); font-size: 11px; font-weight: 500;
+  letter-spacing: var(--tracking-label); text-transform: uppercase; color: var(--muted);
+  margin: 38px 0 6px; display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+}
+h2 .count {
+  color: var(--faint); letter-spacing: 0.04em; font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.lede { font-size: 13.5px; color: var(--muted); margin: 0 0 15px; max-width: 68ch; }
+.panel {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius-md); box-shadow: var(--elev-1); overflow: hidden;
+}
+.pill {
+  display: inline-block; white-space: nowrap; padding: 1px 7px; font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; font-family: var(--mono); border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+}
+.pill.w { color: var(--warn); }
+.pill.c { color: var(--crit); }
+.pill.a { color: var(--accent); }
+.pill.ok { color: var(--ok); }
+.pill.n { color: var(--muted); }
+
+/* tools page rows */
+.toolRow {
+  display: grid; grid-template-columns: 168px 1fr; gap: 14px; align-items: start;
+  padding: 13px 15px; border-bottom: 1px solid var(--hair);
+}
+.toolRow:last-child { border-bottom: 0; }
+.toolName .mono { font-size: 13.5px; color: var(--ink); display: block; }
+.toolRole {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--faint);
+}
+.toolWhat { font-size: 13.5px; color: var(--ink); }
+.toolReturns { font-size: 11px; color: var(--faint); margin-top: 4px; }
+
+/* guide rituals */
+.ritual {
+  display: grid; grid-template-columns: 92px 1fr; gap: 14px; align-items: start;
+  padding: 13px 15px; border-bottom: 1px solid var(--hair); font-size: 13.5px;
+}
+.ritual:last-child { border-bottom: 0; }
+
+.foot {
+  margin-top: 44px; padding-top: 15px; border-top: 1px solid var(--line);
+  font-size: 12px; color: var(--faint); line-height: 1.7;
+}
+
+@media (max-width: 560px) {
+  .toolRow, .ritual { grid-template-columns: 1fr; gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

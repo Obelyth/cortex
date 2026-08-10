@@ -1,0 +1,18 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Obelyth/cortex/security/advisories/new
+    about: >-
+      Report privately, never as an issue. A public issue describing how to reach someone's
+      notes is itself the exploit.
+  - name: A secret reached a public place
+    url: https://github.com/Obelyth/cortex/security/advisories/new
+    about: >-
+      Rotate it first, then tell us here. Editing or deleting the comment does not remove the
+      value from history.
+  - name: Documentation and setup questions
+    url: https://github.com/Obelyth/cortex/wiki
+    about: Architecture, configuration, and MCP integration are covered in the wiki.
+  - name: Roadmap and what was deliberately declined
+    url: https://github.com/Obelyth/cortex/blob/main/ROADMAP.md
+    about: Includes the measurements that would change a "no" into a "yes".

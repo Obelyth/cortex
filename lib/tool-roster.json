@@ -1,0 +1,19 @@
+{
+  "_comment": "The canonical tool rosters, one per door. Consumed by onboard.mjs and the ops healthcheck, and pinned to registerTools() by tests/tool-roster.test.ts \u2014 a hardcoded roster string going stale in a verifier has now caused three separate multi-night outages, which is exactly the drift this file exists to end. When the tool surface changes, this file is part of the change, and the test fails until it is.",
+  "trusted": [
+    "brain_accept",
+    "brain_ask",
+    "brain_bubble",
+    "brain_capture",
+    "brain_context",
+    "brain_corpus",
+    "brain_proposals",
+    "brain_read",
+    "brain_reject",
+    "brain_write"
+  ],
+  "guest": [
+    "brain_ask",
+    "brain_propose"
+  ]
+}

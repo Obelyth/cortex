@@ -1,0 +1,43 @@
+{
+  "name": "cortex",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "onboard": "node scripts/onboard.mjs",
+    "ingest": "node scripts/ingest.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "@modelcontextprotocol/sdk": "1.26.0",
+    "@sentry/nextjs": "^10.69.0",
+    "@upstash/redis": "^1.38.2",
+    "mcp-handler": "1.1.0",
+    "next": "^15.2.6",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/pg": "^8.20.4",
+    "@types/react": "^19",
+    "pg": "^8.22.0",
+    "typescript": "^5",
+    "vitest": "^3"
+  },
+  "description": "CORTEX by OBELYTH \u2014 a private markdown brain served to every Claude surface over MCP, with a verified read path.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Obelyth/cortex"
+  },
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=20"
+  }
+}

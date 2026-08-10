@@ -1,0 +1,10 @@
+node_modules/
+.next/
+.env*.local
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+.claude/
+results/
+# older docs suggested this name for pulled secrets; never commit it
+.env.pull
