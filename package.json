@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "@modelcontextprotocol/sdk": "1.26.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@sentry/nextjs": "^10.69.0",
     "@upstash/redis": "^1.38.2",
-    "mcp-handler": "1.1.0",
+    "mcp-handler": "2.1.0",
     "next": "^15.2.6",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
