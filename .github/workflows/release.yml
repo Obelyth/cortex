@@ -1,0 +1,46 @@
+name: release
+
+# Releases are provenance snapshots of main, cut by pushing a v* tag. The full check suite
+# re-runs AT THE TAG before anything is published — a release that skipped the checks would
+# be a claim the repo cannot back. Updates still ship from main; redeploy to update
+# (SECURITY.md). The release body is .github/RELEASE_HEADER.md followed by GitHub's
+# generated notes, so every release opens with the same five-minute setup path.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to full commit SHAs; a movable tag is a supply-chain
+      # door this workflow does not need to leave open. The comment carries the version.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      # --ignore-scripts: no dependency lifecycle script runs in the release context. The
+      # suite and build pass without them — verified before this flag landed.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            cat .github/RELEASE_HEADER.md
+            echo
+            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+              -f tag_name="${GITHUB_REF_NAME}" --jq .body
+          } > /tmp/notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --title "Cortex ${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md

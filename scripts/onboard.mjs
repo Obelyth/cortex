@@ -8,7 +8,7 @@
  *
  * Safe to re-run: every step checks before it acts.
  */
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { mkdtempSync, cpSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,6 +17,13 @@ import { fileURLToPath } from "node:url";
 import readline from "node:readline/promises";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Interactive by design: every consequential step is confirmed at a prompt, so a pipe or a CI
+// runner has no way to answer honestly. Fail before touching anything rather than hang.
+if (!process.stdin.isTTY) {
+  console.error("onboard is interactive — run it from a terminal. Nothing was changed.");
+  process.exit(1);
+}
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
 const say = (s) => console.log(s);
@@ -57,6 +64,12 @@ head("2 · The brain — a private repo of markdown notes");
 const defaultBrain = `${ghUser}/brain`;
 const brainRepo =
   (await rl.question(`  Brain repo to create or use [${defaultBrain}]: `)).trim() || defaultBrain;
+// The answer lands in child-process arguments and the deployment env: hold it to the one
+// shape GitHub accepts before it goes anywhere. Also the wizard's earliest typo-catch.
+if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(brainRepo)) {
+  say(`  "${brainRepo}" is not an owner/repo name. Nothing was changed.`);
+  process.exit(1);
+}
 
 let brainExists = false;
 try { sh(`gh repo view ${brainRepo} --json name`); brainExists = true; ok(`${brainRepo} already exists — will use it as-is`); }
@@ -73,8 +86,41 @@ if (!brainExists) {
   ok(`created ${brainRepo} (private) with the starter structure`);
 }
 
+// ------------------------------------------------------------------ fill ---
+// The fork every new brain faces: start from the template's clean structure, or bring an
+// existing folder of notes in. The ingest path previews first and asks again before writing —
+// the same dry-run-by-default contract scripts/ingest.mjs keeps on its own.
+head("3 · Fill it — start fresh, or bring what you already have");
+say("  Fresh is a fine answer: the template ships a profile, conventions and an example project.");
+const fromDir = (await rl.question("  Folder of existing notes to index (Enter to start fresh): ")).trim();
+if (fromDir) {
+  // The folder never touches a shell, an argv, or this process's filesystem calls: it rides
+  // the child's environment, and scripts/ingest.mjs validates it on arrival exactly as it
+  // does when run by hand — same dry-run preview, same collision and size rails.
+  const ingest = (commit) =>
+    execFileSync(process.execPath, [join(ROOT, "scripts", "ingest.mjs"), ...(commit ? ["--commit"] : [])], {
+      cwd: ROOT,
+      stdio: "inherit",
+      env: { ...process.env, INGEST_FROM: fromDir, BRAIN_REPO: brainRepo },
+    });
+  let previewed = false;
+  try { ingest(false); previewed = true; }
+  catch { act("preview did not pass — fix what it printed above, then: npm run ingest -- --from <folder> --repo " + brainRepo); }
+  if (previewed) {
+    const file = (await rl.question("  File these into the brain now, one revertable commit per note? [y/N] ")).trim().toLowerCase();
+    if (file === "y") {
+      try { ingest(true); ok("ingested — each note carries a provenance line and its own commit"); }
+      catch { act("some files failed above — what succeeded is in; fix and re-run ingest for the rest"); }
+    } else {
+      say(`  Skipped. Any time: npm run ingest -- --from ${fromDir} --repo ${brainRepo} --commit`);
+    }
+  }
+} else {
+  ok("starting fresh — the template structure is already in place");
+}
+
 // ---------------------------------------------------------------- secrets ---
-head("3 · Secrets — generated locally, shown once");
+head("4 · Secrets — generated locally, shown once");
 say("  Pasted tokens are VISIBLE on screen and in terminal scrollback — clear it after.");
 const MCP_TOKEN = randomBytes(32).toString("hex");
 const CONNECTOR_PATH_SECRET = randomBytes(32).toString("hex");
@@ -92,7 +138,7 @@ act("The reader model needs an Anthropic API key (console.anthropic.com → API 
 const ANTHROPIC_API_KEY = (await rl.question("  Paste ANTHROPIC_API_KEY (or Enter to skip — brain_ask will be disabled until set): ")).trim();
 
 // ----------------------------------------------------------------- deploy ---
-head("4 · Deploy to Vercel");
+head("5 · Deploy to Vercel");
 const proceed = (await rl.question("  Link this directory to a Vercel project and deploy to production? [Y/n] ")).trim().toLowerCase();
 if (proceed === "n") { say("  Stopped before deploy. Your secrets were not sent anywhere."); process.exit(0); }
 
@@ -133,8 +179,12 @@ if (keepExisting) {
   liveToken = (pulled.match(/^MCP_TOKEN="?([^"\n]+)/m) || [])[1] ?? MCP_TOKEN;
   liveSecret = (pulled.match(/^CONNECTOR_PATH_SECRET="?([^"\n]+)/m) || [])[1] ?? CONNECTOR_PATH_SECRET;
 }
-act("deploying…");
-sh(`vercel deploy --prod --yes`, { cwd: ROOT });
+// The most common first-deploy failure, said BEFORE the deploy rather than after the check
+// fails: team-default Deployment Protection puts an SSO page in front of the doors.
+act("if your Vercel team enables Deployment Protection by default, disable it for PRODUCTION");
+act("   on this project (Settings → Deployment Protection) — the doors carry their own auth.");
+act("deploying… (a few minutes; the build streams below)");
+execSync(`vercel deploy --prod --yes`, { cwd: ROOT, stdio: "inherit" });
 // The deploy prints an immutable per-deployment URL; wiring must use the STABLE production
 // alias, or every future deploy would strand the wired surfaces on an old build.
 const projectName = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8")).projectName
@@ -143,7 +193,7 @@ const url = `https://${projectName}.vercel.app`;
 ok(`deployed — production alias: ${url}`);
 
 // ----------------------------------------------------------------- verify ---
-head("5 · Verify — trust the check, not the deploy log");
+head("6 · Verify — trust the check, not the deploy log");
 const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
 const MCP_SECRET_FOR_CHECK = liveSecret;
 let healthy = true;
@@ -174,7 +224,7 @@ if (tools.trim() === expected) {
 }
 
 // ------------------------------------------------------------------ wire ---
-head("6 · Wire your surfaces");
+head("7 · Wire your surfaces");
 say(`  Claude Code (any machine — run once, user scope):
       claude mcp add --transport http cortex ${url}/api/mcp \\
         --header "Authorization: Bearer ${liveToken}"
@@ -189,7 +239,13 @@ say(`  Claude Code (any machine — run once, user scope):
 `);
 say(`  Store MCP_TOKEN and CONNECTOR_PATH_SECRET in your password manager now —
   this is the only time they are shown together.\n`);
-ok(`done. Have something to bring in? npm run ingest -- --from <folder> --repo ${brainRepo}`);
+say(`  Optional tiers, when you want them (each documented in .env.example):
+      guest door       GUEST_PATH_SECRET (a second, different secret) + the Upstash KV
+                       integration on the Vercel Marketplace — it injects KV_REST_API_* itself
+      Supabase mirror  SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, then apply the schema:
+                       npx tsx scripts/migrate.ts --apply   (dry-run without --apply)
+`);
+ok(`done. More to bring in later? npm run ingest -- --from <folder> --repo ${brainRepo}`);
 rl.close();
 
 process.exit(healthy ? 0 : 1);

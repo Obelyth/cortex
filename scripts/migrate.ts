@@ -24,7 +24,7 @@ import pg from "pg";
 const apply = process.argv.includes("--apply");
 const url = process.env.SUPABASE_DB_URL;
 if (!url) {
-  console.error("SUPABASE_DB_URL is not set. It lives in the private checkout's .env.local.");
+  console.error("SUPABASE_DB_URL is not set. Put it in your .env.local (local only — never deployed).");
   process.exit(2);
 }
 
