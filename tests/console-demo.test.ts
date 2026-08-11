@@ -10,7 +10,20 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { COLD, COMMITS, CREDS, POOL, QUOTES, RETIRED, ROWS } from "../app/console-demo-data";
+import {
+  ASK,
+  BUBBLE,
+  COLD,
+  COMMITS,
+  CREDS,
+  NAV,
+  POOL,
+  PROPOSALS,
+  QUOTES,
+  RETIRED,
+  ROWS,
+  TRIAGE,
+} from "../app/console-demo-data";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const read = (p: string) => readFileSync(path.resolve(HERE, "..", p), "utf8");
@@ -28,6 +41,10 @@ describe("console demo data", () => {
       ...RETIRED.map((r) => r.path),
       ...COLD.map((c) => c.path),
       ...QUOTES.map((q) => q.loc),
+      ...TRIAGE.map((t) => t.loc),
+      ...PROPOSALS.map((p) => p.path),
+      ...BUBBLE.map((b) => b.note),
+      ASK.cite.loc,
     ];
     for (const p of paths) expect(p, p).toMatch(INVENTED);
   });
@@ -62,5 +79,21 @@ describe("console demo data", () => {
     expect(src.toLowerCase()).toContain("synthetic");
     // The map tab embeds only the public demo map.
     expect(src).toContain('src="/map"');
+  });
+
+  it("carries the real shell's seven screens, in its tab order", () => {
+    // The README describes seven console screens; the demo stopped omitting two of them when
+    // it adopted the console's current shell. This pin keeps the demo and that claim honest.
+    expect(NAV.map((n) => n.k)).toEqual(["overview", "ask", "trends", "corpus", "attention", "map", "settings"]);
+  });
+
+  it("declares its inert controls in place", () => {
+    // The old demo omitted the screens whose controls mutate a deployment; this one shows
+    // them and says, on the Settings screen itself, that the demo's controls change nothing.
+    // The declaration must stay rendered, not just exported.
+    const src = read("app/console-demo.tsx");
+    expect(src).toContain("{DEMO_NOTE}");
+    const data = read("app/console-demo-data.ts");
+    expect(data).toContain("change nothing");
   });
 });
