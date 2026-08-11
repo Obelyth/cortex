@@ -2,10 +2,11 @@
  * Synthetic data for the landing's console demo — the gated console's shape with nothing
  * real on it, same contract as the demo map. Every path, SHA, count and quote here is
  * invented; tests/console-demo.test.ts pins that this file stays that way. The invented
- * project names follow the fixture convention (aurora, beacon, relay).
+ * project names follow the fixture convention (aurora, beacon, relay, signal).
  *
- * The demo carries five of the real console's six screens; the sixth is declared in
- * OMITTED below rather than mocked, so the landing can be exact about what it shows.
+ * The demo carries all seven of the real console's screens. The controls it shows are
+ * demonstrably inert — DEMO_NOTE below is rendered on the Settings screen so the landing
+ * says so in place rather than faking a working deployment.
  */
 
 export type Stamp =
@@ -45,13 +46,6 @@ export const POOL = [
   { surface: "code", tool: "brain_ask", stamp: "VERIFIED" as Stamp, path: "projects/relay.md", ms: "1,118" },
 ];
 
-const DIR_FILL: Record<string, string> = {
-  projects: "var(--accent-cyan)",
-  notes: "#aeb8c4",
-  log: "#8b97a4",
-  root: "#677483",
-};
-
 const DIR_RAW = [
   { dir: "projects", notes: 18, raw: 34880 },
   { dir: "notes", notes: 16, raw: 29120 },
@@ -72,7 +66,6 @@ export const DIRS = DIR_RAW.map((d) => ({
   dir: d.dir,
   notes: d.notes,
   tokens: d.raw.toLocaleString("en-US"),
-  fill: DIR_FILL[d.dir],
   w: Math.round((d.raw / DIR_TOTAL) * 100) + "%",
   share: Math.round((d.raw / DIR_TOTAL) * 100) + "%",
 }));
@@ -103,25 +96,26 @@ export const ROWS = (
     dir,
     base,
     ticks,
+    blocks,
     tokens: tokens.toLocaleString("en-US"),
     ret: ret || null,
   };
 });
 
-/** 24 hourly bars; the verified share of each is the cyan fill. */
-export const BARS = [3, 2, 1, 0, 1, 2, 6, 11, 16, 21, 24, 19, 27, 33, 25, 18, 22, 29, 34, 30, 26, 17, 12, 8].map(
-  (n, i) => {
-    const h = Math.round((n / 34) * 92);
-    const vh = Math.round(h * (i % 5 === 3 ? 0.86 : 0.97));
-    return { vh, uh: Math.max(1, h - vh), last: i === 23 };
-  },
-);
+/** 24 hourly bars; the peak hour is the one the live field marks. */
+export const BARS = [3, 2, 1, 0, 1, 2, 6, 11, 16, 21, 24, 19, 27, 33, 25, 18, 22, 29, 34, 30, 26, 17, 12, 8];
+
+/** The same log rebucketed, the way the real chart derives WEEK and MONTH from one read. */
+export const BARS_WEEK = [31, 44, 52, 38, 61, 20, 12];
+export const BARS_MONTH = [
+  8, 12, 19, 24, 16, 9, 4, 11, 22, 31, 27, 18, 25, 33, 29, 21, 14, 8, 17, 26, 34, 30, 23, 15, 10, 19, 28, 36, 32, 24,
+];
 
 export const SURFACES = [
-  { name: "Claude Code", sub: "terminal", auth: "bearer", state: "ONLINE", status: "pass" as BadgeStatus, ago: "12 s" },
-  { name: "iOS", sub: "claude.ai app", auth: "connector secret", state: "ONLINE", status: "pass" as BadgeStatus, ago: "4 min" },
-  { name: "Web", sub: "claude.ai", auth: "connector secret", state: "ONLINE", status: "pass" as BadgeStatus, ago: "26 min" },
-  { name: "Desktop", sub: "Mac", auth: "connector secret", state: "IDLE", status: "neutral" as BadgeStatus, ago: "6 hr" },
+  { name: "Claude Code", sub: "terminal · bearer", state: "live", grant: "READ · WRITE" },
+  { name: "iOS", sub: "claude.ai app · connector secret", state: "live", grant: "READ · WRITE" },
+  { name: "Web", sub: "claude.ai · connector secret", state: "live", grant: "READ · WRITE" },
+  { name: "Desktop", sub: "Mac · connector secret", state: "idle", grant: "READ · WRITE" },
 ];
 
 export const COMMITS = [
@@ -178,12 +172,12 @@ export const RITUALS = [
 ];
 
 export const TOOLS = [
-  { name: "brain_ask", role: "the retriever", what: "Reads the whole live corpus, then proves the quote it cited against the file." },
-  { name: "brain_corpus", role: "the direct read", what: "Hands the notes to the calling conversation. No model call." },
-  { name: "brain_context", role: "the boot call", what: "Profile, index and the last week of log entries, in one call." },
-  { name: "brain_read", role: "one note", what: "One note by path. Paths are allowlisted by shape." },
-  { name: "brain_write", role: "the commit", what: "Create, replace or append. A save without a commit SHA did not happen." },
-  { name: "brain_capture", role: "zero friction", what: "Timestamped append to today's log, from any device." },
+  { name: "brain_ask", role: "the retriever", what: "Reads the whole live corpus, then proves the quote it cited against the file.", doors: ["code", "connector", "guest"], calls: 341 },
+  { name: "brain_corpus", role: "the direct read", what: "Hands the notes to the calling conversation. No model call.", doors: ["code", "connector"], calls: 128 },
+  { name: "brain_context", role: "the boot call", what: "Profile, index and the last week of log entries, in one call.", doors: ["code", "connector"], calls: 64 },
+  { name: "brain_read", role: "one note", what: "One note by path. Paths are allowlisted by shape.", doors: ["code", "connector"], calls: 213 },
+  { name: "brain_write", role: "the commit", what: "Create, replace or append. A save without a commit SHA did not happen.", doors: ["code", "connector"], calls: 57 },
+  { name: "brain_capture", role: "zero friction", what: "Timestamped append to today's log, from any device.", doors: ["code", "connector"], calls: 92 },
 ];
 
 export const STAMPS = [
@@ -194,27 +188,204 @@ export const STAMPS = [
   { tag: "UNVERIFIED", status: "fail" as BadgeStatus, line: "Not in the cited file, or spanning a boundary. Shown anyway, labelled." },
 ];
 
+/** How the last 341 asks checked out — the stacked bar and its legend. */
+export const CHECKED = [
+  { tag: "VERIFIED", n: 312, tone: "live" },
+  { tag: "SUPERSEDED", n: 9, tone: "warn" },
+  { tag: "PARTIAL", n: 6, tone: "warn" },
+  { tag: "NOT IN BRAIN", n: 11, tone: "sunk" },
+  { tag: "UNVERIFIED", n: 3, tone: "crit" },
+] as const;
+
+/** The console's seven screens, in the real shell's tab order and vocabulary. */
 export const NAV = [
-  { k: "overview", label: "Overview", count: "" },
-  { k: "corpus", label: "Corpus", count: "68" },
-  { k: "attention", label: "Attention", count: "11" },
-  { k: "map", label: "Map", count: "" },
-  { k: "guide", label: "Guide", count: "" },
+  { k: "overview", label: "Overview" },
+  { k: "ask", label: "Ask" },
+  { k: "trends", label: "Trends" },
+  { k: "corpus", label: "Notes" },
+  { k: "attention", label: "Inbox" },
+  { k: "map", label: "Map" },
+  { k: "settings", label: "Settings" },
 ] as const;
 
 export type ScreenKey = (typeof NAV)[number]["k"];
 
+/** The canned demonstration the Ask screen runs. The citation is QUOTES[1] wearing its verdict. */
+export const ASK = {
+  q: "Where is the retrieval eval scored, and is the index path good enough?",
+  stamp: "VERIFIED" as Stamp,
+  answer:
+    "The index path scores 55% top-1 on the retrieval eval. The note calls that good enough to ship while the reader path is measured — so yes, with the caveat that the comparison is still running.",
+  cite: {
+    loc: "notes/retrieval-eval.md:62",
+    heading: "under “Scoring”",
+    quote: "The index path scores 55% top-1, which is good enough to ship while the reader path is measured…",
+  },
+  meta: { reader: "claude-sonnet-5", ms: "1,284", corpus: "96,240 tok", pack: "1,880 tok" },
+};
+
+/** Trends instruments. Deterministic — the demo's clock is a counter, so its charts are too. */
+export const TRENDS = {
+  stats: [
+    { label: "tokens saved", fig: "412k", sub: "corpus read minus pack sent, summed per ask" },
+    { label: "time saved", fig: "20.8 h", sub: "est · ~330 tok/min retyping" },
+    { label: "sessions", fig: "96", sub: "call bursts more than 30 min apart" },
+    { label: "from memory", fig: "87%", sub: "answered ÷ scored" },
+  ],
+  buckets: [
+    { label: "08-04", memory: 21, fresh: 6 },
+    { label: "08-05", memory: 34, fresh: 4 },
+    { label: "08-06", memory: 28, fresh: 7 },
+    { label: "08-07", memory: 41, fresh: 3 },
+    { label: "08-08", memory: 52, fresh: 5 },
+    { label: "08-09", memory: 38, fresh: 2 },
+    { label: "08-10", memory: 47, fresh: 4 },
+    { label: "08-11", memory: 44, fresh: 1 },
+  ],
+  patterns: [
+    { dir: "up", title: "Busiest block: 13:00–17:00", sub: "132 of 341 asks land in one four-hour band", chip: "39%" },
+    { dir: "down", title: "Not-in-memory is falling", sub: "6 → 1 per day across the window — the brain is filling in", chip: "−83%" },
+    { dir: "up", title: "Proof rate holds", sub: "331 of 341 verdicts carried a verifiable quote", chip: "97.1%" },
+  ],
+  days: ["M", "T", "W", "T", "F", "S", "S"],
+  bands: ["00–04", "04–08", "08–12", "12–16", "16–20", "20–24"],
+  /** 6 four-hour bands × 7 days, intensity 0–100. Row-major; the single 100 is the hot cell. */
+  heat: [
+    [4, 2, 3, 2, 5, 1, 0],
+    [8, 6, 9, 7, 6, 2, 1],
+    [38, 46, 41, 52, 44, 12, 6],
+    [61, 72, 68, 100, 66, 18, 9],
+    [44, 51, 47, 58, 40, 22, 14],
+    [16, 21, 18, 24, 19, 11, 7],
+  ],
+  share: [
+    { name: "claude-sonnet-5", pct: 64, tone: "live" },
+    { name: "gpt-5.6-terra", pct: 22, tone: "ink" },
+    { name: "claude-haiku-4-5", pct: 14, tone: "faint" },
+  ],
+};
+
+/** The inbox queue: every finding the demo triages, with the detail pane's record. */
+export const TRIAGE = [
+  {
+    sev: "crit",
+    title: "Vendor token in prose",
+    loc: "notes/deploy-runbook.md:41",
+    kv: [
+      ["found", "on every read since 2026-08-06"],
+      ["exposure", "redacted on the way out — still verbatim in the repo"],
+      ["shape", "Bearer …, 40 chars, high entropy"],
+      ["honest fix", "rotate the token, then rewrite the line to name where it lives"],
+    ],
+  },
+  {
+    sev: "crit",
+    title: "key=value under “Deploy”",
+    loc: "projects/aurora.md:118",
+    kv: [
+      ["found", "2026-08-09, first scan after the section landed"],
+      ["exposure", "redacted on read · matches KEY=… assignment"],
+      ["shape", "ALL_CAPS=value at line start"],
+      ["honest fix", "move the value to the deployment env; keep the key name"],
+    ],
+  },
+  {
+    sev: "warn",
+    title: "4 unmarked retired-tool claims",
+    loc: "notes/retrieval-eval.md",
+    kv: [
+      ["lines", "L62, L88, L141, L156"],
+      ["names", "index_rank · note_search"],
+      ["why it matters", "a passage naming a deleted tool with no marker verifies clean and reads as current fact"],
+      ["honest fix", "mark them retracted — mark, never delete"],
+    ],
+  },
+  {
+    sev: "warn",
+    title: "2 unmarked retired-tool claims",
+    loc: "notes/mcp-architecture.md",
+    kv: [
+      ["lines", "L37, L44"],
+      ["names", "catalogue.md"],
+      ["why it matters", "the boot note still describes a file the pipeline no longer writes"],
+      ["honest fix", "mark them retracted — mark, never delete"],
+    ],
+  },
+  {
+    sev: "warn",
+    title: "1 unmarked retired-tool claim",
+    loc: "profile.md",
+    kv: [
+      ["lines", "L12"],
+      ["names", "build_catalogue"],
+      ["why it matters", "the profile is the first thing every boot reads"],
+      ["honest fix", "mark it retracted — mark, never delete"],
+    ],
+  },
+  {
+    sev: "warn",
+    title: "Cold verification stamp, 34 d",
+    loc: "notes/prompt-patterns.md",
+    kv: [
+      ["last verified", "2026-06-28"],
+      ["age", "34 days — oldest stamp in the corpus"],
+      ["why it matters", "a stale stamp is a claim nobody has re-checked"],
+      ["honest fix", "re-run the verifier; the stamp re-dates itself"],
+    ],
+  },
+] as const;
+
+/** Guest proposals waiting on the operator's decision. Guest text renders as text, never markdown. */
+export const PROPOSALS = [
+  {
+    path: "projects/relay.md",
+    mode: "append",
+    why: "guest session, 2026-08-09 — adds the handoff its answer relied on",
+    content:
+      "## Handoff — relay cutover\nThe reader path went live behind the flag on 2026-08-09.\nNext session: remove the flag once the eval re-runs clean.",
+  },
+  {
+    path: "log/2026-08-08.md",
+    mode: "append",
+    why: "guest session, 2026-08-08 — a correction to its own earlier answer",
+    content: "21:40 — earlier answer cited the wrong section; the scoring table lives under “Scoring”, not “Method”.",
+  },
+] as const;
+
+/** The Settings screen's reader column — the public repo's own registry vocabulary. */
+export const READER = {
+  active: "claude-sonnet-5",
+  providers: [
+    { id: "anthropic", env: "ANTHROPIC_API_KEY", set: true, locked: true, sub: "key set · serving the default" },
+    { id: "openai", env: "OPENAI_API_KEY", set: true, locked: false, sub: "key set" },
+    { id: "google", env: "GEMINI_API_KEY", set: false, locked: false, sub: "GEMINI_API_KEY missing" },
+  ],
+};
+
+/** The Settings screen's guest column. */
+export const GUEST = {
+  door: "open",
+  scope: [
+    { area: "projects/", on: true },
+    { area: "notes/", on: true },
+    { area: "log/", on: false },
+    { area: "profile.md", on: false },
+  ],
+  showSources: true,
+  asksPerDay: 20,
+  notesPerAsk: 3,
+};
+
+/** Working state — the bubble, as the overview carries it. */
+export const BUBBLE = [
+  { kind: "focus", text: "aurora: reader path behind the flag; eval re-run queued", note: "projects/aurora.md", ago: "2 h" },
+  { kind: "decision", text: "relay ships the index path at 55% top-1 while the reader is measured", note: "projects/relay.md", ago: "1 d" },
+  { kind: "handoff", text: "next session starts at the scoring table — see the log", note: "log/2026-08-01.md", ago: "3 h" },
+] as const;
+
 /**
- * The one real-console screen the demo does not carry. Readers is the reader registry
- * (measured / unstable / unmeasured) plus the only controls that mutate a deployment —
- * default reader, provider switches, guest scope and budget. A static demo cannot render
- * those as working switches without lying, so the screen is omitted and this note is the
- * copy the landing shows instead of claiming full parity.
+ * Rendered on the Settings screen so the demo says in place what its controls are.
+ * tests/console-demo.test.ts pins that this sentence stays in the shell's source.
  */
-export const OMITTED = {
-  screen: "readers",
-  note:
-    "Not shown in this demo: the Readers screen — the reader registry and its live controls " +
-    "(default reader, provider switches, guest scope and budget). Its switches change a real " +
-    "deployment, so the demo declares it instead of faking it.",
-} as const;
+export const DEMO_NOTE =
+  "Demo controls — the switches, chips and steppers here change nothing. In your deployment they gate a real reader, a real guest door and a real budget; secrets render as presence, never values.";

@@ -586,7 +586,7 @@ export default function Welcome() {
             <div data-sheet="" className={styles.sheet}>
               <ConsoleDemo />
             </div>
-            <div data-hint="" className={styles.hint}>Try it — click the tabs, drag the map</div>
+            <div data-hint="" className={styles.hint}>Try it — click the tabs, run the ask, drag the map</div>
           </div>
         </section>
 
