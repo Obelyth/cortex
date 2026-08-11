@@ -21,7 +21,9 @@ const flag = (name) => {
   return i === -1 ? null : args[i + 1] && !args[i + 1].startsWith("--") ? args[i + 1] : true;
 };
 
-const FROM = flag("from");
+// INGEST_FROM is how the onboarding wizard hands the folder over — through the environment,
+// never a shell — and the validation below applies to it the same as to the flag.
+const FROM = flag("from") || process.env.INGEST_FROM;
 const INTO = flag("into") || "notes"; // notes | projects
 const COMMIT = flag("commit") === true;
 // Explicit flag beats environment: --repo means --repo.

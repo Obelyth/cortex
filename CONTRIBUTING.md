@@ -52,3 +52,19 @@ out of the tree: copy `.env.example` to `.env.local` and nowhere else.
 - Comments explain why, not what. No emoji anywhere in the repo.
 - Security issues go through [SECURITY.md](SECURITY.md), not a public issue or
   pull request.
+
+## Releasing (maintainers)
+
+A release is a provenance snapshot of `main`, nothing more — updates still ship
+from `main` and a redeploy is the update path (SECURITY.md). To cut one:
+
+```
+git checkout main && git pull
+npm version <major|minor|patch> --no-git-tag-version
+git commit -am "release: v<X.Y.Z>" && git push   # via a PR, per the rules above
+git tag v<X.Y.Z> && git push origin v<X.Y.Z>
+```
+
+The `release` workflow re-runs typecheck, tests and the build at the tag, then
+publishes the GitHub Release with generated notes behind a fixed setup header
+(`.github/RELEASE_HEADER.md`). A tag whose checks fail publishes nothing.

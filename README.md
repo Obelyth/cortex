@@ -35,6 +35,12 @@ Your notes live in a **private GitHub repo** you own — plain markdown, no data
 
 ## Quickstart
 
+Three ways to your own copy, same five minutes after any of them:
+
+- **Use this template** on GitHub — your own repo, no fork relationship — then clone it.
+- Grab a [release](https://github.com/Obelyth/cortex/releases) — a snapshot of `main` with the full check suite re-run at the tag.
+- Or clone this repo directly.
+
 ```bash
 # needs Node >= 20, plus gh and vercel CLIs (both logged in)
 git clone https://github.com/Obelyth/cortex && cd cortex
@@ -42,9 +48,13 @@ npm install
 npm run onboard
 ```
 
-The onboarding walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run.
+The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).
 
-Already have notes? Bring them in afterwards — dry-run by default:
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FObelyth%2Fcortex)
+
+The button deploys the **public site only** — landing, tools, guide and the synthetic demo map run with zero environment, and every gated route answers 404 until you configure it. Your brain comes from the wizard: clone the repo the button created for you and run `npm run onboard` in it.
+
+More to bring in later? Ingest is dry-run by default:
 
 ```bash
 npm run ingest -- --from ~/my-notes --repo <you>/brain            # preview
@@ -162,6 +172,13 @@ Your notes never touch this repo — they stay in *your* private brain repo and 
 
 `ops/groundskeeper/` is a nightly maintenance task template for Claude Code's scheduler: health-check both auth paths (set-equality against `lib/tool-roster.json`, the one canonical roster, pinned to the server by its own test — a hardcoded count once silently disabled the reference deployment for four nights), absorb daily logs into project pages, fact-check pages against live state, leave a digest. The gated console's attention screen is the same story on demand.
 
+### Rotating secrets
+
+1. Run `npm run onboard` and answer **no** when it offers to keep the existing secrets. It generates fresh values, sets them on the project, redeploys, and reprints the wiring commands.
+2. Re-wire every surface: the claude.ai custom connector gets the new URL; each machine re-runs its `claude mcp add` line. Until then, wired surfaces hold the revoked values and fail closed.
+3. `GUEST_PATH_SECRET` is not managed by the wizard: set a new value in the Vercel project env and redeploy — or unset it, which is how a guest is revoked entirely.
+4. Treat a leaked **trusted** credential as a compromise, not a nuisance: rotate first, then audit the brain repo's recent commits for writes you did not make.
+
 ## Environment
 
 | var | required | what breaks without it |
@@ -178,6 +195,7 @@ Your notes never touch this repo — they stay in *your* private brain repo and 
 | `BRAIN_BRANCH` | no | defaults to `main` |
 | `BRAIN_TZ` | no | defaults to `UTC` — set your IANA zone or daily logs date to the wrong day |
 | `SENTRY_DSN` | no | error reporting disabled |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | no | the Postgres mirror, working-state bubble and note temperatures stay off; every reader degrades to the GitHub tarball path. Server-side only — never `NEXT_PUBLIC_`. Apply the schema once with `npx tsx scripts/migrate.ts --apply` (dry-run without the flag; needs `SUPABASE_DB_URL` locally, never deployed) |
 
 ## Development
 

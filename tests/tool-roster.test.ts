@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerTools } from "../lib/tools";
@@ -27,5 +28,16 @@ describe("the tool roster file", () => {
   it("is stored sorted, because the consumers compare sorted shell output", () => {
     expect(roster.trusted).toEqual([...roster.trusted].sort());
     expect(roster.guest).toEqual([...roster.guest].sort());
+  });
+
+  it("is derived, never copied, by the ops healthcheck", () => {
+    // The shell script once carried its own roster, went stale behind a new tool, and
+    // reported UNHEALTHY against a healthy deployment for as long as nobody looked. It must
+    // read this file at run time and never name a tool itself.
+    const sh = readFileSync(new URL("../ops/groundskeeper/healthcheck.sh", import.meta.url), "utf8");
+    expect(sh).toContain("lib/tool-roster.json");
+    for (const name of [...roster.trusted, ...roster.guest]) {
+      expect(sh, `${name} is hardcoded in healthcheck.sh`).not.toContain(name);
+    }
   });
 });
