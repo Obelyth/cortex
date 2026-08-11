@@ -94,27 +94,31 @@ const event = (i: number, sec: number): StreamRow => ({
   key: i,
 });
 
-const INITIAL_STREAM = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => event(i, START_SEC - i * 37));
+/**
+ * The stream is derived from the tick rather than accumulated in state: every third tick
+ * contributes one appended event on top of the seed rows. Accumulating meant calling
+ * setStream inside the setT updater — updaters must stay pure (StrictMode double-invokes
+ * them, which prepended each event twice and duplicated its React key). Derivation keeps
+ * the updater pure and makes each row's key its monotonic event index, unique by design.
+ */
+const streamAt = (t: number): StreamRow[] => {
+  const rows: StreamRow[] = [];
+  for (let m = Math.floor(t / 3); m >= 1 && rows.length < 8; m--) rows.push(event(m + 8, START_SEC + m * 3));
+  for (let i = 0; rows.length < 8; i++) rows.push(event(i, START_SEC - i * 37));
+  return rows;
+};
 
 export default function ConsoleDemo() {
   const [screen, setScreen] = useState<ScreenKey>("overview");
   const [t, setT] = useState(0);
-  const [stream, setStream] = useState<StreamRow[]>(INITIAL_STREAM);
 
   useEffect(() => {
-    const iv = setInterval(() => {
-      setT((prev) => {
-        const next = prev + 1;
-        if (next % 3 === 0) {
-          setStream((s) => [event(Math.floor(next / 3) + 8, START_SEC + next)].concat(s).slice(0, 8));
-        }
-        return next;
-      });
-    }, 1000);
+    const iv = setInterval(() => setT((prev) => prev + 1), 1000);
     return () => clearInterval(iv);
   }, []);
 
   const sec = START_SEC + t;
+  const stream = streamAt(t);
 
   return (
     <div className={styles.frame}>
