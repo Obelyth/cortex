@@ -54,6 +54,11 @@ with `SUPABASE_URL` unset the server behaves exactly as it did before any of it 
 
 **The brain stops being a place you ask and becomes the place work resumes.**
 
+- **`@obelyth/verify`** — the citation verifier as a standalone package: nonced boundaries,
+  block-scoped quotes, retraction-aware stamps, benchmarked in the open. Citation-proof for
+  any RAG pipeline or vault — bring your own store, keep the receipts. *Pulled forward from
+  2027 (2026-08-11): the verifier is the invention, and it no longer waits behind the
+  features it justifies. Cortex becomes its reference implementation on day one.*
 - **`brain_handoff`** — one call returns a project's whole working context: its page,
   recent logs, relevant notes, open threads — as one cited bundle. Start in Claude Code,
   continue in Cursor, same context. The groundskeeper keeps bundles warm overnight.
@@ -80,9 +85,10 @@ with `SUPABASE_URL` unset the server behaves exactly as it did before any of it 
 
 **The primitive escapes the product.**
 
-- **`@obelyth/verify`** — the citation verifier as a standalone package: nonced
-  boundaries, block-scoped quotes, retraction-aware stamps. Citation-proof for any RAG
-  pipeline; Cortex becomes the reference implementation of a primitive others adopt.
+- **`@obelyth/verify` moved up to Q3 2026** — a roadmap is only as credible as its past
+  tense, so the move is recorded rather than erased. What remains here is what follows a
+  shipped primitive: integrations, adapters for stores that are not this one, and whatever
+  adoption teaches. This section grows from evidence, not ambition.
 
 ## Deliberately not on this roadmap
 
