@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { BrandFoot, Mast } from "../mast";
+
+export const metadata: Metadata = {
+  title: "Guide — Cortex by Obelyth",
+  description:
+    "Wire Claude Code, claude.ai, and an optional guest door to your own Cortex brain — the rituals, the verification contract, and what stays private.",
+  alternates: { canonical: "/guide" },
+};
 
 /**
  * How the system is wired and used, written public-safe: mechanisms are described, secrets are
@@ -41,8 +49,8 @@ export default function Guide() {
           <span className="pill n">BOOT</span>
           <div>
             A session that needs context opens with{" "}
-            <span className="mono">brain_context</span> — profile, index, and the last week of
-            log entries, one call.
+            <span className="mono">brain_context</span> — profile, the router&rsquo;s one-line
+            entry per note, the working bubble, and recent logs, one bounded call.
           </div>
         </div>
         <div className="ritual">
@@ -56,16 +64,21 @@ export default function Guide() {
         <div className="ritual">
           <span className="pill n">WRAP UP</span>
           <div>
-            At session end, outcomes go to the relevant project page and the daily log — the
-            same ritual on desktop and phone, the same files.
+            At session end, outcomes go to the relevant project page and the daily log, and the
+            bubble — <span className="mono">brain_bubble</span>, the working state that rides
+            every boot — is updated so the next session resumes where this one stopped. The same
+            ritual on desktop and phone, the same files.
           </div>
         </div>
       </div>
 
       <h2>How answers are proven</h2>
       <p className="lede">
-        <span className="mono">brain_ask</span> reads the whole live corpus and cites the file it
-        answered from. A deterministic verifier — no model, no network — then checks the quote
+        <span className="mono">brain_ask</span> hands a reader model your actual notes — served
+        from the Postgres mirror, with git remaining the sole authority — and cites the file it
+        answered from. The reader is pluggable (Claude, OpenAI and Gemini models on an allowlist;
+        Claude holds the default it earned on a labeled eval), but the verifier is not a model at
+        all — no model, no network — it checks the quote
         against that file at that commit, and the stamp says exactly what that proves. A passage
         the brain has retracted (marked <span className="mono">SUPERSEDED</span>,{" "}
         <span className="mono">CORRECTION</span>, <span className="mono">DEPRECATED</span>,{" "}

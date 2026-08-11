@@ -16,13 +16,13 @@ import styles from "./welcome.module.css";
 
 const HERO_STATS = [
   { n: "68", label: "notes in your brain" },
-  { n: "9", label: "things your brain can do" },
+  { n: "10", label: "things your brain can do" },
   { n: "4", label: "places you can ask" },
-  { n: "0", label: "things to keep in sync" },
+  { n: "0", label: "copies you keep in sync" },
 ];
 
 const PRINCIPLES = [
-  { n: "01", title: "One place", body: "Every note lives in one place, and Claude reads all of it each time. Nothing can drift out of date, because there is no copy to keep in sync." },
+  { n: "01", title: "One place", body: "Every note lives in one git repo, and that repo stays the sole authority. A mirror serves reads fast and heals from the source, so there is no copy for you to keep in sync." },
   { n: "02", title: "Every surface", body: "Terminal, web, phone, desktop. Whichever one you open, you are talking to the same notes at the same moment in time." },
   { n: "03", title: "Proven quotes", body: "Every answer names its source, and that quote is checked against the file automatically. Anything that cannot be proven is flagged, not quietly dropped." },
 ];
@@ -46,7 +46,7 @@ const STAMPS = [
 const RITUALS = [
   { tag: "Starting up", text: "Start a session and Claude picks up who you are, what you are working on, and the last week of notes." },
   { tag: "Jotting down", text: "Say “remember this” on any device and it lands in today's log, timestamped. You get a receipt when it is saved." },
-  { tag: "Wrapping up", text: "When you finish, what happened goes to the project page and the daily log — same habit on desktop or phone." },
+  { tag: "Wrapping up", text: "When you finish, what happened goes to the project page and the daily log, and the bubble — what is in flight — carries to your next session. Same habit on desktop or phone." },
 ];
 
 const CMD = 'claude mcp add --transport http cortex https://<host>/api/mcp --header "Authorization: Bearer <MCP_TOKEN>"';
@@ -392,8 +392,10 @@ export default function Welcome() {
         </span>
         <div className={styles.sp} />
         <nav aria-label="Site" style={{ display: "contents" }}>
-          <a href="#how" className={styles.navLink}>How it works</a>
-          <a href="#connect" className={styles.navLink}>Connect</a>
+          <a href="#how" className={`${styles.navLink} ${styles.navAux}`}>How it works</a>
+          <a href="#connect" className={`${styles.navLink} ${styles.navAux}`}>Connect</a>
+          <a href="/tools" className={styles.navLink}>Tools</a>
+          <a href="/guide" className={styles.navLink}>Guide</a>
           <a href={REPO} target="_blank" rel="noreferrer" className={styles.navLink}>GitHub</a>
           <a href="#console" onClick={toConsole} className={styles.navBtn}>Open the console</a>
         </nav>
@@ -498,6 +500,24 @@ export default function Welcome() {
           </div>
         </section>
 
+        {/* ─────────────── READER ─────────────── */}
+        <section className={styles.section} aria-labelledby="reader-title">
+          <div data-flow="" className={styles.inner}>
+            <div data-reveal="" className={styles.kicker}>The reader</div>
+            <h2 data-reveal="" id="reader-title" className={styles.h2}>
+              Any model may read it.<br />Claude earned the default.
+            </h2>
+            <p data-reveal="" className={styles.sectionLede} style={{ marginBottom: 0 }}>
+              The model that reads your notes is pluggable — an allowlisted registry of Claude,
+              OpenAI and Gemini models, chosen per call or per deployment, all held to one
+              contract: a refusal or truncation throws rather than masquerading as &ldquo;not in
+              brain.&rdquo; The default goes to the reader with the receipts — Claude, at 97% on
+              a labeled eval over this corpus — and the verifier never involves a model at all,
+              which is why swapping readers never changes what a stamp proves.
+            </p>
+          </div>
+        </section>
+
         {/* ─────────────── CONNECT ─────────────── */}
         <section id="connect" className={styles.section} aria-labelledby="connect-title">
           <div data-flow="" className={styles.inner}>
@@ -594,6 +614,7 @@ export default function Welcome() {
               <a href="/tools" className={styles.footLink}>Tools</a>
               <a href="/guide" className={styles.footLink}>Guide</a>
               <a href="/map" className={styles.footLink}>Demo map</a>
+              <a href={`${REPO}/blob/main/ROADMAP.md`} target="_blank" rel="noreferrer" className={styles.footLink}>Roadmap</a>
               <a href={`${REPO}/blob/main/LICENSE`} target="_blank" rel="noreferrer" className={styles.footLink}>License</a>
               <span className={styles.footTag}>© 2026 Obelyth</span>
             </div>

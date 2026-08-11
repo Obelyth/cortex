@@ -21,6 +21,10 @@
   background: #07090c;
   color: var(--text-primary);
   font-family: var(--sans);
+  /* Decorative layers (the hero glow, the drifting field) are wider than a phone; clip —
+     not hidden — so they never become horizontal scroll and the sticky arrival keeps
+     working (clip creates no scroll container). */
+  overflow-x: clip;
 }
 
 .page a { color: var(--accent-cyan); text-decoration: none; }
@@ -58,7 +62,7 @@
 .sp { flex: 1; }
 .navLink {
   font: 500 10px var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
-  color: var(--text-secondary); transition: color 0.16s var(--ease);
+  color: var(--text-secondary); transition: color 0.16s var(--ease); white-space: nowrap;
 }
 .navLink:hover { color: var(--text-bright); }
 .navBtn {
@@ -67,12 +71,22 @@
   background: var(--surface-raised); font: 500 10px var(--mono); letter-spacing: 0.16em;
   text-transform: uppercase; color: var(--text-primary); box-shadow: var(--elev-1);
   transition: color 0.16s var(--ease), border-color 0.16s var(--ease), background 0.16s var(--ease);
+  white-space: nowrap;
 }
 .navBtn:hover { color: var(--accent-cyan); border-color: var(--accent-cyan); background: var(--ob-cyan-dim); }
 .navBtn:active { transform: translateY(1px); }
+/* marker class: in-page anchors that only make sense at desktop widths */
+.navAux { composes: navLink; }
+/* Mid widths: the anchors yield first, so the row never wraps. */
+@media (max-width: 1080px) {
+  .navAux { display: none; }
+}
 @media (max-width: 720px) {
-  .nav { padding: 0 20px; gap: 14px; }
-  .navLink { display: none; }
+  .nav { padding: 0 18px; gap: 13px; }
+  /* The in-page anchors and the console button yield; Tools / Guide / GitHub stay
+     reachable without a menu, and the byline steps back so the row fits 360px. */
+  .navAux, .navBtn { display: none; }
+  .wordmark span { display: none; }
 }
 
 /* ---------------------------------------------------------------- hero --- */
@@ -217,6 +231,9 @@
 /* ------------------------------------------------------------- connect --- */
 .paths { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-bottom: 66px; }
 .pathCard {
+  /* min-width: 0 lets the grid column shrink below the code block's longest line on
+     phones; the pre then scrolls inside the card instead of widening the page. */
+  min-width: 0;
   padding: 30px 32px 32px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0) 46%), var(--surface-raised);
   border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--elev-2);
@@ -294,6 +311,16 @@
 .footDiv { width: 1px; height: 14px; background: var(--border-default); }
 .footLink { font: 400 10.5px var(--mono); color: var(--text-muted); transition: color 0.16s var(--ease); }
 .footLink:hover { color: var(--accent-cyan); }
+
+/* ---------------------------------------------------------------- phone --- */
+@media (max-width: 560px) {
+  .hero { padding: 104px 20px 72px; }
+  .section { padding: 92px 20px; }
+  .foot { padding: 72px 20px 48px; }
+  .lead { padding: 0 20px; }
+  .stats { gap: 30px; margin-top: 72px; }
+  .pathCard { padding: 24px 18px 26px; }
+}
 
 /* reveal-on-enter targets start visible; JS only hides them once the observer proves live */
 .reveal { }
