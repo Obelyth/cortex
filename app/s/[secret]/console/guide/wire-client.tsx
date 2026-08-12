@@ -94,6 +94,15 @@ const WIRES: Wire[] = [
     note: "Connectors cannot send headers, so the secret rides the path. Add once on the web; iOS and desktop sync on their own.",
   },
   {
+    id: "claude-ai-guest",
+    name: "claude.ai (guest)",
+    door: "guest",
+    grants: "asks · proposes",
+    where: "Settings → Connectors → Add custom connector",
+    snippet: (origin) => `${origin}/api/g/<GUEST_PATH_SECRET>/mcp`,
+    note: "A second Claude account that is not yours to trust with the pen — a work or org one, where somebody else sets the policy. Same screen as the connector above, deliberately a different URL: the guest secret goes in, no OAuth step and no token field appear, and the toolset that comes back is the scoped ask and the propose. If “Add custom connector” is missing from that account entirely, its org has custom connectors switched off and nothing on this side changes that.",
+  },
+  {
     id: "chatgpt",
     name: "ChatGPT / other apps",
     door: "guest",
@@ -182,7 +191,7 @@ export function WireClient({ guestOpen }: { guestOpen: boolean }) {
         {w.note}
         {w.door === "guest" &&
           (guestOpen
-            ? " This door is open on this deployment."
+            ? " This door is open on this deployment. Every guest surface shares the one secret, so rotating GUEST_PATH_SECRET revokes all of them at once — and none of your trusted doors."
             : " This door is CLOSED on this deployment — set GUEST_PATH_SECRET to open it.")}
         {usesSecret &&
           " The secret is masked on screen — copy carries the real URL, a screenshot carries nothing."}
