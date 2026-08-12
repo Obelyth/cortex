@@ -104,4 +104,23 @@ describe("the wire-up picker", () => {
     expect(wireSrc).toContain("/api/s/");
     expect(wireSrc).toContain("/api/g/");
   });
+
+  it("offers claude.ai on the guest door as well as the connector", () => {
+    // A claude.ai account is not automatically one you hold the pen for: a work or org account
+    // runs under somebody else's policy. With only the connector entry on the picker, the
+    // obvious move for that account is the full read-write URL — so the guest option has to be
+    // on the same screen, named for the same client, or the safe path is the one nobody finds.
+    const claudeAi = [...wireSrc.matchAll(/name: "(claude\.ai[^"]*)",\s*\n\s*door: "(\w+)"/g)].map(
+      (m) => [m[1], m[2]]
+    );
+    expect(claudeAi).toEqual(
+      expect.arrayContaining([
+        ["claude.ai", "connector"],
+        [expect.stringContaining("guest"), "guest"],
+      ])
+    );
+    // And the guest-facing one must not carry the trusted door's URL.
+    const guestEntry = wireSrc.slice(wireSrc.indexOf('id: "claude-ai-guest"'));
+    expect(guestEntry.slice(0, guestEntry.indexOf("},"))).toContain("/api/g/");
+  });
 });

@@ -176,7 +176,7 @@ Your notes never touch this repo — they stay in *your* private brain repo and 
 
 1. Run `npm run onboard` and answer **no** when it offers to keep the existing secrets. It generates fresh values, sets them on the project, redeploys, and reprints the wiring commands.
 2. Re-wire every surface: the claude.ai custom connector gets the new URL; each machine re-runs its `claude mcp add` line. Until then, wired surfaces hold the revoked values and fail closed.
-3. `GUEST_PATH_SECRET` is not managed by the wizard: set a new value in the Vercel project env and redeploy — or unset it, which is how a guest is revoked entirely.
+3. `GUEST_PATH_SECRET` is not managed by the wizard: set a new value in the Vercel project env and redeploy — or unset it, which is how a guest is revoked entirely. Every guest surface shares that one secret, however many you have wired, so rotating it revokes all of them together and leaves the trusted doors untouched. That coupling is the point: guests are revoked as a class, without re-wiring your own machines.
 4. Treat a leaked **trusted** credential as a compromise, not a nuisance: rotate first, then audit the brain repo's recent commits for writes you did not make.
 
 ## Environment
