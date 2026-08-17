@@ -100,7 +100,7 @@ const WIRES: Wire[] = [
     grants: "asks · proposes",
     where: "Settings → Connectors → Add custom connector",
     snippet: (origin) => `${origin}/api/g/<GUEST_PATH_SECRET>/mcp`,
-    note: "A second Claude account that is not yours to trust with the pen — a work or org one, where somebody else sets the policy. Same screen as the connector above, deliberately a different URL: the guest secret goes in, no OAuth step and no token field appear, and the toolset that comes back is the scoped ask and the propose. If “Add custom connector” is missing from that account entirely, its org has custom connectors switched off and nothing on this side changes that.",
+    note: "A second Claude account that is not yours to trust with the pen — a work or org one, where somebody else sets the policy. Identical to the connector row in every mechanic (same screen, secret in the path, no OAuth step, no token field) and different in the only thing that matters: this URL registers the scoped ask and the propose, so that account can never write. If “Add custom connector” is missing from it entirely, its org has custom connectors switched off and nothing on this side changes that.",
   },
   {
     id: "chatgpt",
@@ -123,7 +123,7 @@ const WIRES: Wire[] = [
   },
 ];
 
-export function WireClient({ guestOpen }: { guestOpen: boolean }) {
+export function WireClient({ guestServes }: { guestServes: boolean }) {
   const [pick, setPick] = useState("claude-code");
   const [copied, setCopied] = useState(false);
   // Derived after mount so the server-rendered payload carries only placeholders.
@@ -190,9 +190,9 @@ export function WireClient({ guestOpen }: { guestOpen: boolean }) {
       <p className={styles.pathNote}>
         {w.note}
         {w.door === "guest" &&
-          (guestOpen
-            ? " This door is open on this deployment. Every guest surface shares the one secret, so rotating GUEST_PATH_SECRET revokes all of them at once — and none of your trusted doors."
-            : " This door is CLOSED on this deployment — set GUEST_PATH_SECRET to open it.")}
+          (guestServes
+            ? " This door serves on this deployment. Every guest surface shares the one secret AND the one daily budget: rotating GUEST_PATH_SECRET revokes all of them at once and no trusted door with it, and any one of them can spend the whole day's asks before the others get a turn."
+            : " This door is NOT serving on this deployment — the path 03 card above says what it still needs.")}
         {usesSecret &&
           " The secret is masked on screen — copy carries the real URL, a screenshot carries nothing."}
       </p>

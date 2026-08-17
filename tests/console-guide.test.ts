@@ -78,7 +78,7 @@ describe("the wire-up picker", () => {
     // No env read is even possible to render from — a "use client" file has no server env,
     // and none is smuggled through props: the only prop is a boolean.
     expect(wireSrc).not.toContain("process.env");
-    expect(wireSrc).toMatch(/guestOpen\s*}:\s*{\s*guestOpen:\s*boolean\s*}/);
+    expect(wireSrc).toMatch(/guestServes\s*}:\s*{\s*guestServes:\s*boolean\s*}/);
   });
 
   it("renders the mask and copies the real value — never the reverse", () => {
@@ -119,8 +119,29 @@ describe("the wire-up picker", () => {
         [expect.stringContaining("guest"), "guest"],
       ])
     );
-    // And the guest-facing one must not carry the trusted door's URL.
-    const guestEntry = wireSrc.slice(wireSrc.indexOf('id: "claude-ai-guest"'));
-    expect(guestEntry.slice(0, guestEntry.indexOf("},"))).toContain("/api/g/");
+    // And the guest-facing one must carry the guest URL and NOT the trusted door's — the whole
+    // point of the row. Bounded by the next entry's id rather than the next "}," so a snippet
+    // built with JSON.stringify (two sibling entries already are) cannot truncate the slice.
+    const start = wireSrc.indexOf('id: "claude-ai-guest"');
+    expect(start, 'the claude-ai-guest entry must exist to be checked').toBeGreaterThan(-1);
+    const rest = wireSrc.slice(start + 1);
+    const next = rest.indexOf('id: "');
+    const guestEntry = next === -1 ? rest : rest.slice(0, next);
+    expect(guestEntry).toContain("/api/g/");
+    expect(guestEntry).not.toContain("/api/s/");
+  });
+
+  it("reports the guest door as serving only when it can actually serve", () => {
+    // The picker's door-state sentence used to key off GUEST_PATH_SECRET presence alone, so a
+    // deployment with the secret but no KV store (or no MCP_TOKEN) got "this door is open" from
+    // the picker and "door cannot serve" from the path 03 card — on the same screen, thirty
+    // pixels apart. The guest door is an alias onto the bearer-gated handler and it meters
+    // against KV, so all three have to be present before anything claims it serves.
+    expect(src).toMatch(/const guestServes = guestOpen && kvSet && bearerSet;/);
+    // The picker gets the composed verdict, never the bare secret-presence flag.
+    expect(src).toMatch(/<WireClient guestServes=\{guestServes\} \/>/);
+    expect(src).not.toMatch(/<WireClient[^>]*guestOpen=/);
+    // And the closed branch must not name one cause, since the boolean cannot tell them apart.
+    expect(wireSrc).not.toMatch(/NOT serving[^"]*set GUEST_PATH_SECRET/);
   });
 });

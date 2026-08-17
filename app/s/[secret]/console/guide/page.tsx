@@ -35,7 +35,11 @@ export default async function Guide({
   // every call. Presence of both vars is the same test lib/kv.ts applies before constructing
   // its client — checked here directly because this screen reads presence only, never values.
   const kvSet = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  const guestServes = guestOpen && kvSet;
+  // ...and the bearer, because the guest door is an ALIAS: route.ts rewrites the path secret onto
+  // the trusted handler's Authorization header, so an unset MCP_TOKEN makes it 404 on every
+  // request exactly as a wrong secret would. A screen that called that "open" would send the
+  // operator to a URL whose failure mode is indistinguishable from a revoked one.
+  const guestServes = guestOpen && kvSet && bearerSet;
 
   // One KV read, so the roles strip names the ACTUAL reader rather than describing the idea of
   // one. A resolution failure renders as its sentence elsewhere; here the cell degrades to the
@@ -74,7 +78,7 @@ export default async function Guide({
     },
     {
       name: "Guests",
-      who: guestOpen ? (kvSet ? "door open" : "door cannot serve") : "door closed",
+      who: guestServes ? "door open" : guestOpen ? "door cannot serve" : "door closed",
       does: "ask (scoped) · propose",
       detail: `read for them by ${guestReader}, from the areas you share — never the pen`,
     },
@@ -111,9 +115,11 @@ export default async function Guide({
       open: guestServes,
       state: guestServes
         ? "open · scoped in settings"
-        : guestOpen
-          ? "secret set · KV missing — door cannot serve"
-          : "closed · set GUEST_PATH_SECRET",
+        : !guestOpen
+          ? "closed · set GUEST_PATH_SECRET"
+          : !kvSet
+            ? "secret set · KV missing — door cannot serve"
+            : "secret set · MCP_TOKEN missing — door 404s",
       wire: `https://<host>/api/g/<GUEST_PATH_SECRET>/mcp`,
       note: "Questions are answered by a Claude reader from the areas you share; suggestions wait on the attention screen until accepted. The corpus itself is never handed over.",
       // The only path with a policy attached, so it is the only one that links onward.
@@ -189,7 +195,7 @@ export default async function Guide({
 
       <div className={styles.rule} />
 
-      <WireClient guestOpen={guestOpen} />
+      <WireClient guestServes={guestServes} />
 
       <div className={styles.rule} />
 
