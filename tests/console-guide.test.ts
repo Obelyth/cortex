@@ -137,7 +137,20 @@ describe("the wire-up picker", () => {
     // the picker and "door cannot serve" from the path 03 card — on the same screen, thirty
     // pixels apart. The guest door is an alias onto the bearer-gated handler and it meters
     // against KV, so all three have to be present before anything claims it serves.
-    expect(src).toMatch(/const guestServes = guestOpen && kvSet && bearerSet;/);
+    // All three inputs reach the verdict, and it is computed in ONE place — the previous shape
+    // spelled the decision out separately per screen, which is how they came to disagree.
+    expect(src).toMatch(/guestDoorState\(guestOpen, kvSet, bearerSet\)/);
+    expect(src).toMatch(/const guestServes = guestDoor\.serves;/);
+    // Every rendered guest-door string comes from that verdict, not from a local re-derivation.
+    expect(src).toMatch(/who: guestDoor\.who,/);
+    expect(src).toMatch(/state: guestDoor\.state,/);
+    // The helper must refuse on any missing piece rather than only the secret.
+    const helper = src.slice(src.indexOf("function guestDoorState"));
+    const body = helper.slice(0, helper.indexOf("\n}"));
+    for (const guard of ["!open", "!kv", "!bearer"]) {
+      expect(body, `guestDoorState must guard on ${guard}`).toContain(guard);
+    }
+    expect(body.match(/serves: true/g), "exactly one path may report serving").toHaveLength(1);
     // The picker gets the composed verdict, never the bare secret-presence flag.
     expect(src).toMatch(/<WireClient guestServes=\{guestServes\} \/>/);
     expect(src).not.toMatch(/<WireClient[^>]*guestOpen=/);

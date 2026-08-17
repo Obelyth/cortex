@@ -21,6 +21,34 @@ export const metadata = { title: "Guide · Cortex console" };
  * and anything you do not control takes path 03. Only env-var PRESENCE is read — no secret
  * value ever reaches markup, same rule as every other screen.
  */
+/**
+ * The guest door's verdict, computed once.
+ *
+ * Three booleans decide it, and the bug this replaces came from spelling that decision out
+ * separately in each place that renders it: the roles strip said "door open" from two of the three
+ * while the path card wanted all three, so one screen contradicted the other. Guard clauses rather
+ * than a nested conditional, same shape as `guestHeading` on the settings screen.
+ *
+ * Order matters — it reports the FIRST missing piece, so the operator fixes one thing at a time
+ * instead of being told about KV while the secret is still unset.
+ */
+function guestDoorState(open: boolean, kv: boolean, bearer: boolean) {
+  if (!open) return { serves: false, who: "door closed", state: "closed · set GUEST_PATH_SECRET" };
+  if (!kv)
+    return {
+      serves: false,
+      who: "door cannot serve",
+      state: "secret set · KV missing — door cannot serve",
+    };
+  if (!bearer)
+    return {
+      serves: false,
+      who: "door cannot serve",
+      state: "secret set · MCP_TOKEN missing — door 404s",
+    };
+  return { serves: true, who: "door open", state: "open · scoped in settings" };
+}
+
 export default async function Guide({
   params,
 }: {
@@ -35,11 +63,12 @@ export default async function Guide({
   // every call. Presence of both vars is the same test lib/kv.ts applies before constructing
   // its client — checked here directly because this screen reads presence only, never values.
   const kvSet = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
-  // ...and the bearer, because the guest door is an ALIAS: route.ts rewrites the path secret onto
-  // the trusted handler's Authorization header, so an unset MCP_TOKEN makes it 404 on every
+  // The bearer counts too, because the guest door is an ALIAS: route.ts rewrites the path secret
+  // onto the trusted handler's Authorization header, so an unset MCP_TOKEN makes it 404 on every
   // request exactly as a wrong secret would. A screen that called that "open" would send the
   // operator to a URL whose failure mode is indistinguishable from a revoked one.
-  const guestServes = guestOpen && kvSet && bearerSet;
+  const guestDoor = guestDoorState(guestOpen, kvSet, bearerSet);
+  const guestServes = guestDoor.serves;
 
   // One KV read, so the roles strip names the ACTUAL reader rather than describing the idea of
   // one. A resolution failure renders as its sentence elsewhere; here the cell degrades to the
@@ -78,7 +107,7 @@ export default async function Guide({
     },
     {
       name: "Guests",
-      who: guestServes ? "door open" : guestOpen ? "door cannot serve" : "door closed",
+      who: guestDoor.who,
       does: "ask (scoped) · propose",
       detail: `read for them by ${guestReader}, from the areas you share — never the pen`,
     },
@@ -113,13 +142,7 @@ export default async function Guide({
       who: "Assistants you do not control — another person's model, or one you use but do not trust with the pen.",
       grants: "asks · proposes — never writes",
       open: guestServes,
-      state: guestServes
-        ? "open · scoped in settings"
-        : !guestOpen
-          ? "closed · set GUEST_PATH_SECRET"
-          : !kvSet
-            ? "secret set · KV missing — door cannot serve"
-            : "secret set · MCP_TOKEN missing — door 404s",
+      state: guestDoor.state,
       wire: `https://<host>/api/g/<GUEST_PATH_SECRET>/mcp`,
       note: "Questions are answered by a Claude reader from the areas you share; suggestions wait on the attention screen until accepted. The corpus itself is never handed over.",
       // The only path with a policy attached, so it is the only one that links onward.
