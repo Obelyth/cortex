@@ -57,7 +57,7 @@ GitHub and Vercel, and hands off to the same wizard. One line in Terminal does t
 a download:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
+/bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
 ```
 
 The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).

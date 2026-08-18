@@ -16,7 +16,7 @@
  * line is the same live tool-roster check onboarding ends with — trust the
  * check, not the deploy log.
  */
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -187,10 +187,18 @@ try {
 }
 const vNew = version();
 
+// The externally-installed CLIs are resolved to absolute paths once and invoked
+// without a shell: the argument list cannot be re-parsed, and a PATH change
+// cannot swap the binary between the check and the call.
+const binOf = (name) => sh(`command -v ${name}`);
+
 // ---------------------------------------------------------- dependencies ---
 if (sh(`git diff --name-only ${oldHead} HEAD`).split("\n").includes("package-lock.json")) {
   act("the update changed dependencies — installing the exact pinned set (npm ci)…");
-  execSync("npm ci", { cwd: ROOT, stdio: "inherit" });
+  // --ignore-scripts: no dependency lifecycle script runs on this machine, same
+  // policy as the release workflow — which proves on every tag that the suite
+  // and build pass without them. Vercel's build runs on Vercel's side either way.
+  execFileSync(binOf("npm"), ["ci", "--ignore-scripts"], { cwd: ROOT, stdio: "inherit" });
   ok("dependencies match the lockfile");
 }
 
@@ -202,7 +210,8 @@ if (!existsSync(join(ROOT, ".vercel", "project.json"))) {
   rl.close();
   process.exit(1);
 }
-try { sh("command -v vercel"); } catch {
+let vercelBin;
+try { vercelBin = binOf("vercel"); } catch {
   act("vercel CLI is not installed (npm i -g vercel) — install it, then re-run to deploy.");
   process.exit(1);
 }
@@ -213,7 +222,7 @@ if (deploy === "n") {
   rl.close();
   process.exit(0);
 }
-execSync("vercel deploy --prod --yes", { cwd: ROOT, stdio: "inherit" });
+execFileSync(vercelBin, ["deploy", "--prod", "--yes"], { cwd: ROOT, stdio: "inherit" });
 const project = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
 const url = `https://${project.projectName ?? project.name}.vercel.app`;
 ok(`deployed — production alias: ${url}`);
@@ -223,7 +232,10 @@ head("5 · Verify — trust the check, not the deploy log");
 const tmpEnv = join(ROOT, ".vercel", ".update-env.tmp");
 let liveSecret = "", liveToken = "";
 try {
-  execSync(`vercel env pull --environment production ${tmpEnv} --yes`, { cwd: ROOT, stdio: "ignore" });
+  execFileSync(vercelBin, ["env", "pull", "--environment", "production", tmpEnv, "--yes"], {
+    cwd: ROOT,
+    stdio: "ignore",
+  });
   const pulled = readFileSync(tmpEnv, "utf8");
   liveSecret = (pulled.match(/^CONNECTOR_PATH_SECRET="?([^"\n]+)/m) || [])[1] ?? "";
   liveToken = (pulled.match(/^MCP_TOKEN="?([^"\n]+)/m) || [])[1] ?? "";
@@ -243,8 +255,11 @@ const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
 const doorArgs = liveSecret
   ? `"${url}/api/s/${liveSecret}/mcp"`
   : `-H "Authorization: Bearer ${liveToken}" "${url}/api/mcp"`;
+// HTTPS only, redirects included, same as the ops healthcheck: the request
+// carries a credential, and a downgrade would put it on the wire in the clear.
 const tools = sh(
-  `curl -s --max-time 30 -X POST -H 'Content-Type: application/json' ` +
+  `curl -s --max-time 30 --proto '=https' --proto-redir '=https' -X POST ` +
+  `-H 'Content-Type: application/json' ` +
   `-H 'Accept: application/json, text/event-stream' --data '${body}' ${doorArgs} ` +
   `| grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`
 );
