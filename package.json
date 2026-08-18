@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "onboard": "node scripts/onboard.mjs",
+    "update": "node scripts/update.mjs",
     "ingest": "node scripts/ingest.mjs"
   },
   "dependencies": {

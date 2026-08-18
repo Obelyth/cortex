@@ -1,0 +1,15 @@
+# Shapes GitHub's generated release notes (the generate-notes call in
+# .github/workflows/release.yml). "Action required" surfaces first so an
+# operator reads the manual steps — a new env var, a migration, re-wiring —
+# before running the one-command update, which cannot do those steps for them.
+# The label convention is documented in CONTRIBUTING.md (Releasing); a release
+# with no labeled PRs simply omits the section, so its absence is a claim too:
+# nothing manual this time.
+changelog:
+  categories:
+    - title: Action required
+      labels:
+        - action-required
+    - title: Changes
+      labels:
+        - "*"
