@@ -4,7 +4,7 @@
 # Two ways in, same script:
 #   - double-click "Cortex Setup.command" in a downloaded copy, or
 #   - from nothing, one line in Terminal:
-#       /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
+#       /bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
 #
 # It installs the tools Cortex needs — Homebrew, Node, gh, vercel — asking
 # before each one, signs you in to GitHub and Vercel, fetches the code when it
@@ -42,7 +42,8 @@ else
   act "Homebrew is missing. It installs the rest of the tools; its installer is the official"
   act "   one from brew.sh and will ask for your Mac login password (that is normal)."
   confirm "Install Homebrew now?" || fail "stopped at your request. Nothing was installed."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+  # HTTPS only, redirects included — the fetched script runs with this user's rights.
+  /bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
     || fail "Homebrew install did not finish — re-run this after fixing what it printed."
   for p in /opt/homebrew/bin /usr/local/bin; do [[ -d "$p" ]] && PATH="$p:$PATH"; done
   command -v brew >/dev/null 2>&1 || fail "brew still not on PATH — open a new Terminal window and re-run."
@@ -67,8 +68,10 @@ else
 fi
 if command -v vercel >/dev/null 2>&1; then ok "Vercel CLI installed"
 else
-  confirm "Install the Vercel CLI (via npm)?" || fail "Cortex deploys on Vercel and needs its CLI. Stopped."
-  npm install -g vercel || fail "npm install -g vercel failed — re-run after fixing what it printed."
+  # Via brew, not npm -g: the formula ships prebuilt, so no package lifecycle
+  # script runs during install, and brew keeps it updated with everything else.
+  confirm "Install the Vercel CLI (via brew)?" || fail "Cortex deploys on Vercel and needs its CLI. Stopped."
+  brew install vercel-cli || fail "brew install vercel-cli failed — re-run after fixing what it printed."
   ok "vercel installed"
 fi
 
@@ -111,8 +114,11 @@ fi
 
 # ----------------------------------------------------------------- handoff ---
 bold "5 · Hand off to the wizard"
-act "installing dependencies (a minute or two)…"
-npm install || fail "npm install failed — re-run after fixing what it printed."
+act "installing the exact pinned dependencies (a minute or two)…"
+# --ignore-scripts: no dependency lifecycle script runs on this machine, same
+# policy as the release workflow — which proves on every tag that the suite and
+# build pass without them. The deploy builds on Vercel's side either way.
+npm ci --ignore-scripts || fail "npm ci failed — re-run after fixing what it printed."
 ok "dependencies installed"
 act "starting the onboarding wizard — it creates your private brain, deploys, and verifies."
 exec npm run onboard
