@@ -16,16 +16,18 @@ set -u
 
 CANONICAL="https://github.com/Obelyth/cortex"
 
-bold() { printf '\n\033[1m%s\033[0m\n' "$1"; }
-ok()   { printf '  \033[36m✓\033[0m %s\n' "$1"; }
-act()  { printf '  \033[33m→\033[0m %s\n' "$1"; }
+bold() { local s="$1"; printf '\n\033[1m%s\033[0m\n' "$s"; return 0; }
+ok()   { local s="$1"; printf '  \033[36m✓\033[0m %s\n' "$s"; return 0; }
+act()  { local s="$1"; printf '  \033[33m→\033[0m %s\n' "$s"; return 0; }
 # Default yes; anything starting with n/N declines. Written for the bash 3.2
 # macOS ships — no ${var,,}, which arrived in bash 4.
 confirm() {
-  local a; read -r -p "  $1 [Y/n] " a
-  case "$a" in [Nn]*) return 1 ;; *) return 0 ;; esac
+  local q="$1" a
+  read -r -p "  $q [Y/n] " a
+  case "$a" in [Nn]*) return 1 ;; esac
+  return 0
 }
-fail() { act "$1"; exit 1; }
+fail() { local s="$1"; act "$s"; exit 1; }
 
 printf '\n  CORTEX by OBELYTH — macOS setup\n  One memory, every surface. This gets your Mac ready, then hands off to the wizard.\n'
 
@@ -52,7 +54,13 @@ fi
 
 # ------------------------------------------------------------------- tools ---
 bold "2 · The tools Cortex needs"
-node_ok() { command -v node >/dev/null 2>&1 && [[ "$(node -e 'console.log(process.versions.node.split(".")[0])')" -ge 20 ]]; }
+node_ok() {
+  command -v node >/dev/null 2>&1 || return 1
+  local major
+  major="$(node -e 'console.log(process.versions.node.split(".")[0])')" || return 1
+  [[ "$major" -ge 20 ]] || return 1
+  return 0
+}
 if node_ok; then ok "Node $(node -v) (needs 20+)"
 else
   confirm "Install Node (via brew)?" || fail "Cortex needs Node 20+. Stopped."
@@ -94,7 +102,12 @@ fi
 
 # ---------------------------------------------------------------- the code ---
 bold "4 · The code"
-is_cortex() { [[ -f "$1/package.json" ]] && grep -q '"name": "cortex"' "$1/package.json"; }
+is_cortex() {
+  local dir="$1"
+  [[ -f "$dir/package.json" ]] || return 1
+  grep -q '"name": "cortex"' "$dir/package.json" || return 1
+  return 0
+}
 if is_cortex "$PWD"; then
   ok "already inside a Cortex copy: $PWD"
 else

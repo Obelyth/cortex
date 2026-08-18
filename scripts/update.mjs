@@ -119,7 +119,8 @@ if (behind === 0) {
   process.exit(0);
 }
 const latestTag = sh(`git tag --merged ${remote}/main --list "v*" --sort=-v:refname`).split("\n")[0];
-say(`  ${behind} commit${behind === 1 ? "" : "s"} behind main${latestTag ? ` — latest release ${latestTag}` : ""}:`);
+const latestNote = latestTag ? ` — latest release ${latestTag}` : "";
+say(`  ${behind} commit${behind === 1 ? "" : "s"} behind main${latestNote}:`);
 say(sh(`git log --oneline -8 HEAD..${remote}/main`).replace(/^/gm, "      "));
 if (behind > 8) say(`      … and ${behind - 8} more`);
 say("");
@@ -261,7 +262,7 @@ const tools = sh(
   `curl -s --max-time 30 --proto '=https' --proto-redir '=https' -X POST ` +
   `-H 'Content-Type: application/json' ` +
   `-H 'Accept: application/json, text/event-stream' --data '${body}' ${doorArgs} ` +
-  `| grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`
+  String.raw`| grep -o 'brain_[a-z]*' | sort -u | tr '\n' ' '`
 );
 // Same rule as onboard and the ops healthcheck: the expected roster is read from
 // lib/tool-roster.json at run time, never inlined — and read AFTER the merge, so a
