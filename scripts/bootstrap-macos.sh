@@ -24,7 +24,9 @@ act()  { local s="$1"; printf '  \033[33m→\033[0m %s\n' "$s"; return 0; }
 confirm() {
   local q="$1" a
   read -r -p "  $q [Y/n] " a
-  case "$a" in [Nn]*) return 1 ;; esac
+  if [[ "$a" == [Nn]* ]]; then
+    return 1
+  fi
   return 0
 }
 fail() { local s="$1"; act "$s"; exit 1; }
