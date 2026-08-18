@@ -22,7 +22,9 @@ register it as a scheduled task in Claude Code.
 Run: `bash <path-to>/ops/groundskeeper/healthcheck.sh` with `CORTEX_BASE` and
 `CONNECTOR_PATH_SECRET` (or `CORTEX_ENV_FILE`) configured. Then call
 `brain_context` as the second half of the check. If either fails, write
-nothing and report.
+nothing and report. A healthy run may add an `UPDATE AVAILABLE` line — that is
+information for the digest (Job 5), not a failure; never run the update
+unattended.
 
 ## Job 2 — Absorb the day's log
 Read `log/<yesterday>.md` and `log/<today>.md` via `brain_read`. Skip any log
@@ -45,9 +47,10 @@ review. Report any pending proposal, and flag anything older than 21 days as
 about to expire. Do not accept or reject unattended — that stays a human call.
 
 ## Job 5 — Digest
-If you changed anything, anything is broken, or proposals await review: ONE
-short `brain_capture` entry tagged `groundskeeper`. If it was a quiet night,
-write NOTHING — silence is the correct output.
+If you changed anything, anything is broken, proposals await review, or the
+health check said an update is available: ONE short `brain_capture` entry
+tagged `groundskeeper`. If it was a quiet night, write NOTHING — silence is
+the correct output.
 
 ## Hard rules
 - Never invent a fact, SHA, or verification.

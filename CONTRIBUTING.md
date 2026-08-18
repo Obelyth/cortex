@@ -56,7 +56,8 @@ out of the tree: copy `.env.example` to `.env.local` and nowhere else.
 ## Releasing (maintainers)
 
 A release is a provenance snapshot of `main`, nothing more — updates still ship
-from `main` and a redeploy is the update path (SECURITY.md). To cut one:
+from `main` and `npm run update` is how a running copy takes them (README:
+Updating). To cut one:
 
 ```
 git checkout main && git pull
@@ -68,3 +69,14 @@ git tag v<X.Y.Z> && git push origin v<X.Y.Z>
 The `release` workflow re-runs typecheck, tests and the build at the tag, then
 publishes the GitHub Release with generated notes behind a fixed setup header
 (`.github/RELEASE_HEADER.md`). A tag whose checks fail publishes nothing.
+
+### The action-required label
+
+Before merging, label any PR whose change needs operator action beyond
+`npm run update` — a new env var, a migration (`scripts/migrate.ts`), re-wiring
+a client — with `action-required`. Generated release notes group those PRs into
+an "Action required" section at the top (`.github/release.yml`), which is the
+only place an operator is told about manual steps before updating. The header
+promises that no section means no manual steps, so a missing label on a PR that
+needed one makes the next release lie — treat the label as part of the change,
+exactly like the docs the honest-data rule covers.

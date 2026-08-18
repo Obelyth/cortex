@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Health check for a CORTEX deployment. Prints one line; exit 0 = healthy.
+# Health check for a CORTEX deployment. Prints a HEALTHY/UNHEALTHY line —
+# plus, on a healthy night, an UPDATE AVAILABLE line when a newer release is
+# published upstream. Exit 0 = healthy; being behind a release never flips
+# the exit code, because a deployment behind main still answers correctly.
 #
 # Asserts SET EQUALITY against the live tools by name — not a count. A count
 # passes with a wrong tool swapped in, and a hardcoded count is exactly what
@@ -39,6 +42,30 @@ TOOLS=$(curl -s --max-time 25 --proto '=https' --proto-redir '=https' -X POST "$
 
 if [[ "$TOOLS" == "$EXPECTED" ]]; then
   echo "HEALTHY: secret-URL path OK, ${COUNT} tools registered: ${TOOLS}"
+  # Update awareness, not health. One unauthenticated GET of public release
+  # metadata — nothing about this deployment goes out. Absence on any failure:
+  # an update note this script cannot prove is worse than no note. The compare
+  # runs in node rather than sort -V, which macOS's BSD sort does not promise.
+  UPDATE_LINE=$(node -e '
+    const running = require(process.argv[1]).version;
+    fetch("https://api.github.com/repos/Obelyth/cortex/releases/latest",
+      { headers: { Accept: "application/vnd.github+json" }, signal: AbortSignal.timeout(10000) })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const m = /^v(\d+\.\d+\.\d+)$/.exec((j && j.tag_name) || "");
+        if (!m) return;
+        const latest = m[1].split(".").map(Number), run = running.split(".").map(Number);
+        for (let i = 0; i < 3; i++) {
+          if ((latest[i] ?? 0) > (run[i] ?? 0)) {
+            console.log("UPDATE AVAILABLE: v" + m[1] + " (running v" + running + ") — npm run update");
+            return;
+          }
+          if ((latest[i] ?? 0) < (run[i] ?? 0)) return;
+        }
+      })
+      .catch(() => {});
+  ' "$(cd "$(dirname "$0")/../.." && pwd)/package.json" 2>/dev/null)
+  [[ -n "$UPDATE_LINE" ]] && echo "$UPDATE_LINE"
   exit 0
 fi
 echo "UNHEALTHY: got: ${TOOLS:-<none>} (expected: ${EXPECTED})"

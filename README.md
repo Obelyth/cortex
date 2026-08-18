@@ -35,7 +35,8 @@ Your notes live in a **private GitHub repo** you own — plain markdown, no data
 
 ## Quickstart
 
-Three ways to your own copy, same five minutes after any of them:
+Three ways to your own copy, same five minutes after any of them — and whichever you pick,
+one command keeps it current later (see [Updating](#updating)):
 
 - **Use this template** on GitHub — your own repo, no fork relationship — then clone it.
 - Grab a [release](https://github.com/Obelyth/cortex/releases) — a snapshot of `main` with the full check suite re-run at the tag.
@@ -46,6 +47,17 @@ Three ways to your own copy, same five minutes after any of them:
 git clone https://github.com/Obelyth/cortex && cd cortex
 npm install
 npm run onboard
+```
+
+**On a Mac, start from nothing**: download a [release](https://github.com/Obelyth/cortex/releases),
+unzip it, and double-click **`Cortex Setup.command`** (the first time, macOS warns about a file
+from the internet — right-click it and choose Open). It checks for Homebrew, Node, `gh` and
+`vercel`, offers to install whatever is missing — asking before each step — signs you in to
+GitHub and Vercel, and hands off to the same wizard. One line in Terminal does the same without
+a download:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
 ```
 
 The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).
@@ -167,6 +179,39 @@ touches the trust story.
 ## Privacy posture, in one paragraph
 
 Your notes never touch this repo — they stay in *your* private brain repo and are fetched at request time with a PAT scoped to that one repo. Credential-shaped strings are redacted at egress on every read path. `brain_ask` is the only model egress, its tool description discloses exactly what is sent, and the reader model list is allowlisted so a caller cannot pick an arbitrary model on your key. The site never links the gated pages; the demo map strips the icon roster and fails its own build if that strip ever drifts. Reporting and the full trust model: [SECURITY.md](SECURITY.md).
+
+## Updating
+
+Updates ship from `main`; releases are provenance snapshots with the full check suite re-run at
+the tag ([SECURITY.md](SECURITY.md)). However you got your copy, updating it is one command:
+
+```bash
+npm run update
+```
+
+It finds the remote updates come from — adding it the first time if your copy was made from the
+template, which has no fork relationship, so a plain `git pull` would never see a release — shows
+what shipped, merges (your local commits and edits are kept; a conflict aborts cleanly back to
+exactly where you were), reinstalls dependencies when the lockfile changed, redeploys, and
+re-verifies the live tool roster: the same check onboarding ends with. A copy that started as a
+release download is converted into a proper clone on the first run, anchored at the version it
+shipped as. A failed build never replaces what is live — Vercel promotes only builds that
+succeed. Wired surfaces keep working through an update; secrets do not change.
+
+Three ways to hear that an update exists:
+
+- **Watch the repo**: [github.com/Obelyth/cortex](https://github.com/Obelyth/cortex) → Watch →
+  Custom → Releases. GitHub notifies you per release and nothing else.
+- **The console footer** shows the running version, and a `vX.Y.Z available` link when a newer
+  release is published. The deployment asks api.github.com for the latest release tag — an
+  unauthenticated request carrying nothing about you or your corpus, cached six hours — and shows
+  nothing when the check fails, because absence beats a claim it cannot prove.
+- **The groundskeeper health check** appends an `UPDATE AVAILABLE` line on a healthy night when
+  the deployment is behind, so the nightly digest carries it.
+
+When an update needs a manual step — a new env var, a migration, re-wiring — its release notes
+open with an **Action required** section listing exactly those steps. No section means none:
+everything else is the one command.
 
 ## Upkeep
 

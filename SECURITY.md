@@ -7,7 +7,8 @@
 | latest `main` | :white_check_mark: |
 | anything older | :x: |
 
-Cortex ships from `main`; there are no backported fixes. Redeploy to update.
+Cortex ships from `main`; there are no backported fixes. Redeploy to update —
+`npm run update` is the runbook (README: Updating).
 Tagged releases are provenance snapshots of `main` — the release workflow re-runs
 the full check suite at the tag before publishing — and receive no backports either.
 

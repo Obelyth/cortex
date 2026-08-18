@@ -2,6 +2,7 @@ import { requireSecret } from "@/lib/gate";
 import { health } from "@/lib/health";
 import { listCommits, type CommitInfo } from "@/lib/github";
 import { listProposals } from "@/lib/proposals";
+import { updateStatus, RELEASES_URL } from "@/lib/update-check";
 import { Tabs } from "./tabs";
 import { Clock } from "./clock";
 import "./console.css";
@@ -51,6 +52,10 @@ export default async function ConsoleLayout({
   const corpus = `${process.env.BRAIN_REPO ?? "brain"} · ${process.env.BRAIN_BRANCH ?? "main"}`;
   // The footer's build line: the deployed commit when Vercel provides it, dev otherwise.
   const build = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? "dev";
+  // This footer is where an operator looks at their deployment, so it is where the
+  // deployment says a newer release exists. Absence-on-failure: when the probe cannot
+  // prove a latest version, the line carries only what the build itself knows.
+  const update = await updateStatus();
   let commits: CommitInfo[] = [];
   try {
     commits = await listCommits(3);
@@ -99,7 +104,14 @@ export default async function ConsoleLayout({
       <footer className="conFoot">
         <span className="conFootMark">Cortex by Obelyth</span>
         <span className="conFootRule" />
-        <span className="conFootTag">build {build} · head {h.sha}</span>
+        <span className="conFootTag">
+          v{update.running} · build {build} · head {h.sha}
+        </span>
+        {update.behind && (
+          <a className="conFootLink" href={RELEASES_URL} target="_blank" rel="noreferrer">
+            v{update.latest} available — npm run update
+          </a>
+        )}
         <span className="conSpacer" />
         {/* New tab so the gated console stays open behind the public page. */}
         {FOOT_LINKS.map((l) => (

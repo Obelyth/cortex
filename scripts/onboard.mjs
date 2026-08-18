@@ -245,6 +245,32 @@ say(`  Optional tiers, when you want them (each documented in .env.example):
       Supabase mirror  SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, then apply the schema:
                        npx tsx scripts/migrate.ts --apply   (dry-run without --apply)
 `);
+
+// --------------------------------------------------------- staying current ---
+head("8 · Staying current");
+// Updates ship from main (SECURITY.md). A copy made with GitHub's "Use this
+// template" has no fork relationship, so without a remote pointing home a
+// git pull would never see a release — wire it now, while we are here, so
+// npm run update works on every acquisition path from day one.
+try {
+  let originUrl = "";
+  try { originUrl = sh("git remote get-url origin", { cwd: ROOT }); } catch { /* no origin */ }
+  if (/github\.com[/:]obelyth\/cortex(\.git)?$/i.test(originUrl)) {
+    ok("origin points at Obelyth/cortex — this copy updates over it directly");
+  } else if (sh("git remote", { cwd: ROOT }).split("\n").includes("upstream")) {
+    ok("upstream remote already wired — updates come from there");
+  } else {
+    sh("git remote add upstream https://github.com/Obelyth/cortex.git", { cwd: ROOT });
+    ok("added upstream remote (github.com/Obelyth/cortex) — where updates come from");
+  }
+} catch {
+  act("not a git checkout — npm run update will offer to fix that on its first run");
+}
+say(`  Update any time — one command pulls what shipped, redeploys, and re-verifies:
+      npm run update
+  Hear about releases: github.com/Obelyth/cortex → Watch → Custom → Releases.
+  The console footer also shows a "vX.Y.Z available" link when one is out.
+`);
 ok(`done. More to bring in later? npm run ingest -- --from <folder> --repo ${brainRepo}`);
 rl.close();
 
