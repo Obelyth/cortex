@@ -4,14 +4,18 @@ name: release
 # re-runs AT THE TAG before anything is published — a release that skipped the checks would
 # be a claim the repo cannot back. Updates still ship from main; redeploy to update
 # (SECURITY.md). The release body is .github/RELEASE_HEADER.md followed by GitHub's
-# generated notes, so every release opens with the same five-minute setup path.
+# generated notes, so every release opens with the same update-first path.
 
 on:
   push:
     tags: ["v*"]
 
+# id-token + attestations sign the provenance attestation on the source snapshot;
+# contents: write publishes the release.
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -30,6 +34,17 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # The one asset a source-served project has: the exact tree at the tag, packaged here
+      # rather than trusted from an archive produced elsewhere, so the attestation below has
+      # a stable subject. HEAD is the tag's commit on a tag-push run.
+      - name: Package the source snapshot
+        run: git archive --format=tar.gz --prefix="cortex-${GITHUB_REF_NAME}/" -o "cortex-${GITHUB_REF_NAME}.tar.gz" HEAD
+      # Signed provenance: proves this exact tarball came out of this workflow run at this
+      # tag. Anyone can check it: gh attestation verify <file> --owner Obelyth
+      - name: Attest the snapshot's provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-path: cortex-${{ github.ref_name }}.tar.gz
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -40,7 +55,14 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
               -f tag_name="${GITHUB_REF_NAME}" --jq .body
           } > /tmp/notes.md
-          gh release create "${GITHUB_REF_NAME}" \
-            --verify-tag \
-            --title "Cortex ${GITHUB_REF_NAME}" \
-            --notes-file /tmp/notes.md
+          # The Announcements thread is a nicety; a release must never fail because
+          # Discussions is toggled off, so the flag gets one try and is then dropped.
+          publish() {
+            gh release create "${GITHUB_REF_NAME}" \
+              --verify-tag \
+              --title "Cortex ${GITHUB_REF_NAME}" \
+              --notes-file /tmp/notes.md \
+              "$@" \
+              "cortex-${GITHUB_REF_NAME}.tar.gz"
+          }
+          publish --discussion-category "Announcements" || publish
