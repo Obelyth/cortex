@@ -8,6 +8,8 @@ npm run update
 
 If an **Action required** section appears below, do those steps too — they are the manual part (a new env var, a migration) the one command cannot do for you. No section means no manual steps. To hear about the next release: **Watch → Custom → Releases** on the repo.
 
+The attached `cortex-<tag>.tar.gz` is the exact tree at the tag, packaged by the release workflow with a signed provenance attestation — check it with `gh attestation verify cortex-<tag>.tar.gz --owner Obelyth`.
+
 **New here? Set up in five minutes** (Node 20+, `gh` and `vercel` CLIs logged in):
 
 ```bash
