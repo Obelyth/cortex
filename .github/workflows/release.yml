@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       # Third-party actions are pinned to full commit SHAs; a movable tag is a supply-chain
       # door this workflow does not need to leave open. The comment carries the version.
