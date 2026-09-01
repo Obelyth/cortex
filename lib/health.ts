@@ -9,23 +9,78 @@
 import { loadCorpus } from "./corpus";
 import { splitBlocks, retracted, normalise } from "./verify";
 import { hasSecret, redact } from "./redact";
+import { parseFrontmatter } from "./frontmatter";
 
-/** A note's own claim about its freshness. Cold stamps are how a brain rots quietly. */
-const STAMP = /_Facts last verified\s+(\d{4}-\d{2}-\d{2})/i;
+/**
+ * A note's own claim about its freshness. Cold stamps are how a brain rots quietly.
+ *
+ * Global, and read from the END, because a brain page is an append-only build log: each dated
+ * section carries the stamp it was verified under, and the page's CURRENT claim is the last one.
+ * Reading the first match asked "when was the OLDEST section of this page checked?" and answered
+ * a question nobody had. Measured 2026-08-17: two long project pages sat in the inbox reading 16
+ * days stale off an early section stamp while each carried a stamp five days old at its foot, and
+ * both had been reported that way every night for a fortnight. Every page that keeps per-section
+ * stamps was permanently flagged — the failure mode where a real finding hides among rows you
+ * have learned mean nothing.
+ *
+ * Positional-last, deliberately NOT max-by-date: the newest stamp anywhere on a page would let
+ * one freshly-checked section vouch for the whole page, and a wrong answer here has to land on
+ * "watched" — the same failure direction `decays` is parsed with. It is also the groundskeeper's
+ * own written convention read back: its rule is that a page ENDS with `_Facts last verified
+ * <today>._`, so the last stamp in document order IS the page's claim by construction.
+ */
+const STAMP = /(_Facts last verified\s+)(\d{4}-\d{2}-\d{2})/gi;
+
+/**
+ * The page's current freshness claim: its LAST stamp, or null if it makes none.
+ *
+ * Exported so the console's "I re-checked it" button rewrites the same stamp this check reads.
+ * Two definitions of "the page's stamp" is how the console would come to disagree with its own
+ * inbox — the console stamping the first one while the queue read the last would clear nothing
+ * and look broken.
+ */
+export function lastVerified(text: string): string | null {
+  let out: string | null = null;
+  for (const m of text.matchAll(STAMP)) out = m[2];
+  return out;
+}
+
+/**
+ * Move the page's current stamp to `date`, or null when the page makes no claim to move.
+ *
+ * ONE regex for the read and the write, which is the fix as much as "last, not first" is. The
+ * console's write path used to carry its own narrower pattern requiring the stamp to END right
+ * after the date (`_Facts last verified 2026-07-16._`) — and almost no real stamp does. The house
+ * shape is `_Facts last verified <date> — what was checked, what was skipped._`, so the button
+ * answered "has no _Facts last verified_ stamp to refresh" on the very pages the queue was
+ * flagging. It replaces the DATE and nothing else, so whatever prose the stamp carries survives
+ * verbatim — that text is what citations are proven against.
+ */
+export function stampVerified(text: string, date: string): string | null {
+  const all = [...text.matchAll(STAMP)];
+  if (all.length === 0) return null;
+  const m = all[all.length - 1];
+  return text.slice(0, m.index) + `${m[1]}${date}` + text.slice(m.index + m[0].length);
+}
 /** Tools retired in Stage 5. A live note describing them answers about a system that is gone. */
 const RETIRED = ["brain_recall", "brain_search", "brain-index.md", "build_index", "recall.py"];
 /**
  * A note whose filename is a date is a record OF that date, not a standing claim.
  * `log/2026-07-26.md` saying brain_recall is live was true the night it was written; flagging it
  * would ask the operator to falsify his own diary.
+ *
+ * Exported (with DATED_HEADING) because lib/inbox.ts applies the identical doctrine to its
+ * superseded-link check — a diary entry naming a now-superseded page was true the night it was
+ * written. Two definitions of "this text is a dated record" would drift exactly the way two
+ * definitions of "retracted" did.
  */
-const DATED_ENTRY = /(^|\/)\d{4}-\d{2}-\d{2}\.md$/;
+export const DATED_ENTRY = /(^|\/)\d{4}-\d{2}-\d{2}\.md$/;
 /**
  * The same rule for headings: a section titled "… found on the Linux box 2026-07-31" is a
  * record OF that date. A cleanup story that names the tool it deleted is not a live claim,
  * and flagging it asks the operator to falsify his own history.
  */
-const DATED_HEADING = /\b\d{4}-\d{2}-\d{2}\b/;
+export const DATED_HEADING = /\b\d{4}-\d{2}-\d{2}\b/;
 
 
 export interface NoteRow {
@@ -59,15 +114,38 @@ export interface Health {
   sha: string;
   notes: NoteRow[];
   retractedList: Retracted[];
-  stale: Array<{ path: string; verified: string; age: number }>;
+  stale: Array<{
+    path: string;
+    verified: string;
+    age: number;
+    /** ISO date the operator queued this note for the groundskeeper, when they have. */
+    queued?: string;
+  }>;
   secrets: Array<{ path: string; line: number; kind: string }>;
   triage: Array<{
-    sev: "crit" | "warn";
+    /**
+     * `watch` is the third tier, below warn: the mechanical inbox checks (lib/inbox.ts) —
+     * structure worth a glance, never a problem demanding a decision now. It exists so those
+     * items can ride this queue without inflating warn, whose meaning ("something is wrong")
+     * the 23-noise-items lesson made expensive to dilute.
+     */
+    sev: "crit" | "warn" | "watch";
+    /**
+     * What KIND of finding this is, so the console can offer the actions that fit it without
+     * matching on display text. A title is copy; changing it should not silently remove a button.
+     */
+    kind?: "stale-stamp" | "superseded-link" | "coaccess-gap" | "correction-chain";
     title: string;
     loc: string;
     evidence: string;
     why: string;
     action: string;
+    /**
+     * stale-stamp only: the note carries a `reverify:` request the groundskeeper has not yet
+     * consumed. The item stays in the queue — queued is a promise, not a fix — but the console
+     * renders it as waiting on the nightly run rather than on the operator.
+     */
+    queued?: string;
   }>;
   retiredRefs: Array<{
     path: string;
@@ -81,7 +159,6 @@ export interface Health {
   totals: {
     notes: number;
     tokens: number;
-    ceiling: number;
     blocks: number;
     retractedBlocks: number;
     notesWithRetracted: number;
@@ -89,26 +166,42 @@ export interface Health {
   byDir: Array<{ dir: string; notes: number; tokens: number }>;
 }
 
+/** One item of the queue, whoever derived it — health() here, or the inbox checks in
+ *  lib/inbox.ts. One shape, so the attention screen cannot tell the two producers apart. */
+export type TriageItem = Health["triage"][number];
+
 const SECRETISH_KEY = /(TOKEN|SECRET|KEY|PASS|PWD|CREDENTIAL|AUTH)/i;
 const PLACEHOLDER_VALUE =
   /^(<[^>]*>?|\[[^\]]*\]?|\$\{?[A-Za-z_(][^\s]*|your[-_]\S*|changeme|xxx+|\.{3,}|\*+|•+)$/i;
 
-/** Does a generic key=value line plausibly hold a REAL secret? See the alert-precision note. */
+/**
+ * Does a generic key=value line plausibly hold a REAL secret? See the alert-precision note.
+ *
+ * BOTH separators, and EVERY pair on the line — matching redact()'s classifier. redact keys the
+ * kind="key=value" verdict on `…["']?\s*[:=]\s*\S+` (colon accepted for JSON/YAML provider
+ * bodies), so a `api_key: <opaque>` line is flagged secret AND classified key=value there; a gate
+ * here that read only `=` let that colon form fall through — masked at egress, yet never surfaced
+ * in the crit queue while its `=` twin was. And iterated, not first-match-only: a single `.exec`
+ * stopped at a benign leading `word:` (a "Fix:" or "Note:" prefix) and returned before it ever
+ * reached the real `KEY=<secret>` later on the same line. Alert if ANY pair is secret-shaped.
+ */
 export function plausibleSecret(line: string): boolean {
-  const m = /([A-Za-z_][A-Za-z0-9_]*)\s*=\s*("[^"]*"|'[^']*'|`[^`]*`|\S+)/.exec(line);
-  if (!m) return false;
-  if (!SECRETISH_KEY.test(m[1])) return false;
-  const value = m[2].replace(/^[`"']|[`"',.;]+$/g, "");
-  if (value.length < 16) return false;
-  // $(…) and ${…} are indirection, not secrets — a note documenting `TOKEN="$(security
-  // find-generic-password …)"` is describing Keychain hygiene, the exact practice the
-  // alert exists to encourage. Quoted substitutions carry spaces, so this is a prefix
-  // test rather than part of the single-token placeholder regex.
-  if (/^\$[({]/.test(value)) return false;
-  return !PLACEHOLDER_VALUE.test(value);
+  const re = /([A-Za-z_][A-Za-z0-9_]*)["']?\s*[:=]\s*("[^"]*"|'[^']*'|`[^`]*`|\S+)/g;
+  for (const m of line.matchAll(re)) {
+    if (!SECRETISH_KEY.test(m[1])) continue;
+    const value = m[2].replace(/^[`"']|[`"',.;]+$/g, "");
+    if (value.length < 16) continue;
+    // $(…) and ${…} are indirection, not secrets — a note documenting `TOKEN="$(security
+    // find-generic-password …)"` is describing Keychain hygiene, the exact practice the
+    // alert exists to encourage. Quoted substitutions carry spaces, so this is a prefix
+    // test rather than part of the single-token placeholder regex.
+    if (/^\$[({]/.test(value)) continue;
+    if (PLACEHOLDER_VALUE.test(value)) continue;
+    return true;
+  }
+  return false;
 }
 
-const CEILING = 150_000;
 
 export async function health(now = new Date()): Promise<Health> {
   const corpus = await loadCorpus();
@@ -186,14 +279,36 @@ export async function health(now = new Date()): Promise<Health> {
     }
 
     let age: number | null = null;
-    const stamp = STAMP.exec(text);
+    const stamp = lastVerified(text);
     if (stamp) {
-      const d = new Date(`${stamp[1]}T00:00:00Z`);
+      const d = new Date(`${stamp}T00:00:00Z`);
       if (!Number.isNaN(d.getTime())) {
         age = Math.round((now.getTime() - d.getTime()) / 86_400_000);
         // Two weeks, not two days: at >2 the queue flagged pages re-verified three days
         // earlier, and an alert that fires on freshly checked work teaches you to ignore it.
-        if (age > 14) stale.push({ path, verified: stamp[1], age });
+        //
+        // `decays: false` opts a note out entirely, because the same reasoning goes further than
+        // the threshold does. The check treated every stamped note alike and the notes are not
+        // alike: a note recording that a package was uninstalled on a date cannot stop being
+        // true, while a runbook describing how a machine is configured decays the moment the
+        // machine changes. Measured before this: 7 findings, 6 of them settled history, all of
+        // them arriving within two days of each other because the threshold is a clock. An inbox
+        // that is mostly noise is one you stop reading, and the item it buried here was the
+        // recovery runbook with an unmitigated risk in it.
+        const fm = parseFrontmatter(text);
+        // `!dated`: a note whose filename is a date is a record OF that date, not a standing
+        // claim (the DATED_ENTRY doctrine above, already applied to the retired-tool check).
+        // Its stamp cannot go stale, so it never rides the re-verify queue — otherwise a day
+        // log that happens to quote a "_Facts last verified_" line asks the operator to
+        // re-verify his own diary, burning a groundskeeper slot on a page that can never resolve.
+        if (age > 14 && !dated && fm.decays !== false) {
+          stale.push({
+            path,
+            verified: stamp,
+            age,
+            ...(fm.reverify === undefined ? {} : { queued: fm.reverify }),
+          });
+        }
       }
     }
 
@@ -291,14 +406,36 @@ export async function health(now = new Date()): Promise<Health> {
       why: "A quote from an unmarked block verifies clean and reads as current fact about a system that is gone.",
       action: "Mark the passage SUPERSEDED in place — never delete it.",
     })),
-    ...stale.map((s) => ({
-      sev: "warn" as const,
-      title: "Cold verification stamp",
-      loc: s.path,
-      evidence: `Its own "_Facts last verified_" stamp is ${s.age} days old (${s.verified}).`,
-      why: "Stale facts are the main way this brain rots; the stamp is the note's own freshness claim.",
-      action: "Re-verify the page's live-state claims and refresh the stamp.",
-    })),
+    ...stale.map((s) => {
+      // A consumed request is a removed key, so "queued" here always means "not yet done". Two
+      // days is two missed nightly runs: past that, the promise itself is the finding — say so,
+      // because a queued badge that can sit for a week teaches the same skimming the dismiss
+      // button was refused for.
+      const requested = s.queued ? new Date(`${s.queued}T00:00:00Z`) : null;
+      // floor, not round: "two missed runs" means two FULL days have passed since the request,
+      // and rounding a day and a half up would raise the alarm while the first night's run is
+      // still the only one that has had its chance.
+      const overdue =
+        requested && !Number.isNaN(requested.getTime())
+          ? Math.floor((now.getTime() - requested.getTime()) / 86_400_000) >= 2
+          : false;
+      return {
+        sev: "warn" as const,
+        kind: "stale-stamp" as const,
+        // Not "cold": this product already uses hot/warm/cold for how often a note is READ, and a
+        // finding that borrows the word to mean "the stamp is old" makes both senses ambiguous.
+        title: "Verification stamp is stale",
+        loc: s.path,
+        evidence:
+          `Its own "_Facts last verified_" stamp is ${s.age} days old (${s.verified}).` +
+          (overdue
+            ? ` Queued for re-verify since ${s.queued} and still unconsumed — check that the groundskeeper is running.`
+            : ""),
+        why: "Stale facts are the main way this brain rots; the stamp is the note's own freshness claim.",
+        action: "Re-verify the page's live-state claims and refresh the stamp — or mark it as recording settled history, which stops the check.",
+        ...(s.queued === undefined ? {} : { queued: s.queued }),
+      };
+    }),
   ];
 
   return {
@@ -314,7 +451,6 @@ export async function health(now = new Date()): Promise<Health> {
       // Sum of the per-note figures, so the gauge and the rows can never disagree. bytes/4
       // counted UTF-8 while every row counts UTF-16 length/4 — close, but visibly different.
       tokens: notes.reduce((a, n) => a + n.tokens, 0),
-      ceiling: CEILING,
       blocks: notes.reduce((a, n) => a + n.blocks, 0),
       retractedBlocks: notes.reduce((a, n) => a + n.retracted, 0),
       notesWithRetracted: notes.filter((n) => n.retracted > 0).length,

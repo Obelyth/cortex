@@ -107,9 +107,54 @@ async function main(): Promise<void> {
     return ((await res.json()) as Array<{ path: string }>).map((r) => r.path);
   };
 
+  // ── the graph challengers: BM25 widened one hop along note_edges ──────────────────────────
+  // Edges are derived from the SAME corpus snapshot the incumbent ranks, so both arms describe
+  // one set of bytes. link/tag/correction are derivable offline; lexical too, though it is
+  // BM25's own opinion re-stored as edges — kept derivable so the all-kinds shapes can measure
+  // that redundancy instead of asserting it. coaccess is the exception: its raw material
+  // (note_access) lives only in Postgres, so the harness pulls the prod graph's coaccess rows
+  // live — built at the prod mirror's head, which can drift from the local checkout. Stated
+  // rather than hidden: when the fetch fails, the coaccess-bearing shapes simply run without
+  // those rows, and the summary line says what the adjacency was actually made of.
+  const { deriveEdges } = await import("../lib/edges");
+  const { buildAdjacency, hopNarrow, HOP_SHAPES } = await import("../lib/hop");
+  const offline = deriveEdges(files);
+  let coaccess: typeof offline = [];
+  try {
+    if (!base || !key) throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set");
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const res = await fetch(
+        `${base}/rest/v1/note_edges?select=src,dst,kind,weight,evidence&kind=eq.coaccess&order=src.asc,dst.asc`,
+        {
+          headers: { apikey: key, Authorization: `Bearer ${key}`, Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
+        }
+      );
+      if (!res.ok) throw new Error(`note_edges HTTP ${res.status}`);
+      const rows = (await res.json()) as typeof offline;
+      coaccess.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+  } catch (e) {
+    console.log(`coaccess edges unavailable (${e instanceof Error ? e.message : e}) — hop shapes run without them\n`);
+    coaccess = [];
+  }
+  const byKind = new Map<string, number>();
+  for (const r of [...offline, ...coaccess]) byKind.set(r.kind, (byKind.get(r.kind) ?? 0) + 1);
+  console.log(
+    `graph: ${offline.length + coaccess.length} edges — ` +
+      [...byKind.entries()].sort().map(([kind, n]) => `${kind} ${n}`).join(" · ") +
+      ` (coaccess ${coaccess.length ? "fetched live from prod" : "absent"})\n`
+  );
+  const adjacency = buildAdjacency([...offline, ...coaccess]);
+
   const strategies: Array<{ name: string; run: (q: string, k: number) => Promise<string[]> }> = [
     { name: "BM25 (in-memory, incumbent)", run: async (q, k) => narrow(files, q, k) },
     { name: "FTS (Postgres)", run: ftsSearch },
+    ...Object.entries(HOP_SHAPES).map(([shape, config]) => ({
+      name: `hop ${shape}`,
+      run: async (q: string, k: number) => hopNarrow(files, q, k, adjacency, config),
+    })),
     {
       // Union, incumbent first. If both arms find things the reader sees both; the point is to
       // learn whether they MISS different labels, which is the only case where a hybrid earns

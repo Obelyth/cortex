@@ -46,8 +46,19 @@ const key = () => `cortex:guest:${kvEnv()}`;
 const dayKey = (now: number) =>
   `cortex:guest:${kvEnv()}:asks:${new Date(now).toISOString().slice(0, 10)}`;
 
-/** Only the paths brain.ts would ever accept, so a policy cannot name a directory that is not real. */
-const SCOPE_RE = /^(profile\.md|INDEX\.md|(projects|notes|log|archive)\/[A-Za-z0-9._/-]*)$/;
+/**
+ * A scope entry is either an exact note path or a directory prefix ENDING IN `/`.
+ *
+ * The trailing slash is load-bearing, because applyScope matches with startsWith: an entry of
+ * `projects/harbor` — which the old pattern allowed, and which reads as "the harbor project" —
+ * also covers projects/harbor-comp.md and projects/harbor-private.md. A prefix that can stop
+ * mid-segment is a scope that silently includes siblings, and with citations off there is
+ * nothing in the reply to reveal it.
+ *
+ * `archive/` is gone: corpus.ts excludes the whole prefix from the reader corpus, so an archive
+ * scope could never match a file and a guest ticking it got NOT IN BRAIN on every question.
+ */
+const SCOPE_RE = /^(profile\.md|(projects|notes|log)\/([A-Za-z0-9._-]+\.md|[A-Za-z0-9._/-]*\/)?)$/;
 
 export function isScopeEntry(v: unknown): v is string {
   return typeof v === "string" && v.length > 0 && !v.includes("..") && SCOPE_RE.test(v);
@@ -64,7 +75,16 @@ function parse(raw: unknown): GuestPolicy {
   }
   if (o === null || typeof o !== "object") return { ...GUEST_DEFAULTS };
   const r = o as Record<string, unknown>;
-  const scope = Array.isArray(r.scope) ? r.scope.filter(isScopeEntry) : [];
+  // Legacy entries stored before scope entries required a trailing slash (`projects/harbor`)
+  // are NORMALISED, not dropped. Dropping them would empty the array and fall through to
+  // GUEST_DEFAULTS below — turning a deliberately narrow policy into the wide default, which is
+  // the exact fail-open direction this file forbids. Appending the slash keeps the operator's
+  // intent and fails closed: if no such directory exists the guest simply matches nothing.
+  const stored: unknown[] = Array.isArray(r.scope) ? r.scope : [];
+  const normalised = stored.map((s) =>
+    typeof s === "string" && s.length > 0 && !s.endsWith("/") && !s.endsWith(".md") ? `${s}/` : s
+  );
+  const scope = normalised.filter(isScopeEntry);
   const num = (v: unknown, fallback: number, max: number) =>
     typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.min(Math.floor(v), max) : fallback;
   return {
@@ -115,25 +135,60 @@ export async function writeGuestPolicy(next: GuestPolicy): Promise<void> {
 }
 
 /**
- * Spend one ask against today's budget, or refuse. INCR first and compare after, so two
- * concurrent guests cannot both read "49 used" and both proceed.
+ * The guest door is CLOSED whenever the policy could not actually be read.
+ *
+ * GUEST_DEFAULTS is a safe floor for a deployment that has never configured anything. It is not
+ * a safe substitute for a policy that exists and was unreachable: an operator who narrowed the
+ * scope to one note and the budget to five asks would silently get projects/ and fifty the
+ * moment Upstash went slow — the widening happening precisely when the store is under the load
+ * that makes a limit matter. Enforced at the door rather than inside each limit check, so a
+ * future guest tool cannot forget it.
  */
-export async function spendGuestAsk(policy: GuestPolicy, now = Date.now()): Promise<void> {
+export function requireReadablePolicy(policy: GuestState): void {
+  if (policy.source !== "store") {
+    throw new Error(
+      "the guest policy could not be read, so the door is closed until the store answers"
+    );
+  }
+}
+
+/** One counter per metered guest action. Separate keys: a propose flood must not eat the ask
+ *  budget, and an ask flood must not silence the proposal channel. */
+const dayKeyFor = (action: "asks" | "proposals", now: number) =>
+  `cortex:guest:${kvEnv()}:${action}:${new Date(now).toISOString().slice(0, 10)}`;
+
+async function spend(action: "asks" | "proposals", limit: number, now: number, what: string) {
   const r = kv();
   if (!r) {
     // No store means no counter, and an unmeterable budget is not a budget. The guest door
     // needs KV anyway (proposals live there), so this is a misconfiguration, not a mode.
     throw new Error("the guest door needs a KV store to meter usage");
   }
-  const k = dayKey(now);
+  const k = dayKeyFor(action, now);
   const used = await r.incr(k);
   // Two days, so a counter written just before midnight still expires on its own.
   if (used === 1) await r.expire(k, 172_800);
-  if (used > policy.dailyAsks) {
-    throw new Error(
-      `the guest daily limit of ${policy.dailyAsks} asks is spent — it resets at 00:00 UTC`
-    );
+  if (used > limit) {
+    throw new Error(`the guest daily limit of ${limit} ${what} is spent — it resets at 00:00 UTC`);
   }
+}
+
+/**
+ * Spend one ask against today's budget, or refuse. INCR first and compare after, so two
+ * concurrent guests cannot both read "49 used" and both proceed.
+ */
+export async function spendGuestAsk(policy: GuestPolicy, now = Date.now()): Promise<void> {
+  await spend("asks", policy.dailyAsks, now, "asks");
+}
+
+/** Proposals per UTC day. Derived from the ask budget rather than configured separately — the
+ *  operator sets one number for "how much may a guest cost me", and an unmetered write-shaped
+ *  tool was the hole: each propose is an HGETALL plus an HSET, unbounded and free. */
+export const guestProposalLimit = (policy: GuestPolicy): number =>
+  Math.max(5, Math.min(policy.dailyAsks, 100));
+
+export async function spendGuestPropose(policy: GuestPolicy, now = Date.now()): Promise<void> {
+  await spend("proposals", guestProposalLimit(policy), now, "proposals");
 }
 
 /**

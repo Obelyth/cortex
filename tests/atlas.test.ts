@@ -42,6 +42,9 @@ function corpus(files: Array<[string, string]>, snapshot: string | null = SNAPSH
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubEnv("CONNECTOR_PATH_SECRET", SECRET);
+  // buildAtlas now also reads the optional graph/heat store; blank the env so these tests stay
+  // hermetic on a machine that has real Supabase credentials exported.
+  vi.stubEnv("SUPABASE_URL", "");
   mLoad.mockResolvedValue(
     corpus([
       ["log/2026-07-30.md", "# Log\n\nRan the groundskeeper.\n"],

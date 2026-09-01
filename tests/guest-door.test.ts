@@ -112,14 +112,15 @@ describe("the two toolsets", () => {
     // The load-bearing one, and the one an earlier version of this file got backwards. Each of
     // these returns private note text directly, and brain_corpus returns the ENTIRE brain in a
     // single call — the most exposure this server can produce, disguised as a cheap tool
-    // because it calls no model.
+    // because it calls no model. brain_handoff belongs on this list: a bundle is the most
+    // current, least filtered view of what the operator is doing on a project.
     const t = await toolsFor(true);
-    for (const bulk of ["brain_corpus", "brain_read", "brain_context"]) {
+    for (const bulk of ["brain_corpus", "brain_read", "brain_context", "brain_handoff"]) {
       expect(t, `guest must not see ${bulk}`).not.toContain(bulk);
     }
     // And every one of them is still there for the operator's own doors.
     const trusted = await toolsFor(false);
-    for (const bulk of ["brain_corpus", "brain_read", "brain_context"]) {
+    for (const bulk of ["brain_corpus", "brain_read", "brain_context", "brain_handoff"]) {
       expect(trusted).toContain(bulk);
     }
   });

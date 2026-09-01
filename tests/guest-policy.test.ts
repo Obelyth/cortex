@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ask, render } from "../lib/ask";
+import { ask, render, type ReaderPrompt } from "../lib/ask";
 import { __setCache } from "../lib/corpus";
 import type { Corpus } from "../lib/corpus";
 
@@ -25,9 +25,9 @@ const corpus: Corpus = {
   ]),
 };
 
-function tagOf(prompt: string, path: string): string {
+function tagOf(prompt: ReaderPrompt, path: string): string {
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return prompt.match(new RegExp(`FILE: ${esc} \\[tag: ([0-9a-z]+)\\]`))?.[1] ?? "";
+  return prompt.stable.match(new RegExp(`FILE: ${esc} \\[tag: ([0-9a-z]+)\\]`))?.[1] ?? "";
 }
 
 // The corpus is served from the cache, with the head lookup mocked — same harness as ask.test.ts,
@@ -59,7 +59,7 @@ describe("scope removes notes before the reader ever sees them", () => {
     await ask(
       "what is the operator's address",
       async (prompt) => {
-        seen = prompt;
+        seen = prompt.stable + prompt.question;
         return JSON.stringify({ answer: "NOT IN BRAIN", tag: "", quote: "" });
       },
       { scope: ["projects/"], k: 40 }
@@ -91,7 +91,7 @@ describe("scope removes notes before the reader ever sees them", () => {
     await ask(
       "anything",
       async (p) => {
-        seen = p;
+        seen = p.stable + p.question;
         return JSON.stringify({ answer: "x", tag: "", quote: "" });
       },
       { k: 40 }
@@ -101,7 +101,7 @@ describe("scope removes notes before the reader ever sees them", () => {
 });
 
 describe("what a guest is told about the answer", () => {
-  const cite = (path: string, quote: string) => async (prompt: string) =>
+  const cite = (path: string, quote: string) => async (prompt: ReaderPrompt) =>
     JSON.stringify({ answer: "Production is dark.", tag: tagOf(prompt, path), quote });
 
   it("returns the verdict without the path or the verbatim evidence", async () => {

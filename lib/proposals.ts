@@ -88,7 +88,9 @@ export async function propose(
   const r = kv();
   if (!r) noStore();
 
-  const pending = await listProposals(now);
+  // strict: a ceiling that silently stops enforcing when the store is slow is not a ceiling,
+  // and "the store is slow" is exactly the condition a flood produces.
+  const pending = await listProposals(now, true);
   if (pending.length >= MAX_QUEUE) {
     // Refuse rather than evict. The oldest unreviewed proposal is not the least important one,
     // and a queue that silently drops what it cannot hold is worse than one that says it is full.
@@ -101,10 +103,22 @@ export async function propose(
   return p;
 }
 
-/** Every pending proposal, newest first, with expired ones filtered out. */
-export async function listProposals(now = Date.now()): Promise<Proposal[]> {
+/**
+ * Every pending proposal, newest first, with expired ones filtered out.
+ *
+ * `strict` distinguishes the two states an empty array used to conflate. A review screen wants
+ * "show nothing rather than break" — but propose() checks the queue LENGTH against MAX_QUEUE,
+ * and a swallowed read there reported 0 pending and let the ceiling through, silently disabling
+ * the one control that stops a leaked guest URL filling the store. Every sibling KV module
+ * (guest.ts, settings.ts, calls.ts) already models this with `source: "unreachable"`; this is
+ * the same idea at the one call site where the difference has consequences.
+ */
+export async function listProposals(now = Date.now(), strict = false): Promise<Proposal[]> {
   const r = kv();
-  if (!r) return [];
+  if (!r) {
+    if (strict) noStore();
+    return [];
+  }
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
@@ -123,7 +137,11 @@ export async function listProposals(now = Date.now()): Promise<Proposal[]> {
       }
     }
     return out.sort((a, b) => b.ts - a.ts);
-  } catch {
+  } catch (e) {
+    // Logged, always. A degradation nothing records is a degradation nobody can diagnose after
+    // the fact — and this one renders as "no pending proposals" on four surfaces.
+    console.error(`[proposals] queue unreadable: ${String(e)}`);
+    if (strict) throw e;
     return [];
   } finally {
     clearTimeout(timer);
@@ -154,7 +172,22 @@ export async function acceptProposal(
   const p = await getProposal(id, now);
   if (!p) throw new Error(`no pending proposal with id ${id}`);
   const res = await writeNote(p.path, p.content, p.mode);
-  await dropProposal(id);
+  // THE COMMIT ALREADY LANDED. A throw from here used to propagate, so tools.ts returned
+  // isError with no SHA and the model correctly reported "nothing was committed" — about a
+  // write that had committed. The operator retries, the queue entry is still there because the
+  // drop is what failed, and writeNote runs a second time: for mode:"append" that appends the
+  // same content twice. Report the real outcome and name the loose end instead.
+  try {
+    await dropProposal(id);
+  } catch (e) {
+    return {
+      ...res,
+      indexWarning:
+        `${res.indexWarning ? `${res.indexWarning}; ` : ""}` +
+        `the commit landed but proposal ${id} could not be removed from the queue ` +
+        `(${e instanceof Error ? e.message : String(e)}) — reject it to clear it, and do NOT accept it again`,
+    };
+  }
   return res;
 }
 

@@ -17,8 +17,11 @@
  */
 
 /** Ordered: the specific token shapes run before the generic key=value rule, so a
- *  recognisable token is labelled by kind rather than swallowed by the catch-all. */
-const SECRETS: Array<[RegExp, string]> = [
+ *  recognisable token is labelled by kind rather than swallowed by the catch-all.
+ *
+ *  Exported so the export gate (tests/no-brain-leakage.test.ts) can extract secret-shaped
+ *  substrings from the real brain using THIS list rather than a second one that would drift. */
+export const SECRETS: Array<[RegExp, string]> = [
   // Vendor-shaped tokens, identifiable on their own with no key name nearby. The masked
   // sk-…***… form is OpenAI's own invalid-key echo ("Incorrect API key provided:
   // sk-proj-********MA5A") — the provider masks the middle, but the visible slice of a real
@@ -35,8 +38,14 @@ const SECRETS: Array<[RegExp, string]> = [
   // archive. That near-miss is why this pattern is written the wide way. The optional quote
   // before the separator is JSON: in '{"token": "v"}' the char after the key name is a
   // closing quote, and provider error bodies — which now ride through here — are always JSON.
+  // The prefix length is BOUNDED, not open. `[A-Za-z0-9_.-]*` is greedy and the six literal
+  // alternatives sit behind it, so on a long unbroken run of class characters — a JWT, a
+  // base64url blob, a hex digest, a minified line — the engine consumed the run and backtracked
+  // over every position, once per start offset. Measured O(n^2): 4k chars 25ms, 16k 407ms, 32k
+  // 1.6s. redact() runs on whole notes and on provider error bodies, so that was reachable.
+  // 64 is far past any real key name and turns the inner walk into a constant.
   [
-    /([A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key))["']?\s*[:=]\s*\S+/gi,
+    /([A-Za-z0-9_.-]{0,64}(?:password|passwd|secret|token|api[_-]?key))["']?\s*[:=]\s*\S+/gi,
     "$1=<redacted>",
   ],
   [/\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "<redacted-jwt>"],

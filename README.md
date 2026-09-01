@@ -12,6 +12,8 @@ with a read path that proves its own citations instead of asking to be trusted.
 
 *Any model may read it. Claude earned the default.*
 
+[**Inside Cortex — the illustrated tour →**](https://claude.ai/code/artifact/ee654cc7-63ed-47f0-831f-e3541e482555)
+
 [**Roadmap →**](ROADMAP.md)
 
 [![release](https://img.shields.io/github/v/release/Obelyth/cortex?label=release)](https://github.com/Obelyth/cortex/releases/latest)
@@ -23,7 +25,11 @@ with a read path that proves its own citations instead of asking to be trusted.
 
 ---
 
-Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same ten tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
+Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same eleven tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
+
+Stateless Next.js on Vercel. Writes go through the Contents API, so every write is a commit. Reads serve from a Supabase Postgres **mirror** of the corpus when one is configured — healed to the git head before serving, rebuildable from one tarball, and falling back to the tarball path whenever it is absent or unwell. Git owns every note.
+
+One class of data lives in Postgres and nowhere else: **the bubble** — working state (what is in progress, decisions not yet filed, open questions, handoffs), written deliberately through `brain_bubble`, riding every boot call, and leaving only by being filed into a note, dropped, or aged out after fourteen untouched days. It is the one table a fresh clone of the brain cannot rebuild, which is what the database's point-in-time recovery exists for.
 
 ```
         iOS      Web      Desktop      Claude Code      Cursor · CLIs
@@ -80,9 +86,9 @@ npm run ingest -- --from ~/my-notes --repo <you>/brain --commit   # file it
 
 Every ingested note gets a provenance line, because a brain that cannot say where a claim came from cannot be trusted to answer with it.
 
-## The ten tools
+## The eleven tools
 
-Trusted doors get all ten. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`.
+Trusted doors get all eleven. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`. The canonical list is `lib/tool-roster.json` — if this table and that file ever disagree, the file is right.
 
 | tool | what it does |
 |---|---|
@@ -93,6 +99,7 @@ Trusted doors get all ten. The guest door gets exactly two — a scoped `brain_a
 | `brain_write` | Create, replace, append — or `edit`: surgical in-place replacement, refused loudly if the target is absent or ambiguous. Returns the commit SHA — a save without a SHA did not happen. |
 | `brain_capture` | Timestamped append to today's log. The zero-friction path from a phone. |
 | `brain_bubble` | Working memory: what is in flight right now, carried across sessions and surfaces so work resumes instead of being re-explained. The one thing Postgres is authoritative for — notes never are. |
+| `brain_handoff` | One call resumes a project: the project page, its open bubble items, recent log entries that mention it, and the graph's neighbour notes — every piece cited with why it is there, the whole bundle budgeted and its coverage counted. Trusted doors only. |
 | `brain_propose` | Guest-only. Leaves a suggestion in a review queue — commits nothing, ever. |
 | `brain_proposals` · `brain_accept` · `brain_reject` | The review half, trusted doors only. Accepting is what commits. |
 
@@ -115,7 +122,7 @@ Why this architecture: measured on its own labelled eval, **ranking a generated 
 
 - **The MCP endpoint**, three doors: `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` for clients that send headers (Claude Code, Cursor, the CLIs), `/api/s/<CONNECTOR_PATH_SECRET>/mcp` for trusted clients that cannot (claude.ai custom connectors — add once on the web and iOS and desktop inherit it), and `/api/g/<GUEST_PATH_SECRET>/mcp` for assistants you do not control — a smaller handler that registers only the scoped ask and the propose, so its `tools/list` is the honest answer to "what may I do here". All fail closed: a bad bearer gets a standard `401`; a wrong path secret gets an **empty 404**, because a secret door does not advertise that anything lives there; the guest door does not exist until its secret is set.
 - **A public site** — Overview, Tools, Guide, and a demo map (the real ring renderer over synthetic placeholders; nothing real ships on it).
-- **The secret-gated console** — seven screens at `/s/<CONNECTOR_PATH_SECRET>/console`: overview (corpus load, calls, verdicts per reader, ingest feed of real commits), readers (each model's own record on your corpus, eval states, who is reading now), corpus (every note expandable to its own title, outline and retracted passages, tick by tick), attention (a triaged queue plus the guest proposal review), the live map (your machine's rings, memory ring rebuilt from the corpus on every request — also standalone at `/s/<secret>/map`), a setup guide that reads your deployment's real state and emits ready-to-paste client configs, and settings — every control in one place: default reader, provider switches, guest scope and budgets, appearance; secrets render as presence, never values. Gated because they are inventories; linked from nothing public. `/s/<secret>/health` survives as a redirect into the console.
+- **The secret-gated console** — seven screens at `/s/<CONNECTOR_PATH_SECRET>/console`: overview (corpus load, calls, activity, verdicts per reader, ingest feed of real commits), ask (put a question to the brain from the browser and watch the cited answer assemble), trends (memory growth and read patterns over time), notes (every note expandable to its own title, outline, heat, pins and retracted passages — with the handoff panel for working state), inbox (a triaged attention queue plus the guest proposal review, with one-click verify), the live map (your machine's rings, memory ring rebuilt from the corpus on every request — also standalone at `/s/<secret>/map`), and settings — every control in one place: default reader, provider switches, learning knobs, guest scope and budgets, plus the readers ledger and a setup guide that reads your deployment's real state and emits ready-to-paste client configs; secrets render as presence, never values. Entry is double-locked: the path secret finds the door, and `CONSOLE_PASSCODE` stamps the device — the link alone no longer opens the console. Gated because they are inventories; linked from nothing public. `/s/<secret>/health` survives as a redirect into the console.
 
 ### Machine rings on the map (optional)
 
@@ -237,6 +244,7 @@ everything else is the one command.
 | `GITHUB_TOKEN` | yes | every tool — 401 from the Contents API. Fine-grained PAT, Contents R/W, only the brain repo |
 | `MCP_TOKEN` | yes | all requests 401 |
 | `CONNECTOR_PATH_SECRET` | for claude.ai | the header-less alias and both gated pages 404 |
+| `CONSOLE_PASSCODE` | for the web console | every `/s/...` page is locked, fail closed — the entry renders "CONSOLE LOCKED" instead of the prompt, and no device can be stamped. The MCP doors never read it |
 | `ANTHROPIC_API_KEY` | yes, for `brain_ask` | `brain_ask` errors; everything else works. Each `brain_ask` bills this key — order of $0.25–$0.80/call depending on corpus size and model |
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` | no | those readers error on selection; unset, they simply cannot be chosen |
 | `READER_MODEL` | no | deployment default reader; outranked by the console's own setting |

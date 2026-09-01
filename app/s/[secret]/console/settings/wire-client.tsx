@@ -94,15 +94,6 @@ const WIRES: Wire[] = [
     note: "Connectors cannot send headers, so the secret rides the path. Add once on the web; iOS and desktop sync on their own.",
   },
   {
-    id: "claude-ai-guest",
-    name: "claude.ai (guest)",
-    door: "guest",
-    grants: "asks · proposes",
-    where: "Settings → Connectors → Add custom connector",
-    snippet: (origin) => `${origin}/api/g/<GUEST_PATH_SECRET>/mcp`,
-    note: "A second Claude account that is not yours to trust with the pen — a work or org one, where somebody else sets the policy. Identical to the connector row in every mechanic (same screen, secret in the path, no OAuth step, no token field) and different in the only thing that matters: this URL registers the scoped ask and the propose, so that account can never write. If “Add custom connector” is missing from it entirely, its org has custom connectors switched off and nothing on this side changes that.",
-  },
-  {
     id: "chatgpt",
     name: "ChatGPT / other apps",
     door: "guest",
@@ -123,7 +114,7 @@ const WIRES: Wire[] = [
   },
 ];
 
-export function WireClient({ guestServes }: { guestServes: boolean }) {
+export function WireClient({ guestOpen }: { guestOpen: boolean }) {
   const [pick, setPick] = useState("claude-code");
   const [copied, setCopied] = useState(false);
   // Derived after mount so the server-rendered payload carries only placeholders.
@@ -154,7 +145,7 @@ export function WireClient({ guestServes }: { guestServes: boolean }) {
   }
 
   return (
-    <section>
+    <section className="card">
       <div className={styles.sectionHead}>
         <span className={styles.label}>Wire up your client</span>
         <span className={styles.note}>
@@ -190,9 +181,9 @@ export function WireClient({ guestServes }: { guestServes: boolean }) {
       <p className={styles.pathNote}>
         {w.note}
         {w.door === "guest" &&
-          (guestServes
-            ? " This door serves on this deployment. Every guest surface shares the one secret AND the one daily budget: rotating GUEST_PATH_SECRET revokes all of them at once and no trusted door with it, and any one of them can spend the whole day's asks before the others get a turn."
-            : " This door is NOT serving on this deployment — the path 03 card above says what it still needs.")}
+          (guestOpen
+            ? " This door is open on this deployment."
+            : " This door is CLOSED on this deployment — set GUEST_PATH_SECRET to open it.")}
         {usesSecret &&
           " The secret is masked on screen — copy carries the real URL, a screenshot carries nothing."}
       </p>

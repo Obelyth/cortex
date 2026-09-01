@@ -13,6 +13,7 @@
  * says working memory must: never unbounded, and what does not fit is counted out loud.
  */
 import { safeText, MAX_DESCRIPTION } from "./frontmatter";
+import { normaliseProject } from "./project";
 
 export type BubbleKind = "focus" | "decision" | "question" | "handoff";
 
@@ -165,10 +166,29 @@ function age(touched: string): string {
  * The boot-call section. Newest touch first, budgeted — and every number is measured against the
  * store's OWN total, not the fetched page, so what is not shown is counted exactly. The sweep is
  * disclosed too: an item the reaper took is reported, never disappeared.
+ *
+ * SCOPED when brain_context is called for one project: only that project's items and the general
+ * (project-less) ones ride, so a session picking up cortex is not handed the ego backlog. General
+ * items always ride because they belong to no project and so bleed into none — they are the
+ * cross-cutting working state. Scoping changes the "not shown" accounting: the store's total
+ * counts every open item across every project, which is not what a scoped view left out, so a
+ * scoped section names the filter and points at `brain_bubble list` for the global total rather
+ * than quoting a subtraction that would read as "12 more cortex items" when they are ego ones.
  */
-export function renderBubble(read: BubbleRead): string {
-  const { items, total, swept } = read;
-  if (items.length === 0 && swept === 0) return "";
+export function renderBubble(read: BubbleRead, project?: string): string {
+  const { total, swept } = read;
+  const scope = project ? normaliseProject(project) : "";
+  const items = scope
+    ? read.items.filter((it) => {
+        const p = normaliseProject(it.project);
+        return p === scope || p === "";
+      })
+    : read.items;
+  if (items.length === 0 && swept === 0) {
+    // A scoped view with nothing for this project still says so, so the reader can tell "no
+    // working state here" apart from "the bubble is off" (which degrades to logs upstream).
+    return scope ? `# BUBBLE (working state — update with brain_bubble)\n\n(no open items for ${safeText(scope, 40)} · brain_bubble list for all open items)` : "";
+  }
   const lines: string[] = [];
   let spent = 0;
   let rendered = 0;
@@ -182,9 +202,17 @@ export function renderBubble(read: BubbleRead): string {
     spent += line.length;
     rendered++;
   }
-  const notShown = total - rendered;
   const notes: string[] = [];
-  if (notShown > 0) notes.push(`${notShown} more open item${notShown === 1 ? "" : "s"} not shown — brain_bubble list for all`);
+  if (scope) {
+    // Scoped: report what THIS view dropped for budget against its own filtered set, and hand the
+    // global count to the tool that owns it rather than doing project-blind arithmetic here.
+    const droppedForBudget = items.length - rendered;
+    if (droppedForBudget > 0) notes.push(`${droppedForBudget} more ${safeText(scope, 40)}/general item${droppedForBudget === 1 ? "" : "s"} did not fit — brain_bubble list for all`);
+    else notes.push(`scoped to ${safeText(scope, 40)} + general · brain_bubble list for all open items`);
+  } else {
+    const notShown = total - rendered;
+    if (notShown > 0) notes.push(`${notShown} more open item${notShown === 1 ? "" : "s"} not shown — brain_bubble list for all`);
+  }
   if (swept > 0) notes.push(`${swept} item${swept === 1 ? "" : "s"} just aged out (untouched ${MAX_AGE_DAYS}+ days)`);
   const tail = notes.length ? `\n(${notes.join(" · ")})` : "";
   if (lines.length === 0) return tail ? `# BUBBLE (working state — update with brain_bubble)\n${tail}` : "";

@@ -1,0 +1,259 @@
+/* The Live Board — full-bleed canvas, floating menu, layers legend, detail drawer.
+   Palette rides as --cx-* custom properties on .root (set inline), matching the design's
+   dark theme exactly; the brand defines no light palette, so neither does the board. */
+
+.root {
+  position: relative; width: 100%; height: 100%; overflow: hidden;
+  background: var(--cx-bg); color: var(--cx-fg);
+  font-family: var(--sans);
+}
+.canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+
+.wordmark { position: absolute; top: 20px; left: 24px; z-index: 20; pointer-events: none; }
+.wordTitle {
+  font-family: var(--display); font-size: 34px; font-weight: 700; letter-spacing: 0.04em;
+  line-height: 1; text-transform: uppercase; color: var(--cx-fg);
+}
+.wordTitle b { font-weight: 700; color: var(--cx-gold); }
+.wordBy {
+  margin-top: 4px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.24em;
+  text-transform: uppercase; color: var(--cx-faint);
+}
+.wordLive {
+  margin-top: 7px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  text-transform: uppercase; white-space: nowrap; color: var(--cx-fg2);
+}
+/* Liveness is cyan's question, and colour is a field, never ink — the chip carries near-black
+   on the live cyan, per the console's own two-questions rule. */
+.liveChip { background: #1fbdd6; color: #111315; padding: 3px 7px; margin-right: 6px; display: inline-block; }
+.wordLive em { font-style: normal; color: var(--cx-faint); }
+
+.menuBtn {
+  position: absolute; top: 20px; right: 24px; z-index: 31;
+  background: var(--cx-panel); border: 1.5px solid var(--cx-fg); border-radius: 0;
+  color: var(--cx-fg); font-family: inherit; font-size: 13px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; padding: 11px 18px; cursor: pointer;
+  box-shadow: 0 4px 14px -4px var(--cx-shadow);
+  transition: background 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.15s, color 0.15s,
+    transform 0.12s, box-shadow 0.15s;
+}
+.menuBtn:hover { box-shadow: 0 7px 20px -6px var(--cx-shadow); }
+.menuBtn:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(17, 19, 21, 0.25); }
+.menuBtnOn { background: var(--cx-btnh); border-color: var(--cx-accent); color: var(--cx-accent); }
+
+.panel {
+  position: absolute; top: 74px; right: 24px; z-index: 30; width: 288px;
+  max-height: calc(100% - 100px); overflow-y: auto;
+  border: 1px solid var(--cx-line); border-radius: 0; padding: 16px;
+  box-shadow: 0 22px 50px -20px var(--cx-shadow);
+  transform-origin: top right;
+  transition: opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1), transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0; transform: scale(0.96) translateY(-6px); pointer-events: none;
+}
+.panelOpen { opacity: 1; transform: none; pointer-events: auto; }
+
+.search {
+  width: 100%; background: var(--cx-btn); border: 1px solid var(--cx-line); border-radius: 0;
+  color: var(--cx-fg); font-family: inherit; font-size: 12.5px; padding: 10px 12px; outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.search::placeholder { color: var(--cx-faint); }
+.search:focus { border-color: var(--cx-accent); background: var(--cx-btnh); }
+
+.panelLabel {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--cx-faint); margin: 16px 0 8px;
+}
+.panelLabel span { float: right; font-size: 11px; letter-spacing: 0; color: var(--cx-fg2); }
+
+.btnRow { display: flex; gap: 6px; }
+.rowBtn {
+  flex: 1; background: var(--cx-btn); border: 0; border-radius: 0; color: var(--cx-fg2);
+  font-family: inherit; font-size: 12px; font-weight: 600; padding: 9px 6px; cursor: pointer;
+  box-shadow: none;
+  transition: background 0.15s cubic-bezier(0.22, 1, 0.36, 1), color 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.rowBtn:hover { background: var(--cx-btnh); color: var(--cx-fg); }
+.rowBtn:active { transform: translateY(1px); }
+.rowBtnOn {
+  background: var(--cx-fg); color: var(--cx-bg);
+  box-shadow: 0 2px 8px -3px var(--cx-shadow);
+}
+.rowBtnOn:hover { background: var(--cx-fg); color: var(--cx-bg); }
+
+.slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 4px; border-radius: 0;
+  background: var(--cx-track); outline: none; margin: 2px 0 4px;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--cx-accent); cursor: pointer; border: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.slider:active::-webkit-slider-thumb { transform: scale(1.18); }
+.slider::-moz-range-thumb {
+  width: 15px; height: 15px; border-radius: 50%; background: var(--cx-accent); cursor: pointer; border: 0;
+}
+
+.checkRow {
+  display: flex; align-items: center; gap: 9px; width: 100%; background: none; border: 0;
+  border-radius: 0; cursor: pointer; font-family: inherit; font-size: 12.5px;
+  color: var(--cx-fg2); padding: 5px 4px; text-align: left; transition: background 0.13s, color 0.13s;
+}
+.checkRow:hover { background: var(--cx-btn); }
+.checkRowOn { color: var(--cx-fg); }
+.checkBox {
+  width: 14px; height: 14px; border: 1.5px solid var(--cx-faint); background: transparent;
+  border-radius: 0; display: grid; place-items: center; font-style: normal; font-size: 10px;
+  line-height: 1; color: var(--cx-bg); flex: none; transition: background 0.14s, border-color 0.14s;
+}
+.checkBoxOn { background: var(--cx-accent); border-color: var(--cx-accent); }
+
+.legend {
+  position: absolute; left: 24px; bottom: 24px; z-index: 20; width: 258px;
+  border-radius: 0; overflow: hidden;
+  box-shadow: 0 18px 44px -20px var(--cx-shadow);
+  max-height: 400px; transition: max-height 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.legendShut { max-height: 38px; }
+.legendHead {
+  display: flex; align-items: center; gap: 8px; padding: 11px 14px; cursor: pointer;
+  user-select: none; transition: background 0.13s; width: 100%; background: none; border: 0;
+  color: inherit; font-family: inherit; text-align: left;
+}
+.legendHead:hover { background: var(--cx-btn); }
+.legendTitle {
+  flex: 1; font-family: var(--mono); font-size: 10px; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--cx-faint);
+}
+.legendN { font-family: var(--mono); font-size: 10px; color: var(--cx-faint); }
+.chev {
+  color: var(--cx-faint); font-size: 10px;
+  transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.chevShut { transform: rotate(-90deg); }
+.legendBody { padding: 0 10px 10px; max-height: 330px; overflow-y: auto; transition: opacity 0.2s; }
+.legendBodyShut { opacity: 0; }
+
+.layerRow {
+  display: flex; align-items: center; gap: 9px; padding: 6px 5px; border-radius: 0;
+  transition: background 0.13s, opacity 0.18s;
+}
+.layerRow:hover { background: var(--cx-btn); }
+.layerOff { opacity: 0.32; }
+.layerChip { width: 9px; height: 9px; border-radius: 0; flex: none; cursor: pointer; border: 0; padding: 0; }
+.layerName {
+  flex: 1; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; color: var(--cx-fg); background: none; border: 0; font-family: inherit;
+  text-align: left; padding: 0;
+}
+.layerCount { font-family: var(--mono); font-size: 11px; color: var(--cx-faint); }
+.layerCaret {
+  width: 18px; height: 18px; flex: none; display: grid; place-items: center; border: 0;
+  background: none; color: var(--cx-faint); font-size: 9px; cursor: pointer; border-radius: 0;
+  transition: transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), background 0.13s;
+}
+.layerCaret:hover { background: var(--cx-btnh); }
+.caretOpen { transform: rotate(90deg); }
+
+.groupRow {
+  display: flex; align-items: center; gap: 8px; padding: 4px 5px 4px 24px; cursor: pointer;
+  border-radius: 0; font-size: 11.5px; transition: background 0.12s, color 0.12s;
+  color: var(--cx-faint); width: 100%; background: none; border: 0; font-family: inherit; text-align: left;
+}
+.groupRow:hover { background: var(--cx-btn); }
+.groupOn { color: var(--cx-fg2); }
+.groupDot { width: 5px; height: 5px; border-radius: 50%; flex: none; background: currentColor; opacity: 0.5; }
+.groupName { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.groupCount { font-family: var(--mono); font-size: 10px; }
+
+.drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 420px; max-width: 90%; z-index: 40;
+  background: var(--cx-detail); border-left: 1px solid var(--cx-line);
+  transform: translateX(101%); transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex; flex-direction: column; box-shadow: -30px 0 70px rgba(0, 0, 0, 0.6);
+}
+.drawerOpen { transform: none; }
+.drawerClose {
+  position: absolute; top: 18px; right: 18px; background: none; border: 0; color: var(--cx-faint);
+  font-size: 22px; cursor: pointer; padding: 2px 7px; line-height: 1; z-index: 2; border-radius: 0;
+  transition: color 0.13s, background 0.13s;
+}
+.drawerClose:hover { color: var(--cx-fg); background: var(--cx-btn); }
+.drawerHead { padding: 24px 26px 18px; border-bottom: 1px solid var(--cx-line); }
+.drawerLayer {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.drawerTitle {
+  font-size: 20px; font-weight: 600; line-height: 1.25; margin-bottom: 8px;
+  word-break: break-word; color: var(--cx-fg);
+}
+.drawerId { font-family: var(--mono); font-size: 11px; color: var(--cx-faint); word-break: break-all; }
+.drawerBody { padding: 20px 26px 34px; overflow-y: auto; flex: 1; }
+.drawerDesc { font-size: 13.5px; line-height: 1.65; color: var(--cx-fg2); margin: 0 0 20px; }
+.kvGrid {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 14px;
+  font-family: var(--mono); font-size: 11.5px;
+}
+.kvGrid dt { color: var(--cx-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.kvGrid dd { color: var(--cx-fg2); margin: 0; }
+.connHead {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--cx-faint); margin: 20px 0 9px; padding-top: 15px; border-top: 1px solid var(--cx-line);
+}
+.connRow {
+  display: block; width: 100%; text-align: left; background: none; border: 0;
+  border-bottom: 1px solid var(--cx-line); color: var(--cx-fg2); font-family: var(--mono);
+  font-size: 11.5px; padding: 8px 0; cursor: pointer; word-break: break-all;
+  transition: color 0.13s, padding-left 0.13s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.connRow:hover { color: var(--cx-accent); padding-left: 5px; }
+
+/* The note graph's ties: kind, direction, the other end, and — unfolded beneath — the evidence
+   string that justifies drawing the line at all. Evidence arrives pre-scrubbed (redact +
+   safeText at the store boundary); this panel displays, it never scrubs. */
+.tie { border-bottom: 1px solid var(--cx-line); padding: 8px 0 9px; }
+.tieRow {
+  display: flex; align-items: baseline; gap: 8px; width: 100%; background: none; border: 0;
+  color: var(--cx-fg2); font-family: var(--mono); font-size: 11.5px; padding: 0; cursor: pointer;
+  text-align: left; transition: color 0.13s;
+}
+.tieRow:hover { color: var(--cx-accent); }
+.tieKind {
+  flex: none; font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--cx-accent);
+}
+.tieDir { flex: none; color: var(--cx-faint); }
+.tieOther { flex: 1; word-break: break-all; }
+.tieW { flex: none; font-size: 10.5px; color: var(--cx-faint); }
+.tieWhy {
+  margin-top: 5px; font-family: var(--mono); font-size: 10.5px; line-height: 1.55;
+  color: var(--cx-faint); word-break: break-word;
+}
+
+/* The drawer's jump into the corpus ledger — the map is the glance, the ledger is the
+   interrogation. Scoped under .root because the console shell sets `.conRoot a { color:
+   var(--ink-900) }` (theme.css) — paper-black ink, invisible on the instrument — and (0,1,1)
+   outranks a lone module class. The same trap console.css documents at .ovInboxLink. */
+.root .ledgerGo {
+  display: inline-block; margin-top: 16px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--cx-accent);
+  text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.13s;
+}
+.root .ledgerGo:hover { border-bottom-color: var(--cx-accent); }
+
+/* The freshness caption when the board is embedded: the wordmark stays off under the console
+   masthead, but which rings are live — and whether the graph is on the board — is data. */
+.srcline {
+  position: absolute; right: 24px; bottom: 24px; z-index: 15; pointer-events: none;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--cx-faint);
+}
+
+/* The console embed breaks out of conBody's 1240px column to run edge to edge. */
+.embed {
+  position: relative; width: 100vw; margin-left: calc(50% - 50vw);
+  height: calc(100vh - 176px); min-height: 540px;
+}

@@ -12,10 +12,23 @@ export function branch(): string {
   return process.env.BRAIN_BRANCH ?? "main";
 }
 
+/**
+ * Per-request ceiling on every GitHub call.
+ *
+ * There was none, and the boot path's first act is a GitHub round trip that sits ABOVE
+ * corpus.ts's mirror deadline — so a stalled socket during a GitHub incident hung brain_context
+ * for the full 60s function wall while a complete, already-verified corpus sat in the cache one
+ * `catch` away. loadCorpus() only falls back on a thrown error, never on a hang; this is what
+ * turns the hang into an error. Generous enough for a tarball redirect, far inside the wall.
+ */
+const REQUEST_TIMEOUT_MS = 15_000;
+
 export async function gh(path: string, init: RequestInit = {}): Promise<Response> {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new Error("GITHUB_TOKEN env var not set");
   return fetch(`${API}${path}`, {
+    // Callers can still pass their own signal — spread last so an explicit one wins.
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     ...init,
     headers: {
       Authorization: `Bearer ${token}`,

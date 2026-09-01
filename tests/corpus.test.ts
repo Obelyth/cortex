@@ -74,7 +74,7 @@ describe("corpus/brain_ask parity", () => {
     // Two definitions of "the live corpus" that disagree is the dual-implementation drift
     // this rebuild exists to delete. brain_ask.py SKIP_PREFIX must match this list; when
     // they diverged, cortex saw 70 files and brain_ask saw 77.
-    const py = [".git/", "tools/", "archive/", "brain-v2/", ".github/"];
+    const py = [".git/", ".claude/", "tools/", "archive/", "brain-v2/", ".github/"];
     for (const prefix of py) expect(isLive(`${prefix}whatever.md`)).toBe(false);
     for (const name of ["brain-index.md", "INDEX.md", "README.md"]) {
       expect(isLive(`notes/${name}`)).toBe(false);

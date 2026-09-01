@@ -2,24 +2,38 @@
 import { usePathname } from "next/navigation";
 
 /**
- * Six sibling screens; every href is RELATIVE so the secret never appears in markup. The
- * active tab comes from the pathname's last segment.
- *
- * Readers sits second, next to overview, because it answers the question the overview now
- * raises: the numbers there are an aggregate over several models, and this is where you find
- * out which ones.
+ * Seven became six: Models and Connect live inside Settings (the owner's standing merge).
+ * The bar itself follows the design file exactly — top placement, uppercase mono, a cyan
+ * underline on the active tab. Labels are the design's vocabulary; segments keep their URLs.
  */
-const TABS = ["overview", "readers", "corpus", "attention", "map", "guide", "settings"] as const;
+/* Ask sits second, right after Overview: it is the only screen that uses the brain rather than
+   measuring it, and it is the one a newcomer needs first. Everything after it is telemetry. */
+const TABS = [
+  { seg: "overview", label: "Overview" },
+  { seg: "ask", label: "Ask" },
+  { seg: "trends", label: "Trends" },
+  { seg: "corpus", label: "Notes" },
+  { seg: "attention", label: "Inbox" },
+  { seg: "map", label: "Map" },
+  { seg: "settings", label: "Settings" },
+] as const;
+
+const MERGED = new Set(["readers", "guide"]);
 
 export function Tabs({ attention }: { attention: number }) {
-  const last = (usePathname() ?? "").split("/").filter(Boolean).pop();
+  const last = (usePathname() ?? "").split("/").filter(Boolean).pop() ?? "";
+  const active = MERGED.has(last) ? "settings" : last;
   return (
     <nav className="conTabs" aria-label="Console">
       {TABS.map((t) => (
-        <a key={t} href={t} className={`conTab${t === last ? " on" : ""}`}
-          aria-current={t === last ? "page" : undefined}>
-          {t}
-          {t === "attention" && attention > 0 && <span className="conTabN">{attention}</span>}
+        <a
+          key={t.seg}
+          href={t.seg}
+          className={`conTab${t.seg === active ? " on" : ""}`}
+          aria-current={t.seg === active ? "page" : undefined}
+        >
+          {t.label}
+          {t.seg === "attention" && attention > 0 && <span className="conTabN">{attention}</span>}
         </a>
       ))}
     </nav>

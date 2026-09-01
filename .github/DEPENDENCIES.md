@@ -4,7 +4,7 @@ There is deliberately no `dependabot.yml` here.
 
 ## Why it was removed
 
-It opened four PRs in one overnight batch. Two of them were genuinely breaking — `mcp-handler` v2 changed
+It opened seven PRs in a week. Two of them were genuinely breaking — `mcp-handler` v2 changed
 `createMcpHandler`'s arity and moved `McpServer` to a different package, and TypeScript 7 changed
 what a side-effect import needs — and both sat red in the queue looking like neglect rather than
 like the migrations they were. The rest were noise that still had to be read to find out which
@@ -21,12 +21,11 @@ by that file. GitHub still raises an advisory the moment one lands, and
 `gh api repos/Obelyth/cortex/vulnerability-alerts` confirms it. Removing the config removed
 the *version-bump PRs*, not the *warnings*.
 
-The routine check belongs to whoever maintains the deployment, alongside the other things a
-maintenance pass already looks at:
+The routine check belongs to the groundskeeper, alongside the other things it already looks at:
 
 ```bash
 npm audit --omit=dev          # advisories that actually matter for what ships
-npm outdated                  # drift, read as a list rather than as four PRs
+npm outdated                  # drift, read as a list rather than as seven PRs
 ```
 
 Anything that comes out of those gets fixed deliberately, in a session with attention on it,

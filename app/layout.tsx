@@ -1,25 +1,25 @@
 import type { Metadata } from "next";
-import { Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Archivo, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 /**
- * Both faces are self-hosted: next/font/google fetches at BUILD time and serves from this
+ * Both faces are self-hosted. next/font/google fetches at BUILD time and serves from this
  * origin, so there is no runtime request to Google — no third-party font CDN in the loading
  * path of a page about keeping a private brain private.
  *
- * The DISPLAY slot ships empty on purpose. The reference deployment uses a licensed display
- * face we cannot redistribute; headers fall back to Hanken bold here. To add your own: drop a
- * font in public/fonts/, add a next/font/local block exposing --font-display, and put its
- * variable class on // suppressHydrationWarning is for ONE attribute: the console layout stamps data-appearance
-    // on <html> pre-paint (from localStorage) so a reload never flashes the wrong ground. The
-    // server cannot know that value, the mismatch is by design.
-    <html> below.
+ * Archivo replaced the previous Hanken Grotesk + display-slot pairing in the console
+ * redesign, and one variable file does both jobs: the `wdth` axis runs 62–125, so
+ * "Archivo Expanded" is this same file at wdth 125 rather than a second download. Display
+ * type takes the wide end, running UI text sits at the default 100.
+ *
+ * JetBrains Mono is unchanged and load-bearing: mono is what marks a value as functional —
+ * every ID, metric and timestamp.
  */
-const hanken = Hanken_Grotesk({
+const archivo = Archivo({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  axes: ["wdth"],
   display: "swap",
-  variable: "--font-hanken",
+  variable: "--font-archivo",
 });
 const jetbrains = JetBrains_Mono({
   subsets: ["latin"],
@@ -57,11 +57,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // suppressHydrationWarning is gone with the thing that needed it: the console used to stamp
+  // data-appearance on <html> pre-paint from localStorage, which the server could not know.
+  // The light/dark toggle was removed, so the mismatch it silenced no longer exists, and
+  // leaving the suppression in place would hide real hydration bugs.
   return (
-    <html suppressHydrationWarning
-      lang="en"
-      className={`${hanken.variable} ${jetbrains.variable}`}
-    >
+    <html lang="en" className={`${archivo.variable} ${jetbrains.variable}`}>
       <body>{children}</body>
     </html>
   );

@@ -43,6 +43,11 @@ export interface CallRow {
    *  sent. brain_ask only; absent on rows written before the field shipped (2026-08-05) — the
    *  trends screen counts those out loud rather than folding them into zero. */
   saved?: number;
+  /** True when the reply came from the answer cache — zero model calls on this row. `model`
+   *  then names the reader that answered ORIGINALLY, so the row stays attributable, but the
+   *  row is excluded from that model's verdict record (see modelRecordRows): replaying an
+   *  answer is not evidence about the model, and repeats must not inflate its record. */
+  cached?: true;
 }
 
 /** Two days of headroom at a heavy cadence; the console never reads more than 24h of it. */
@@ -176,7 +181,21 @@ function parseRow(raw: unknown): CallRow | null {
     // history. A model retired from READER_MODEL_IDS still answered these calls, and a reader
     // that dropped the field on rename would quietly rewrite the past as unattributed.
     ...(typeof r.model === "string" && r.model ? { model: r.model } : {}),
+    // Only literal true counts. Coercing a truthy junk value would mark a real model call as
+    // cached and silently drop it from the model's record — the failure direction that matters.
+    ...(r.cached === true ? { cached: true as const } : {}),
   };
+}
+
+/**
+ * Rows that count toward a model's verdict record: attributed AND actually answered by the
+ * model on that call. A cached row is a replay of an earlier answer — counting it would let a
+ * repeated question inflate (or, on a repeated UNVERIFIED-adjacent verdict, damage) a model's
+ * record without the model ever running. Lives here rather than in the page so every screen
+ * that draws a per-model record applies the same honesty rule.
+ */
+export function modelRecordRows(rows: CallRow[]): CallRow[] {
+  return rows.filter((r) => r.model && !r.cached);
 }
 
 /**

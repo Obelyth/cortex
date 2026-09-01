@@ -77,6 +77,43 @@ export function logDigest(text: string): Digest {
   return { entries, tags, description: describe(entries, tags) };
 }
 
+/** One timestamped entry of a day-log: its heading parts and its verbatim text. */
+export interface LogSection {
+  /** "HH:MM" from the entry heading. */
+  time: string;
+  /** The raw text after the `·`, exactly as authored ("" when untagged). Callers that render
+   *  it are responsible for safeText — this is the same untrusted note text as everything else. */
+  tags: string;
+  /** The section verbatim: its heading line through the line before the next entry heading. */
+  text: string;
+}
+
+/**
+ * Split a day-log into its `## HH:MM · tags` sections. The ENTRY shape has one home (this
+ * file); brain_handoff needs the sections themselves — which entries mention a project — where
+ * logDigest only needs their count. Prose H2s inside an entry stay inside it, same as the
+ * digest: `## <topic>` is a section of a day, not a new entry. Text before the first entry
+ * heading (the `# Log YYYY-MM-DD` title line) belongs to no section and is not returned.
+ */
+export function logSections(text: string): LogSection[] {
+  const out: LogSection[] = [];
+  let current: { time: string; tags: string; lines: string[] } | null = null;
+  const close = () => {
+    if (current) out.push({ time: current.time, tags: current.tags, text: current.lines.join("\n").trimEnd() });
+  };
+  for (const raw of text.split(/\r?\n/)) {
+    const m = raw.trimEnd().match(ENTRY);
+    if (m) {
+      close();
+      current = { time: m[1], tags: (m[2] ?? "").trim(), lines: [raw] };
+    } else if (current) {
+      current.lines.push(raw);
+    }
+  }
+  close();
+  return out;
+}
+
 function describe(entries: number, tags: string[]): string {
   if (entries === 0) return "no entries";
   const count = entries === 1 ? "1 entry" : `${entries} entries`;

@@ -18,6 +18,9 @@ function fakeStore(seed: NoteRow[] = [], head: string | null = null) {
     async all() {
       return [...rows.values()];
     },
+    async paths() {
+      return [...rows.keys()];
+    },
     async apply(expectedHead, newHead, upserts, removes) {
       applies.push({ expectedHead, newHead, upserts: upserts.map((r) => r.path), removes, rows: upserts });
       if (currentHead !== expectedHead) return false; // the CAS
@@ -51,7 +54,12 @@ describe("syncMirror — the backfill IS reconcile-from-empty", () => {
       fullLoad: vi.fn(async () => new Map([["notes/a.md", "A"], ["tools/atlas-snapshot.json", "{}"]])),
     });
     await syncMirror(store, null, "sha2", d);
-    expect(rows.get("notes/a.md")).toEqual({ path: "notes/a.md", content: "A", commit_sha: "sha2" });
+    expect(rows.get("notes/a.md")).toEqual({
+      path: "notes/a.md",
+      content: "A",
+      commit_sha: "sha2",
+      last_commit_at: "2026-08-06T12:00:00Z",
+    });
     expect(head()).toBe("sha2");
     expect(d.compare).not.toHaveBeenCalled();
     // ONE apply carrying rows and head together. There is no partial ordering to get wrong,
@@ -223,11 +231,67 @@ describe("write-recency provenance", () => {
     expect(applies[0].rows?.[0]?.last_commit_at).toBeNull();
   });
 
-  // A full sync carries no per-file dates. It must not blank what the patch path learned —
-  // sync_apply coalesces server-side, and the client must send null rather than a wrong value.
-  it("sends no date on a full sync", async () => {
+  // A full sync now carries the head commit's date, same bound the patch path uses.
+  //
+  // was: it sent nothing, and note_scores coalesces a null last_commit_at to mirrored_at — which
+  // sync_apply sets to now() on every upsert. So a force-push (or any commit touching more than
+  // PATCH_LIMIT files) reset the AUTHORSHIP age of every full-synced row to today, re-warming
+  // notes that had gone cold and pushing them back out of propose_deletions' 180-day window.
+  // The migration that added the column exists specifically to stop the mirror resetting note
+  // age; leaving the full-sync path out of it reopened that hole through a different column.
+  it("stamps the head commit's date on a full sync", async () => {
     const { store, applies } = fakeStore([], null);
     await syncMirror(store, null, "sha2", deps());
-    expect(applies[0].rows?.[0]?.last_commit_at).toBeUndefined();
+    expect(applies[0].rows?.[0]?.last_commit_at).toBe("2026-08-06T12:00:00Z");
+  });
+
+  // Still never GUESSED. sync_apply coalesces server-side, so null preserves whatever date the
+  // patch path already learned rather than blanking it.
+  it("sends null on a full sync when the commit date is unavailable", async () => {
+    const { store, applies } = fakeStore([], null);
+    await syncMirror(store, null, "sha2", deps({
+      commitDate: vi.fn(async () => { throw new Error("api down"); }),
+    }));
+    expect(applies[0].rows?.[0]?.last_commit_at).toBeNull();
+  });
+});
+
+/**
+ * Regression: 2026-08-12. A note carrying a literal NUL byte (U+0000) landed in the brain, and
+ * every sync_apply from then on 400'd whole — Postgres cannot hold the byte in text, and jsonb
+ * refuses its escape outright — so the mirror froze at the last clean commit and the connections
+ * graph (whose rebuild trigger rides the mirror path only) froze with it, both silently. The
+ * sync seam must strip exactly that byte: history already carrying it has to stay syncable, and
+ * every byte the store CAN hold must survive untouched.
+ */
+describe("syncMirror — bytes the store cannot hold", () => {
+  const NUL = String.fromCharCode(0);
+
+  it("strips U+0000 from patched content — one poisoned note must not brick the whole sync", async () => {
+    const { store, applies, head } = fakeStore([{ path: "notes/a.md", content: "A", commit_sha: "sha1" }], "sha1");
+    const d = deps({
+      compare: vi.fn(async () => ({ changed: ["projects/example.md"], removed: [], ...AHEAD })),
+      fetchAt: vi.fn(async () => `before${NUL}after`),
+    });
+    await syncMirror(store, "sha1", "sha2", d);
+    expect(applies[0].rows?.[0]?.content).toBe("beforeafter");
+    expect(head()).toBe("sha2");
+  });
+
+  it("strips U+0000 on the full-sync path too — the backfill must survive a poisoned history", async () => {
+    const { store, applies } = fakeStore([], null);
+    const d = deps({
+      fullLoad: vi.fn(async () => new Map([["projects/example.md", `x${NUL}${NUL}y`]])),
+    });
+    await syncMirror(store, null, "sha2", d);
+    expect(applies[0].rows?.[0]?.content).toBe("xy");
+  });
+
+  it("leaves every storable byte alone — newlines, tabs, a CRLF note, the router separator", async () => {
+    const text = "line one\n\tline two\r\nsnippet with the router separator: path - desc - tags";
+    const { store, applies } = fakeStore([], null);
+    const d = deps({ fullLoad: vi.fn(async () => new Map([["notes/a.md", text]])) });
+    await syncMirror(store, null, "sha2", d);
+    expect(applies[0].rows?.[0]?.content).toBe(text);
   });
 });

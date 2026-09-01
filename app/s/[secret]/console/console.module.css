@@ -55,7 +55,7 @@
 .cell { padding: 18px 22px 20px 0; }
 .cell + .cell { border-left: 1px solid var(--hair); padding-left: 22px; }
 .cellLabel {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: var(--tracking-label);
+  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--muted);
 }
 .big {
@@ -68,13 +68,13 @@
 .cellCrit .big { color: var(--crit); }
 .meter { height: 4px; background: var(--sunk); margin-top: 16px; border-radius: 2px; overflow: hidden; }
 .meter i { display: block; height: 100%; background: var(--accent); }
-.cellNote { font-size: 11.5px; color: var(--faint); margin-top: 12px; font-family: var(--mono); }
+.cellNote { font-size: 12px; color: var(--faint); margin-top: 12px; font-family: var(--mono); }
 
 /* ---- blocks ---------------------------------------------------------------- */
-.block { padding: 20px 0 8px; border-bottom: 1px solid var(--line); }
+.block { composes: card from global; }
 .blockHead {
   display: flex; align-items: baseline; gap: 12px; justify-content: space-between;
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: var(--tracking-label);
+  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--muted); margin-bottom: 14px;
 }
 .dim { color: var(--faint); text-transform: none; letter-spacing: 0.04em; }
@@ -94,7 +94,7 @@
   padding: 7px 0; border-bottom: 1px solid var(--hair); font-size: 12px;
 }
 .distRow:last-child { border-bottom: 0; }
-.distLabel { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+.distLabel { font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .distBar { height: 4px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
 .distBar i { display: block; height: 100%; background: var(--muted); }
 .distN {
@@ -104,16 +104,19 @@
 
 /* ---- ingest feed ------------------------------------------------------------ */
 .commitRow {
-  display: grid; grid-template-columns: 76px 1fr 48px; gap: 12px; align-items: baseline;
-  padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 12px;
+  /* The ago column's track was a fixed 48px while .agoCol declares min-width 64px, so every
+     row's timestamp hung 16px past the card edge. max-content lets the timestamp size the
+     track; the message column keeps the ellipsis. */
+  display: grid; grid-template-columns: minmax(76px, max-content) 1fr max-content; gap: 12px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: 12px;
 }
 .commitRow:last-child { border-bottom: 0; }
-.sha { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+.sha { font-family: var(--mono); font-size: 11px; color: var(--accent); min-width: 0; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg {
-  font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.agoCol { font-family: var(--mono); font-size: 10.5px; color: var(--faint); text-align: right; }
+.agoCol { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: right; white-space: nowrap; min-width: 64px; }
 
 /* ---- ledger ----------------------------------------------------------------- */
 /* Leading 12px column: the caret. Rows earned it when they became buttons — an affordance the
@@ -141,13 +144,61 @@
 .noteDesc { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); max-width: 74ch; }
 .noteOutline { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 24px; }
 .noteHeading {
-  display: flex; gap: 10px; align-items: baseline; font-size: 11.5px; color: var(--muted);
+  display: flex; gap: 10px; align-items: baseline; font-size: 12px; color: var(--muted);
   min-width: 0;
 }
 .noteHeading > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .noteDead { border-left: 2px solid var(--warn); padding-left: 12px; display: flex; flex-direction: column; gap: 4px; }
-.noteDeadRow { display: flex; gap: 10px; font-size: 11.5px; color: var(--muted); }
+.noteDeadRow { display: flex; gap: 10px; font-size: 12px; color: var(--muted); }
 .noteDeadRow > .fig { flex: none; }
+/* The connections graph, inside the same drawer. Same grammar as the rest of the expansion —
+   hairline separation, mono figures, the caret vocabulary the ledger already taught — because a
+   panel that invented its own widgets would be a second console to learn. The kind chip is a
+   small field: it is a classification, and fields are how this world labels one. */
+.cxnPanel { border-top: 1px solid var(--hair); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.cxnHead { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.cxnLabel {
+  font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint);
+}
+.cxnMeta { font: 400 11px var(--mono); color: var(--faint); }
+.cxnGroup { display: flex; flex-direction: column; }
+/* The row is a button because the caret promises evidence, and the ledger's own history says an
+   affordance that answers nothing is a finding. */
+.cxnRow {
+  display: flex; align-items: baseline; gap: 10px; min-width: 0; width: 100%;
+  padding: 4px 0; border: 0; background: none; text-align: left; cursor: pointer;
+  color: inherit; font: inherit; border-bottom: 1px solid var(--hair);
+}
+.cxnRow:hover { background: var(--sunk); }
+.cxnKind {
+  flex: none; width: 84px; text-align: center;
+  font: 600 9px/1.8 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  background: var(--sunk); color: var(--ink);
+}
+.cxnDir { flex: none; font: 400 11px var(--mono); color: var(--faint); }
+.cxnOther {
+  font-family: var(--mono); font-size: 12px; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.cxnW {
+  margin-left: auto; flex: none; font-family: var(--mono); font-size: 11px;
+  color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+/* Evidence rides under its row like the retracted passages do — a pulled drawer, never a modal. */
+.cxnEvi {
+  margin: 2px 0 6px 22px; padding: 8px 12px; border-left: 2px solid var(--accent);
+  background: var(--sunk); display: flex; flex-direction: column; gap: 6px;
+  font: 400 12px/1.55 var(--mono); color: var(--muted); overflow-wrap: anywhere;
+}
+.cxnGo {
+  align-self: flex-start; border: 0; background: none; padding: 0; cursor: pointer;
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint);
+}
+.cxnGo:hover { color: var(--accent); }
+.cxnNone { font: 400 11px/1.6 var(--mono); color: var(--faint); max-width: 74ch; }
+
 .thead {
   padding: 8px 0; border-bottom: 1px solid var(--line);
   font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
@@ -158,7 +209,7 @@
 .row:hover { background: var(--sunk); }
 .path {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-family: var(--mono); font-size: 11.5px;
+  font-family: var(--mono); font-size: 12px;
 }
 .path span { color: var(--faint); }
 .path b { font-weight: 600; }
@@ -166,15 +217,16 @@
 .blocks i { width: 5px; height: 12px; background: var(--hair); display: block; }
 .blocks i.ret { background: var(--warn); }
 .right { text-align: right; }
-.fig { font-family: var(--mono); font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.fig { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .figWarn { color: var(--warn); font-weight: 600; }
 .figNil { color: var(--faint); }
 .footNote {
-  font-family: var(--mono); font-size: 10.5px; color: var(--faint); padding: 12px 0 6px;
+  font-family: var(--mono); font-size: 11px; color: var(--faint); padding: 12px 0 6px;
 }
 
 /* ---- triage ----------------------------------------------------------------- */
-.triage { display: grid; grid-template-columns: minmax(300px, 5fr) 7fr; gap: 0 40px; }
+.triage {
+  composes: card from global; display: grid; grid-template-columns: minmax(300px, 5fr) 7fr; gap: 0 40px; }
 .queue { border-bottom: 1px solid var(--line); padding-top: 20px; }
 .qRow {
   display: grid; grid-template-columns: 44px 1fr; grid-template-rows: auto auto;
@@ -191,8 +243,11 @@
 }
 .pillCrit { color: var(--crit); }
 .pillWarn { color: var(--warn); }
-.qTitle { font-size: 12.5px; color: var(--ink); }
-.qLoc { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
+/* The watch tier is deliberately quieter than warn: mechanical structure worth a glance, not a
+   problem — in a monochrome theme the recede IS the ranking. */
+.pillWatch { color: var(--muted); }
+.qTitle { font-size: 12px; color: var(--ink); }
+.qLoc { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .detail { padding-top: 20px; }
 .detailLoc { font-family: var(--mono); font-size: 11px; color: var(--accent); text-transform: none; letter-spacing: 0.02em; }
 .detailTitle {
@@ -218,8 +273,8 @@
 /* Third column carries which doors reach the tool — a tool list that does not say who may call
    it is half a permissions model. */
 .toolRow {
-  display: grid; grid-template-columns: 150px 1fr 58px; gap: 12px; align-items: baseline;
-  padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: 12.5px;
+  display: grid; grid-template-columns: minmax(120px, 150px) 1fr max-content; gap: 12px; align-items: baseline;
+  padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: 12px;
 }
 .toolRow:last-of-type { border-bottom: 0; }
 .toolRow .mono { color: var(--ink); }
@@ -244,13 +299,13 @@
 /* ── Overview, standalone-board layout ─────────────────────────────────────
    Corpus load reads as one 80px figure with the three counts beside it, then a
    split: calls + verdicts on the left, doors + ingest in a 340px rail. */
-.screen { display: flex; flex-direction: column; gap: 14px; padding: 4px 0 8px; }
+.screen { display: flex; flex-direction: column; gap: 24px; padding: 0 0 8px; }
 .headRow { display: grid; grid-template-columns: 404px 1fr; gap: 36px; align-items: end; }
 .label {
   font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--faint);
 }
-.note { font: 400 11px var(--mono); color: var(--faint); }
+.note { font: 400 11px/1.65 var(--mono); color: var(--faint); }
 .bigRow { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
 .big {
   font-family: var(--display); font-weight: 700; font-size: 80px; letter-spacing: 0.02em;
@@ -273,7 +328,7 @@
 .splitMain { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 .sectionHead {
   display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 26px;
 }
 /* The label names the panel and must stay on one line; the note beside it is the part with
    something to say, so it takes the wrapping and the remaining width. */
@@ -283,20 +338,22 @@
   display: flex; align-items: flex-end; gap: 5px; height: 112px;
   border-bottom: 1px solid var(--hair);
 }
-.barCol { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; gap: 1px; }
-/* flex: none is load-bearing — a stretched bar would draw an empty hour as a full one. */
-.barRest { display: block; flex: none; background: var(--ob-ink-600); }
+.barCol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 1px; }
+/* flex: none is load-bearing — a stretched bar would draw an empty hour as a full one. The
+   13px pill is the design's bar; verified keeps the gradient, the rest goes ink. */
+.barRest { display: block; flex: none; width: 13px; max-width: 100%; border-radius: 2.5px 2.5px 0 0; background: var(--ob-ink-600); }
 .barVerified {
-  display: block; flex: none;
+  display: block; flex: none; width: 13px; max-width: 100%;
   background: linear-gradient(180deg, var(--ob-cyan-400), var(--ob-cyan-500));
 }
+.barCol > i:first-child { border-radius: 2.5px 2.5px 0 0; }
 .chartAxis {
   display: flex; justify-content: space-between; margin-top: 9px;
   font: 400 10px var(--mono); color: var(--faint);
 }
 .empty {
   margin-top: 14px; padding: 12px 14px; border: 1px solid var(--hair); border-radius: var(--radius-sm);
-  font-size: 12.5px; line-height: 1.55; color: var(--muted); background: var(--sunk);
+  font-size: 12px; line-height: 1.55; color: var(--muted); background: var(--sunk);
 }
 
 .verdictRow {
@@ -304,12 +361,12 @@
   padding: 9px 0; border-bottom: 1px solid var(--hair);
 }
 .verdictTag {
-  font: 500 10.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  font: 500 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
 }
 .verdictBar { height: 5px; background: var(--sunk); border-radius: 2px; overflow: hidden; }
 .verdictBar i { display: block; height: 100%; background: currentColor; }
 .verdictN {
-  font: 500 11.5px var(--mono); color: var(--muted); text-align: right;
+  font: 500 12px var(--mono); color: var(--muted); text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .vPass { color: var(--ok); }
@@ -325,10 +382,10 @@
 .doorName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink); }
 .dotLive { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
 .dotIdle { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled); flex: none; }
-.railNote { margin-top: 10px; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
+.railNote { margin-top: 10px; font-size: 12px; line-height: 1.5; color: var(--faint); }
 /* Relative href, like every link between console screens — the secret stays out of markup. */
 .railLink {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
   color: var(--muted); text-decoration: none; white-space: nowrap;
 }
 .railLink:hover { color: var(--accent); }
@@ -352,21 +409,21 @@
 }
 .rdHead {
   padding-bottom: 7px; border-bottom: 1px solid var(--line);
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label);
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--faint);
 }
 .rdRow { padding: 11px 0; border-bottom: 1px solid var(--hair); }
 .rdRow:last-of-type { border-bottom: 0; }
 .rdOn { background: var(--sunk); box-shadow: inset 2px 0 0 var(--accent); }
 .rdModel { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.rdName { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.rdName { font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .rdOn .rdName { color: var(--accent); }
 .rdBadge {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
   color: currentColor;
 }
 .rdUnknown { color: var(--muted); }
-.rdEvalNote { display: block; margin-top: 3px; font: 400 10.5px var(--mono); color: var(--faint); }
+.rdEvalNote { display: block; margin-top: 3px; font: 400 11px var(--mono); color: var(--faint); }
 .rdBar { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .rdTrack {
   display: flex; height: 5px; border-radius: 2px; overflow: hidden;
@@ -378,13 +435,13 @@
 .rdRest { background: var(--ob-ink-600, var(--muted)); }
 .rdNone { font: 400 11px var(--mono); color: var(--faint); }
 .rdIsDefault {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label);
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--accent);
 }
 .rdBtn, .pvBtn {
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
   padding: 5px 9px; cursor: pointer; color: var(--muted); white-space: nowrap;
-  font: 500 9.5px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  font: 500 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
   transition: color 0.16s var(--ease-out), border-color 0.16s var(--ease-out);
 }
 .rdBtn:hover:enabled, .pvBtn:hover:enabled { color: var(--bright); border-color: var(--muted); }
@@ -400,7 +457,7 @@
 .rdChain { margin: 0; padding: 0; list-style: none; counter-reset: chain; }
 .rdChain li {
   display: flex; flex-direction: column; gap: 2px; padding: 8px 0 8px 22px;
-  border-bottom: 1px solid var(--hair); font-size: 12.5px; color: var(--ink); position: relative;
+  border-bottom: 1px solid var(--hair); font-size: 12px; color: var(--ink); position: relative;
 }
 .rdChain li:last-child { border-bottom: 0; }
 .rdChain li::before {
@@ -428,7 +485,7 @@
 .pathCard .pathNote { margin-top: auto; padding-top: 4px; }
 .pathHead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
 .pathNum {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label);
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--faint);
 }
 .pathName {
@@ -437,16 +494,16 @@
   line-height: 1;
 }
 .pathGrants {
-  margin-left: auto; font: 400 10.5px var(--mono); color: var(--muted); white-space: nowrap;
+  margin-left: auto; font: 400 11px var(--mono); color: var(--muted); white-space: nowrap;
 }
 /* One line, always: a wrapping state line pushes the card's body down and breaks the row's
    shared baseline, which is the whole reason the cards read as one choice. */
 .pathState { display: flex; align-items: center; gap: 8px; min-height: 16px; }
 .pathState > .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pathLink { margin-left: auto; flex: none; }
-.pathWho { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--ink); }
-.pathNote { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
-.pathCard .pre { margin: 0; font-size: 10.5px; overflow-x: auto; }
+.pathWho { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); }
+.pathNote { margin: 0; font-size: 12px; line-height: 1.5; color: var(--faint); }
+.pathCard .pre { margin: 0; font-size: 11px; overflow-x: auto; }
 
 /* The four roles — the mental model, before any wiring. Same instrument grammar as statTrio:
    hairline-separated cells, mono labels, one live value each. The reader cell's value is the
@@ -455,10 +512,10 @@
 .roleCell { padding: 2px 20px 4px 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .roleCell + .roleCell { border-left: 1px solid var(--hair); padding-left: 20px; }
 .roleWho {
-  font-family: var(--mono); font-size: 14.5px; color: var(--bright);
+  font-family: var(--mono); font-size: 15px; color: var(--bright);
   overflow-wrap: break-word;
 }
-.roleDoes { font: 400 10.5px var(--mono); color: var(--muted); }
+.roleDoes { font: 400 11px var(--mono); color: var(--muted); }
 
 /* The wire-up picker's meta line: which path, what it grants, where it lives — and the copy. */
 .wireMeta {
@@ -470,7 +527,7 @@
 /* Which doors a tool is reachable from — the column that turns a tool list into a permissions
    table. Guest-reachable is the exception, so it is the one that carries the accent. */
 .toolDoor {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label);
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--faint); text-align: right; white-space: nowrap;
 }
 .toolDoorGuest { color: var(--accent); }
@@ -479,7 +536,7 @@
 /* Three control sections side by side, then the read-only deployment table. Controls reuse the
    established vocabulary (gArea chips, pvBtn switches, Reveal) — a settings screen that invents
    new widgets is a second console to learn. */
-.setGrid { display: grid; grid-template-columns: 1.2fr 1.2fr 0.7fr; gap: 0 36px; align-items: start; }
+.setGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; align-items: stretch; }
 .setGrid > section { min-width: 0; }
 .setGrid .note { display: block; margin-top: 4px; }
 .setRows { margin-top: 6px; }
@@ -500,7 +557,7 @@
 .gArea {
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
   padding: 4px 8px; cursor: pointer; color: var(--faint);
-  font: 400 10.5px var(--mono); white-space: nowrap;
+  font: 400 11px var(--mono); white-space: nowrap;
   transition: color 0.16s var(--ease-out), border-color 0.16s var(--ease-out);
 }
 .gArea:hover:enabled { color: var(--ink); border-color: var(--muted); }
@@ -525,13 +582,13 @@
   background: none; border: 0; cursor: pointer; text-align: left;
 }
 .propHead:hover { background: var(--sunk); }
-.propPath { font-family: var(--mono); font-size: 12.5px; color: var(--accent); }
+.propPath { font-family: var(--mono); font-size: 12px; color: var(--accent); }
 .propMode {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label);
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
   text-transform: uppercase; color: var(--muted);
 }
 .propBody { padding: 4px 0 18px; display: flex; flex-direction: column; gap: 10px; }
-.propWhy { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink); }
+.propWhy { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--ink); }
 .propContent {
   margin: 0; padding: 12px 14px; background: var(--sunk); border-left: 2px solid var(--line);
   border-radius: var(--radius-sm); font: 400 12px/1.55 var(--mono); color: var(--ink);
@@ -550,11 +607,11 @@
 .byRow:last-of-type { border-bottom: 0; }
 /* Rows that are links behave like it — the ledger taught us what a mute hover costs. */
 a.byRow:hover { background: var(--sunk); }
-.byName { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+.byName { font-family: var(--mono); font-size: 12px; color: var(--ink); }
 .byName span { color: var(--faint); }
 
 @media (max-width: 1100px) {
-  .setGrid { grid-template-columns: 1fr; gap: 26px 0; }
+  .setGrid { grid-template-columns: 1fr; gap: 24px; }
   .depGrid { grid-template-columns: 1fr; }
   .headRow { grid-template-columns: 1fr; gap: 20px; }
   .statTrio { border-left: 0; }
@@ -571,3 +628,19 @@ a.byRow:hover { background: var(--sunk); }
      reads as a rendering bug, not a separator. */
   .roleCell:nth-child(odd) { border-left: 0; padding-left: 0; }
 }
+
+/* ---- trends -------------------------------------------------------------------------- */
+/* The heat grid: 7 day rows × 12 two-hour blocks. The hottest cell takes the warm accent —
+   the one place --pop appears on this screen, which is what keeps it a signal. */
+.heatGrid {
+  display: grid; grid-template-columns: 34px repeat(12, 1fr); gap: 4px; align-items: center;
+  margin-top: 8px;
+}
+.heatLabel { font: 400 10px var(--mono); color: var(--faint); text-align: center; }
+.heatCell { display: block; height: 16px; border-radius: 3px; }
+.checkedRows { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.checkedRow {
+  display: grid; grid-template-columns: 10px 1fr 40px; gap: 10px; align-items: center;
+  font-size: 12px; color: var(--muted);
+}
+.checkedRow i { width: 8px; height: 8px; border-radius: 2px; display: block; }

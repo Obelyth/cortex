@@ -3,9 +3,20 @@ on:
   push:
     branches: [main, dev]
   pull_request:
+# One run per ref: a superseded push cancels the queued one instead of starving behind it —
+# stacked runs otherwise each wait on a runner that may never come. And a job that cannot
+# acquire a runner dies at 10 minutes, not at GitHub's leisure.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    # Routed by a repo VARIABLE so an outage never needs a workflow commit: the default runner
+    # by default, and flipping CI_RUNNER re-homes the same job at another machine.
+    # runs-on cannot be bypassed; it can be re-homed.
+    runs-on: ${{ vars.CI_RUNNER || 'blacksmith-2vcpu-ubuntu-2404' }}
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

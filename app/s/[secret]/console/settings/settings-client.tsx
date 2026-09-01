@@ -1,8 +1,9 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Appearance } from "../appearance";
 import { Reveal } from "../reveal";
+import { ModelSelect } from "../overview/model-select";
+import { settingsEndpoint } from "./endpoints";
 import styles from "../console.module.css";
 
 /**
@@ -16,15 +17,6 @@ export interface SettingsVM {
   writable: boolean;
   storeState: "store" | "unconfigured" | "unreachable";
   conflicts: string[];
-  readers: Array<{
-    model: string;
-    provider: string;
-    configured: boolean;
-    disabled: boolean;
-    evalState: "measured" | "unstable" | "unmeasured";
-    isDefault: boolean;
-    defaultSource: string | null;
-  }>;
   providers: Array<{
     provider: string;
     keyEnv: string;
@@ -52,75 +44,85 @@ const AREAS = [
   { path: "profile.md", note: "who you are" },
 ];
 
-function saveUrl(): string {
-  let p = window.location.pathname;
-  while (p.endsWith("/")) p = p.slice(0, -1);
-  if (p.endsWith("/settings")) p = p.slice(0, -"/settings".length);
-  return `${p}/settings/save`;
-}
-
-function ToggleRow({
+/** Exported for the Learning section's client, which shares the row vocabulary — a settings
+ *  screen that invents a second switch is two switches to keep honest. */
+export function ToggleRow({
   label,
+  sub,
   on,
   disabled,
+  locked,
   busy,
   title,
   onClick,
 }: Readonly<{
   label: string;
+  sub?: string;
   on: boolean;
   disabled: boolean;
+  locked?: boolean;
   busy: boolean;
   title?: string;
   onClick: () => void;
 }>) {
   return (
-    <div className={styles.gRow}>
-      <span className={styles.note}>{label}</span>
+    <div className="setRow">
+      <span className="setBody">
+        <span className="setTitle">{label}</span>
+        {sub && <span className="setSub">{sub}</span>}
+      </span>
+      {/* A locked switch says LOCKED. Dimming an on-switch to 40% produced a third state that
+          read as neither on nor off — the provider serving the current default looked half-on
+          beside two full ones, and no reader could tell "held" from "partly enabled". */}
+      {locked && <span className="setLock">locked · serves the default</span>}
       <button
         type="button"
-        className={`${styles.pvBtn}${on ? " " + styles.pvOn : ""}`}
-        disabled={disabled}
-        aria-pressed={on}
+        role="switch"
+        className={`swt${locked ? " swtLocked" : ""}`}
+        disabled={disabled || busy}
+        aria-checked={on}
+        aria-label={label}
         title={title}
         onClick={onClick}
-      >
-        {busy ? "…" : on ? "on" : "off"}
-      </button>
+      />
     </div>
   );
 }
 
-function StepperRow({
+/** Exported for the Learning section's client, same reason as ToggleRow. `display` overrides
+ *  the rendered figure when the stored unit is not the readable one (bytes shown as KB). */
+export function StepperRow({
   label,
+  sub,
   value,
+  display,
   disabled,
   onStep,
 }: Readonly<{
   label: string;
+  sub?: string;
   value: number;
+  display?: string;
   disabled: boolean;
   onStep: (delta: number) => void;
 }>) {
   return (
-    <div className={styles.gRow}>
-      <span className={styles.note}>{label}</span>
+    <div className="setRow">
+      <span className="setBody">
+        <span className="setTitle">{label}</span>
+        {sub && <span className="setSub">{sub}</span>}
+      </span>
+      {/* Both buttons announced as bare "minus"/"plus" with no aria-label, so two steppers gave
+          a screen reader four identical controls with no way to tell which number they moved. */}
       <span className={styles.stepper}>
-        <button type="button" className={styles.rdBtn} disabled={disabled} onClick={() => onStep(-1)}>−</button>
-        <span className={styles.fig}>{value}</span>
-        <button type="button" className={styles.rdBtn} disabled={disabled} onClick={() => onStep(1)}>+</button>
+        <button type="button" className={styles.rdBtn} disabled={disabled}
+          aria-label={`decrease ${label}`} onClick={() => onStep(-1)}>−</button>
+        <span className={styles.fig}>{display ?? value}</span>
+        <button type="button" className={styles.rdBtn} disabled={disabled}
+          aria-label={`increase ${label}`} onClick={() => onStep(1)}>+</button>
       </span>
     </div>
   );
-}
-
-/** The flagged nested ternaries, named instead of nested. */
-function chipTitle(r: SettingsVM["readers"][number]): string {
-  if (r.isDefault) return `reading now (${r.defaultSource})`;
-  if (!r.configured) return `${r.provider} has no key`;
-  if (r.disabled) return `${r.provider} is off`;
-  if (r.evalState === "measured") return "measured on the eval — make default";
-  return `${r.evalState} — make default`;
 }
 
 function guestHeading(g: SettingsVM["guest"]): string {
@@ -129,7 +131,15 @@ function guestHeading(g: SettingsVM["guest"]): string {
   return "Guest · door open";
 }
 
-export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
+export function SettingsClient({
+  vm,
+  modelOptions,
+  activeModel,
+}: Readonly<{
+  vm: SettingsVM;
+  modelOptions: { model: string; configured: boolean }[];
+  activeModel: string;
+}>) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
@@ -140,7 +150,7 @@ export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
     setBusy(tag);
     setError(null);
     try {
-      const res = await fetch(saveUrl(), {
+      const res = await fetch(settingsEndpoint("save"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),
@@ -183,33 +193,34 @@ export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
       )}
 
       <div className={styles.setGrid}>
-        <section>
-          <div className={styles.label}>Reader</div>
-          <div className={styles.note}>who answers brain_ask — guests always get a Claude reader</div>
-          <div className={styles.gScope}>
-            {vm.readers.map((r) => {
-              const off = r.disabled || !r.configured;
-              return (
-                <button
-                  key={r.model}
-                  type="button"
-                  className={`${styles.gArea}${r.isDefault ? " " + styles.gOn : ""}`}
-                  disabled={disabledAll || off || r.isDefault}
-                  aria-pressed={r.isDefault}
-                  title={chipTitle(r)}
-                  onClick={() => send({ defaultReader: r.model }, r.model)}
-                >
-                  {busy === r.model ? "…" : r.model}
-                </button>
-              );
-            })}
+        <section className="card">
+          {/* Section header carries the one fact the reader needs, right-aligned and quiet.
+              The paragraph of prose that used to sit between this heading and the first control
+              is in the disclosure at the foot — a settings screen is a list of controls, and
+              explanation that outranks the control it explains is a manual, not a setting. */}
+          {/* Reader, not "Providers". Picking the answering model and deciding which providers
+              may be picked FROM are one decision, and they used to sit in two cards on opposite
+              sides of a grid — the switch that governs selection nowhere near the select it
+              governs. */}
+          <div className="setHead">
+            <span className={styles.label}>Reader</span>
+            <span className="setHeadMeta">what answers · selection only, never keys</span>
+          </div>
+          <div className="setRow">
+            <span className="setBody">
+              <span className="setTitle">answering model</span>
+              <span className="setSub">plain reads never touch a model</span>
+            </span>
+            <ModelSelect options={modelOptions} current={activeModel} writable={vm.writable} />
           </div>
           <div className={styles.setRows}>
             {vm.providers.map((p) => (
               <ToggleRow
                 key={p.provider}
-                label={`${p.provider} · ${p.configured ? "key set" : `${p.keyEnv} missing`}`}
+                label={p.provider}
+                sub={p.configured ? "key set" : `${p.keyEnv} missing`}
                 on={!p.disabled}
+                locked={p.holdsDefault}
                 disabled={disabledAll || p.holdsDefault}
                 busy={busy === p.provider}
                 title={p.holdsDefault ? "serves the current default — change the default first" : undefined}
@@ -227,53 +238,67 @@ export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
             ))}
           </div>
           <Reveal label="how the reader is chosen">
-            Per call, the caller&rsquo;s own model argument wins; then this default; then
-            READER_MODEL; then the built-in. Switches govern selection, never keys, and the last
-            resort ignores them — no combination can leave brain_ask with nothing to call.
+            Per call, the caller&rsquo;s own model argument wins; then the default set on the
+            Models list; then READER_MODEL; then the built-in. Switches govern selection, never
+            keys, and the last resort ignores them — no combination can leave brain_ask with
+            nothing to call. Guests always get a Claude reader.
           </Reveal>
         </section>
 
-        <section>
-          <div className={styles.label}>{guestHeading(g)}</div>
-          <div className={styles.note}>
-            {g.open
-              ? `${g.usedToday ?? "—"} / ${g.dailyAsks} asks today · ${g.queued} proposal${g.queued === 1 ? "" : "s"} waiting`
-              : "set GUEST_PATH_SECRET to open it — nothing on this section applies until then"}
+        <section className="card">
+          <div className="setHead">
+            <span className={styles.label}>{guestHeading(g)}</span>
+            <span className="setHeadMeta">
+              {g.open
+                ? `${g.usedToday ?? "—"}/${g.dailyAsks} asks today · ${g.queued} waiting`
+                : "set GUEST_PATH_SECRET to open"}
+            </span>
           </div>
-          <div className={styles.gScope}>
-            {AREAS.map((a) => {
-              const on = g.scope.includes(a.path);
-              return (
-                <button
-                  key={a.path}
-                  type="button"
-                  className={`${styles.gArea}${on ? " " + styles.gOn : ""}`}
-                  disabled={disabledAll}
-                  aria-pressed={on}
-                  title={on ? `stop sharing ${a.path}` : `share ${a.path} — ${a.note}`}
-                  onClick={() =>
-                    send(
-                      { guest: { scope: on ? g.scope.filter((s) => s !== a.path) : [...g.scope, a.path] } },
-                      `scope:${a.path}`
-                    )
-                  }
-                >
-                  {busy === `scope:${a.path}` ? "…" : a.path}
-                </button>
-              );
-            })}
+          {/* Every control below was previously live and clickable while the door was shut, under
+              a heading that said nothing here applies — nine interactive controls that did
+              nothing. Closed is now genuinely disabled, which is what the heading already
+              claimed. */}
+          <div className="setRow setRowStack">
+            <span className="setBody">
+              <span className="setTitle">shared areas</span>
+              <span className="setSub">out-of-scope notes never enter the pack the reader sees</span>
+            </span>
+            <span className={styles.gScope}>
+              {AREAS.map((a) => {
+                const on = g.scope.includes(a.path);
+                return (
+                  <button
+                    key={a.path}
+                    type="button"
+                    className={`${styles.gArea}${on ? " " + styles.gOn : ""}`}
+                    disabled={disabledAll || !g.open}
+                    aria-pressed={on}
+                    title={on ? `stop sharing ${a.path}` : `share ${a.path} — ${a.note}`}
+                    onClick={() =>
+                      send(
+                        { guest: { scope: on ? g.scope.filter((s) => s !== a.path) : [...g.scope, a.path] } },
+                        `scope:${a.path}`
+                      )
+                    }
+                  >
+                    {busy === `scope:${a.path}` ? "…" : a.path}
+                  </button>
+                );
+              })}
+            </span>
           </div>
           <div className={styles.setRows}>
             <ToggleRow
-              label="show source and evidence"
+              label="show sources with answers"
+              sub="citations reveal note paths and verbatim text"
               on={g.citations}
-              disabled={disabledAll}
+              disabled={disabledAll || !g.open}
               busy={busy === "citations"}
               onClick={() => send({ guest: { citations: !g.citations } }, "citations")}
             />
-            <StepperRow label="asks per day" value={g.dailyAsks} disabled={disabledAll}
+            <StepperRow label="asks per day" value={g.dailyAsks} disabled={disabledAll || !g.open}
               onStep={(d) => step("dailyAsks", g.dailyAsks, d * 10, 10, 1000)} />
-            <StepperRow label="notes per ask (max k)" value={g.maxK} disabled={disabledAll}
+            <StepperRow label="notes per ask (max k)" value={g.maxK} disabled={disabledAll || !g.open}
               onStep={(d) => step("maxK", g.maxK, d, 1, 40)} />
           </div>
           <Reveal label="how scope is enforced">
@@ -283,15 +308,9 @@ export function SettingsClient({ vm }: Readonly<{ vm: SettingsVM }>) {
           </Reveal>
         </section>
 
-        <section>
-          <div className={styles.label}>Appearance</div>
-          <div className={styles.note}>this browser only — stored locally, never on the server</div>
-          <div className={styles.setRows}>
-            <div className={styles.gRow}>
-              <Appearance />
-            </div>
-          </div>
-        </section>
+        {/* The Appearance card is gone with the light/dark toggle. The console has one ground,
+            so there is nothing to choose, and this card was spending a third of a 3-up grid row
+            on two buttons. */}
       </div>
     </>
   );

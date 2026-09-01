@@ -22,17 +22,25 @@ import zlib from "node:zlib";
 import { promisify } from "node:util";
 import { gh, repo, branch, compareCommits } from "./github";
 import { mirrorStore, syncMirror, fetchFileAt, commitDateOf, type MirrorStore } from "./mirror";
+import { scheduleEdgeRebuild } from "./edges";
 
 const gunzip = promisify(zlib.gunzip);
 
 /** Excluded from the reader tier. archive/ is 45% of bytes and holds superseded material;
  *  a reader given both answers from the dead one. tools/ is code, not memory. */
-// Must stay identical to brain/tools/brain_ask.py SKIP_PREFIX — tests/corpus.test.ts
-// asserts it. Two definitions of "the live corpus" that disagree is the dual-implementation
-// drift this rebuild exists to delete; when they diverged, cortex saw 70 files to
-// brain_ask's 77 and nobody would have noticed until an answer was silently missing.
-const SKIP_PREFIX = [".git/", "tools/", "archive/", "brain-v2/", ".github/"];
-const SKIP_NAME = ["brain-index.md", "INDEX.md", "README.md"];
+// Must stay identical to brain/tools/brain_ask.py SKIP_PREFIX and SKIP_NAMES. Two definitions
+// of "the live corpus" that disagree is the dual-implementation drift this rebuild exists to
+// delete; when they diverged, cortex saw 70 files to brain_ask's 77 and nobody would have
+// noticed until an answer was silently missing. Exported for the parity checks: the live
+// differential in tests/no-brain-leakage.test.ts reads the real python source from the brain
+// checkout and runs in the brain-gate; tests/corpus.test.ts pins the shape brain-free.
+// ".claude/" is the nested-worktree guard: Claude Code's EnterWorktree checks out at
+// .claude/worktrees/<name>/ INSIDE the repo, a full second copy of every file — measured
+// 2026-08-18, it near-doubled the reader's corpus and re-admitted retired archive content as
+// current. Cortex reads the committed tree where .gitignore already blocks these, so this
+// entry is parity with brain_ask.py's filesystem walk, not a live hole here.
+export const SKIP_PREFIX = [".git/", ".claude/", "tools/", "archive/", "brain-v2/", ".github/"];
+export const SKIP_NAME = ["brain-index.md", "INDEX.md", "README.md"];
 
 /**
  * Files that ride the brain tarball but are NOT notes.
@@ -277,13 +285,44 @@ async function build(sha: string): Promise<Corpus> {
  * so the one definition of "the live corpus" stays in this file.
  */
 async function buildFromMirror(store: MirrorStore, sha: string): Promise<Corpus> {
-  await syncMirror(store, await store.head(), sha, {
+  // head() and all() were awaited in series, and they do not depend on each other. Measured
+  // against the live store: head ~160-470 ms, all ~185-210 ms for 92 rows / 711 KB, and the
+  // reconcile between them is 0 ms whenever the mirror is already at head — which is the normal
+  // case. Two sequential round-trips for one answer.
+  //
+  // So both start together. The rows are read OPTIMISTICALLY, on the bet that no sync is needed,
+  // which is the bet that is right almost every time.
+  const headPromise = store.head();
+  const optimisticRows = store.all();
+  // Nothing may observe a rejection later than its await, or Node reports an unhandled rejection
+  // and the process notices a failure the code has already handled.
+  optimisticRows.catch(() => undefined);
+
+  // The head the store ACTUALLY holds after syncing, which is not always the one we asked for:
+  // when another instance wins the CAS its state is the truth and ours was never applied.
+  // Stamping the corpus with the requested sha in that case attributed every citation to a
+  // commit whose content we are not serving — a VERIFIED stamp on a false provenance claim.
+  const before = await headPromise;
+  const head = await syncMirror(store, before, sha, {
     compare: (base, head) => compareCommits(base, head, (p) => isLive(p) || isSidecar(p)),
     fetchAt: fetchFileAt,
     commitDate: commitDateOf,
     fullLoad: loadFilesAt,
   });
-  return assemble(new Map((await store.all()).map((r) => [r.path, r.content])), sha);
+
+  // The bet, settled. If the sync moved the head then the optimistic read is of the PREVIOUS
+  // state and must be discarded — serving it would attribute the old content to the new commit,
+  // which is the false-provenance failure the comment above exists to prevent. Correctness is
+  // never traded for the round-trip; the re-read only happens when something actually changed.
+  const rows = head === before ? await optimisticRows : await store.all();
+  const corpus = assemble(new Map(rows.map((r) => [r.path, r.content])), head);
+  // A reconcile that advanced the head is the moment the connections graph went stale — and the
+  // moment the fresh corpus is already sitting in memory, so the rebuild costs zero extra reads.
+  // Scheduled via after(), never awaited: the graph is an observation of the corpus, and nothing
+  // that serves notes may wait on it (lib/edges.ts). The builder itself skips when the graph
+  // already describes this head, so a lost race here re-triggers at most one cheap check.
+  if (head !== before) scheduleEdgeRebuild(corpus.files, head);
+  return corpus;
 }
 
 /**

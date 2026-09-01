@@ -17,10 +17,18 @@
  *
  * Its absence is a non-event: the memory ring is the live half and renders on its own. The page
  * says the machine rings are missing rather than pretending the map is complete.
+ *
+ * The live ring also carries the learning layer when its store answers: note_edges becomes
+ * chords between notes (budgeted here — the renderer draws what it is given, the budget is a
+ * data decision) and note_scores becomes brightness. Both are read-only joins against tables
+ * other code owns; this module never derives an edge or scores a note, so the map can never
+ * disagree with the ledger or the trends about what is connected or what is warm.
  */
 import { loadCorpus } from "./corpus";
 import { splitBlocks, retracted } from "./verify";
 import { redact } from "./redact";
+import { allEdges, type EdgeRow } from "./edges";
+import { noteHeat } from "./pulse";
 
 interface Node {
   id: string;
@@ -33,12 +41,18 @@ interface Node {
   weight?: number;
   machine?: string;
   refs?: unknown;
+  /** note_scores temperature, memory nodes only — brightness on the ring. Absent = no claim. */
+  temp?: "hot" | "warm" | "cold";
+  /** note_scores read count, for the drawer's temperature row. Rides only with temp. */
+  reads?: number;
 }
 interface Edge {
   source: string;
   target: string;
   kind?: string;
   why?: string;
+  /** The stored weight, note-graph edges only — the renderer thickens strong ties slightly. */
+  w?: number;
 }
 
 /** The path the snapshot rides at, inside the brain repo. Must match corpus.ts's SIDECAR set. */
@@ -104,11 +118,71 @@ export interface Atlas {
   capturedAt: string | null;
   live: number;
   snapshotted: number;
+  /** Note-graph edges shipped to the renderer. Null when the store gave no answer — the caption
+   *  must say the graph is absent, never that the brain has no structure. */
+  graphEdges: number | null;
+}
+
+/** How many graph edges each note pins onto the map, strongest first. Three reads as structure;
+ *  the full adjacency list reads as spaghetti, and the ledger already serves the full list. */
+export const MAP_EDGES_PER_NOTE = 3;
+/** A global ceiling on top of the per-note pin, so the map's edge pass stays bounded no matter
+ *  how the corpus grows. Strongest-first, same ordering, so the cap trims the weakest ties. */
+export const MAP_EDGE_CAP = 240;
+
+/** Strongest claim first — the ledger's own ranking (lib/edges KIND_ORDER discipline): an
+ *  explicit link outranks a correction chain outranks shared tags outranks co-reading outranks
+ *  mere lexical similarity. Weights are only comparable within a kind. */
+const KIND_PRIORITY: Record<EdgeRow["kind"], number> = {
+  link: 0,
+  correction: 1,
+  tag: 2,
+  coaccess: 3,
+  lexical: 4,
+};
+
+/**
+ * The map's edge budget: every note keeps its strongest few ties, and nothing more. Greedy over
+ * the globally-sorted list (kind priority, then weight, then path — fully deterministic): an
+ * edge survives while EITHER endpoint still has budget, so a note's best ties are never stolen
+ * by a well-connected neighbour, then a global cap trims the weakest of what remains. Pure and
+ * exported for tests — this is the seam that decides what "the graph on the board" means.
+ */
+export function budgetEdges(
+  rows: EdgeRow[],
+  notes: Set<string>,
+  perNote = MAP_EDGES_PER_NOTE,
+  cap = MAP_EDGE_CAP,
+): EdgeRow[] {
+  const eligible = rows.filter((r) => r.src !== r.dst && notes.has(r.src) && notes.has(r.dst));
+  eligible.sort(
+    (a, b) =>
+      KIND_PRIORITY[a.kind] - KIND_PRIORITY[b.kind] ||
+      b.weight - a.weight ||
+      (a.src < b.src ? -1 : a.src > b.src ? 1 : 0) ||
+      (a.dst < b.dst ? -1 : a.dst > b.dst ? 1 : 0),
+  );
+  const used = new Map<string, number>();
+  const kept: EdgeRow[] = [];
+  for (const r of eligible) {
+    const s = used.get(r.src) ?? 0;
+    const d = used.get(r.dst) ?? 0;
+    if (s >= perNote && d >= perNote) continue;
+    used.set(r.src, s + 1);
+    used.set(r.dst, d + 1);
+    kept.push(r);
+    if (kept.length >= cap) break;
+  }
+  return kept;
 }
 
 /** Builds the page's data payload. Returns the JSON to inject, plus counts for the caption. */
 export async function buildAtlas(): Promise<{ json: string; meta: Atlas }> {
-  const corpus = await loadCorpus();
+  // The graph and the temperatures are optional stores riding beside the corpus; all three
+  // reads are independent, and the two store reads resolve to null (never throw) when the
+  // store is off, unmigrated or unwell — SUPABASE_URL unset renders exactly the old map.
+  const [corpus, graphRows, heat] = await Promise.all([loadCorpus(), allEdges(), noteHeat()]);
+  const heatByPath = new Map((heat ?? []).map((h) => [h.path, h]));
 
   const memory: Node[] = [];
   for (const [path, text] of corpus.files) {
@@ -119,6 +193,8 @@ export async function buildAtlas(): Promise<{ json: string; meta: Atlas }> {
     let ret = 0;
     for (let i = 0; i < blocks.length; i++) if (retracted(blocks, i)) ret++;
 
+    // Same rows the router and the trends read — the map may brighten and dim, never rescore.
+    const h = heatByPath.get(path);
     memory.push({
       id: path,
       label: (cut >= 0 ? path.slice(cut + 1) : path).replace(/\.md$/i, ""),
@@ -133,6 +209,7 @@ export async function buildAtlas(): Promise<{ json: string; meta: Atlas }> {
       // A note carrying retracted passages is worth seeing on the map, not just in the console.
       status: ret > 0 ? "retracted" : undefined,
       machine: "all",
+      ...(h ? { temp: h.temperature, reads: h.reads } : {}),
     });
   }
 
@@ -151,6 +228,15 @@ export async function buildAtlas(): Promise<{ json: string; meta: Atlas }> {
   // Snapshot edges point at note paths that may have been renamed or deleted since capture.
   // Dropping them keeps the renderer honest instead of drawing a line to nothing.
   const edges = (snapshot?.edges ?? []).filter((e) => ids.has(e.source) && ids.has(e.target));
+
+  // The note graph joins the same edge list, budgeted to the strongest few ties per note. The
+  // endpoint filter is inherent — budgetEdges only keeps edges between live note paths, so a
+  // stored edge naming a renamed note simply does not draw. Evidence rides as `why`, already
+  // scrubbed by the read path, so the drawer can show WHY two notes are tied.
+  const noteEdges = budgetEdges(graphRows ?? [], memoryIds);
+  edges.push(
+    ...noteEdges.map((r) => ({ source: r.src, target: r.dst, kind: r.kind, why: r.evidence, w: r.weight })),
+  );
 
   // The live ring's definition is cortex's own; the snapshot only ever adds the machine rings,
   // and never gets to redefine memory out from under the code that computes it.
@@ -178,6 +264,9 @@ export async function buildAtlas(): Promise<{ json: string; meta: Atlas }> {
       live: memory.length,
       // The centre is neither live nor snapshotted, so it is subtracted only when present.
       snapshotted: machineNodes.length - (machineNodes.some((n) => n.id === snapshot?.center) ? 1 : 0),
+      // Null when the store gave no answer, a count (possibly 0) when it did — the caption must
+      // distinguish "graph absent" from "no ties", which read the same and mean opposite things.
+      graphEdges: graphRows === null ? null : noteEdges.length,
     },
   };
 }

@@ -178,6 +178,41 @@ describe("durable store path", () => {
     vi.doUnmock("@upstash/redis");
   });
 
+  it("carries the cached marker through, dropping junk values, and keeps cached rows out of the model record", async () => {
+    // A cached row is a replay: it stays attributed (the console can still say who answered
+    // originally) but must not count toward the model's verdict record — a repeated answer
+    // must not inflate a model's record. And only literal true marks a row cached: a truthy
+    // junk value would silently drop a REAL model call from the record.
+    vi.resetModules();
+    const now = Date.now();
+    vi.doMock("@upstash/redis", () => ({
+      Redis: class {
+        lrange() {
+          return Promise.resolve([
+            JSON.stringify({ ts: now - 1_000, surface: "terminal", tool: "brain_ask", stamp: "VERIFIED", ms: 12, model: "claude-sonnet-5", cached: true }),
+            JSON.stringify({ ts: now - 2_000, surface: "terminal", tool: "brain_ask", stamp: "VERIFIED", ms: 900, model: "claude-sonnet-5" }),
+            JSON.stringify({ ts: now - 3_000, surface: "terminal", tool: "brain_ask", stamp: "VERIFIED", ms: 800, model: "claude-sonnet-5", cached: "yes" }),
+          ]);
+        }
+        get() { return Promise.resolve(String(now - 7_200_000)); }
+        pipeline() { return { lpush() {}, ltrim() {}, setnx() {}, exec: () => Promise.resolve([]) }; }
+      },
+    }));
+    vi.stubEnv(URL_KEY, "https://example.upstash.io");
+    vi.stubEnv(TOK_KEY, "test-token");
+    const { readCalls: read, modelRecordRows } = await import("../lib/calls");
+    const { rows } = await read(86_400_000, now);
+    expect(rows.map((r) => r.cached)).toEqual([undefined, undefined, true]);
+    // The record keeps the two real calls (including the junk-cached one) and drops the replay.
+    expect(modelRecordRows(rows).map((r) => r.ms).sort()).toEqual([800, 900]);
+    // Unattributed rows never enter the record either, cached or not.
+    expect(
+      modelRecordRows([{ ts: now, surface: "terminal", tool: "brain_ask", stamp: "VERIFIED", ms: 1 }])
+    ).toEqual([]);
+    vi.unstubAllEnvs();
+    vi.doUnmock("@upstash/redis");
+  });
+
   it("falls back to memory when the store throws, and says so", async () => {
     vi.resetModules();
     vi.doMock("@upstash/redis", () => ({

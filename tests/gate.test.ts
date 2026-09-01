@@ -19,24 +19,37 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+// The gate reads the device stamp from the request's cookie jar; the jar here is a plain
+// mutable map so each test states exactly what the device carries.
+const jar = vi.hoisted(() => new Map<string, string>());
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined),
+  }),
+}));
+
 const params = (secret: string) => Promise.resolve({ secret });
 
 describe("requireSecret", () => {
   const saved = process.env.CONNECTOR_PATH_SECRET;
-  beforeEach(() => {
+  beforeEach(async () => {
     process.env.CONNECTOR_PATH_SECRET = "the-right-secret";
+    vi.stubEnv("CONSOLE_PASSCODE", "the passcode");
+    const { STAMP_COOKIE, stampValue } = await import("../lib/stamp");
+    jar.clear();
+    jar.set(STAMP_COOKIE, stampValue()!);
   });
   afterEach(() => {
     if (saved === undefined) delete process.env.CONNECTOR_PATH_SECRET;
     else process.env.CONNECTOR_PATH_SECRET = saved;
   });
 
-  it("returns the secret on a match", async () => {
+  it("returns the secret on a match from a stamped device", async () => {
     const { requireSecret } = await import("../lib/gate");
     await expect(requireSecret(params("the-right-secret"))).resolves.toBe("the-right-secret");
   });
 
-  it("404s on a mismatch", async () => {
+  it("404s on a mismatch — before the stamp is even considered", async () => {
     const { requireSecret } = await import("../lib/gate");
     await expect(requireSecret(params("wrong"))).rejects.toThrow("NEXT_NOT_FOUND");
   });
@@ -45,6 +58,27 @@ describe("requireSecret", () => {
     delete process.env.CONNECTOR_PATH_SECRET;
     const { requireSecret } = await import("../lib/gate");
     await expect(requireSecret(params(""))).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("sends an unstamped device to the entry prompt, not into the page", async () => {
+    jar.clear();
+    const { requireSecret } = await import("../lib/gate");
+    await expect(requireSecret(params("the-right-secret"))).rejects.toThrow(
+      "NEXT_REDIRECT:/s/the-right-secret/console",
+    );
+  });
+
+  it("treats the pre-passcode cookie — the raw secret — as unstamped", async () => {
+    const { STAMP_COOKIE } = await import("../lib/stamp");
+    jar.set(STAMP_COOKIE, "the-right-secret");
+    const { requireSecret } = await import("../lib/gate");
+    await expect(requireSecret(params("the-right-secret"))).rejects.toThrow("NEXT_REDIRECT");
+  });
+
+  it("fails closed to the prompt while the passcode is unconfigured — a stale stamp buys nothing", async () => {
+    vi.stubEnv("CONSOLE_PASSCODE", "");
+    const { requireSecret } = await import("../lib/gate");
+    await expect(requireSecret(params("the-right-secret"))).rejects.toThrow("NEXT_REDIRECT");
   });
 });
 

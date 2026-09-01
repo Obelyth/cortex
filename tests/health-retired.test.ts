@@ -133,4 +133,34 @@ describe("triage tuning", () => {
     expect(plausibleSecret('export GITHUB_PERSONAL_ACCESS_TOKEN="$(security find-generic-password -s github-pat -w)"')).toBe(false);
     expect(plausibleSecret('GITHUB_TOKEN="${VAULT_GITHUB_TOKEN}" gh api …')).toBe(false);
   });
+
+  it("alerts on a colon / JSON-form secret exactly as on its = twin — redact classifies both", async () => {
+    const { plausibleSecret } = await import("../lib/health");
+    // redact() keys kind=key=value on `["']?\s*[:=]`, so the colon form is flagged AND classified
+    // the same as `=`; the gate must agree or a JSON/YAML credential is masked yet never surfaced.
+    expect(plausibleSecret("api_key: 3f9a8b7c6d5e4f0a1b2c3d4e")).toBe(true);
+    expect(plausibleSecret('"api_key": "3f9a8b7c6d5e4f0a1b2c3d4e"')).toBe(true);
+    // The same length and placeholder gates still apply on the colon side.
+    expect(plausibleSecret("api_key: <your-key-here>")).toBe(false);
+    expect(plausibleSecret("api_key: short")).toBe(false);
+  });
+
+  it("a benign leading word: no longer masks a real KEY=secret later on the line", async () => {
+    const { plausibleSecret } = await import("../lib/health");
+    // A single first-match exec stopped at "Fix:" and returned before reaching the credential.
+    expect(plausibleSecret("Fix: rotate the GITHUB_TOKEN=ghp_9f2mQ81xPzL04vWyTr7NnB3aa now")).toBe(true);
+  });
+});
+
+describe("colon / JSON-form credentials reach the crit queue, not just the = form", () => {
+  it("a `key: <opaque>` line produces a crit Credential-shaped item, like its = twin", async () => {
+    mLoad.mockResolvedValue(
+      corpus([["notes/creds.md", "# Creds\n\napi_key: 3f9a8b7c6d5e4f0a1b2c3d4e\n"]]),
+    );
+    const h = await health();
+    expect(h.secrets).toContainEqual({ path: "notes/creds.md", line: 3, kind: "key=value" });
+    expect(
+      h.triage.some((t) => t.title === "Credential-shaped line" && t.loc === "notes/creds.md:3"),
+    ).toBe(true);
+  });
 });

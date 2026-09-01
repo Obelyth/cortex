@@ -36,6 +36,10 @@ function storeOf(rows: NoteRow[], head: string | null = HEAD): MirrorStore & { c
       calls.push("all");
       return [...byPath.values()];
     },
+    async paths() {
+      calls.push("paths");
+      return [...byPath.keys()];
+    },
     async apply(expectedHead, newHead, upserts, removes) {
       calls.push(`apply:${newHead}`);
       if (currentHead !== expectedHead) return false;

@@ -1,88 +1,907 @@
-/* Console shell — design 1b. Masthead + permanent live ribbon; hairlines carry structure. */
+/*
+ * Console shell — paper. Structure is 1px hairlines and nothing else: no fills, no radii, no
+ * elevation, no hover lift. Colour appears only as a filled field carrying near-black text,
+ * because on this ground every brand colour fails as ink (cyan measures 1.96:1) and passes as
+ * field (8.25:1). Type is Archivo — wide at the display end via `wdth` 125 — with JetBrains
+ * Mono on every ID, metric and timestamp.
+ *
+ * The token layer lives in theme.css, which loads first. This file styles; that file decides.
+ */
+/* The card variables survive as NAMES only — 20-odd rules reference them — but they no longer
+   describe a card. On paper there is no fill and no elevation, so --card resolves to the paper
+   itself and --card-line to a hairline. --pop is gone entirely: a second accent was a brand
+   violation on the old ground and is a contrast failure on this one. */
 .conRoot {
-  background:
-    var(--cx-vignette, radial-gradient(100% 60% at 50% 0%, rgba(88, 110, 138, 0.1) 0%, rgba(15, 19, 24, 0) 58%)),
-    var(--ground); min-height: 100vh; display: flex; flex-direction: column; }
+  --card: transparent;
+  /* Inner-row rules run at ~55% of the section rule. Full-strength hairlines between every
+     row read as a grid pressing on the text (design review, 2026-08-11: rows read too
+     close together) — the section border keeps its weight, the rows inside it quiet down. */
+  --card-line: color-mix(in srgb, var(--rule-soft) 55%, transparent);
+  --card-line-strong: var(--rule);
+  min-height: 100vh;
+}
 
+/* ── The top bar ──────────────────────────────────────────────────────────── */
+/* Paper, with one full-strength rule under it. The gradient and inset top-light it replaces were
+   the two devices this world does not have. */
 .conMast {
-  height: 64px; display: flex; align-items: center; gap: 16px; padding: 0 26px;
-  /* The design's bar: linear-gradient(180deg,#1b2230,#12171f), per Cortex Live.dc.html. */
-  background: var(--cx-bar, linear-gradient(180deg, #1b2230 0%, #12171f 100%));
-  border-bottom: 1px solid var(--line);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  height: 56px; display: flex; align-items: center; gap: 0; padding: 0 24px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  box-shadow: none;
+  position: sticky; top: 0; z-index: 30;
 }
-.conEmblem { flex: none; }
 .conWordmark {
-  font-family: var(--display); font-weight: 700; font-size: 24px;
-  letter-spacing: var(--tracking-display); text-transform: uppercase; color: var(--bright);
-  white-space: nowrap;
+  font-family: var(--display); font-weight: 800; font-size: 21px;
+  font-variation-settings: var(--display-wide);
+  letter-spacing: var(--tracking-display); text-transform: uppercase; color: var(--ink-900);
+  white-space: nowrap; margin-right: 28px;
 }
-.conBy {
-  font-family: var(--mono); font-size: 9px; letter-spacing: var(--tracking-label);
-  color: var(--faint); vertical-align: 4px; margin-left: 4px; text-transform: uppercase;
-}
-.conTabs { display: flex; gap: 2px; margin-left: 18px; }
+.conTabs { display: flex; gap: 0; align-items: stretch; height: 100%; }
 .conTab {
-  font-family: var(--mono); font-size: 11px; letter-spacing: var(--tracking-label);
-  text-transform: uppercase; color: var(--muted); padding: 21px 12px 19px;
-  border-bottom: 2px solid transparent; text-decoration: none;
+  display: flex; align-items: center;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.13em;
+  text-transform: uppercase; color: var(--muted); text-decoration: none;
+  padding: 0 14px; border-bottom: 0;
+  transition: color 0.12s var(--ease-out), background-color 0.12s var(--ease-out);
 }
-.conTab:hover { color: var(--bright); background: rgba(255, 255, 255, 0.045); }
-.conTab.on { color: var(--accent); border-bottom-color: var(--accent); }
-.conTabN { margin-left: 6px; color: var(--warn); font-variant-numeric: tabular-nums; }
-.conSpacer { flex: 1; }
-.conSha { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.conTab:hover { color: var(--ink-900); text-decoration: none; }
+/* The active tab is a field, not an underline — selection is the one piece of live state in
+   the chrome, and field is how this world says live. */
+.conTab.on { color: var(--field-on); background: var(--field-live); }
+/* The badge is a field too, so a waiting decision is legible at a glance rather than being a
+   tinted digit. It sits on amber because it is attention, not liveness. */
+.conTabN {
+  margin-left: 8px; padding: 1px 5px; background: var(--field-warn); color: var(--field-on);
+  font-variant-numeric: tabular-nums;
+}
+.conTab.on .conTabN { background: var(--ink-900); color: var(--field-live); }
 .conClock {
-  font-family: var(--mono); font-size: 11px; color: var(--ink);
-  font-variant-numeric: tabular-nums; min-width: 62px; text-align: right;
+  font-family: var(--mono); font-size: 12px; color: var(--muted);
+  font-variant-numeric: tabular-nums; margin-left: 16px;
 }
 
-.conRibbon {
-  height: 46px; display: flex; align-items: center; gap: 18px; padding: 0 26px;
-  background: var(--sunk); border-bottom: 1px solid var(--hair);
-  box-shadow: inset 0 10px 18px -12px rgba(0, 0, 0, 0.9);
-  overflow: hidden; white-space: nowrap;
-}
-.conLiveDot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
-  box-shadow: 0 0 8px var(--accent); flex: none; animation: conBlip 1.8s ease-in-out infinite;
-}
-@keyframes conBlip { 50% { opacity: 0.35; } }
-@media (prefers-reduced-motion: reduce) { .conLiveDot { animation: none; } }
-.conLive {
-  font-family: var(--mono); font-size: 10px; letter-spacing: var(--tracking-label);
-  text-transform: uppercase; color: var(--accent);
-}
-.conRibbonItem {
-  font-family: var(--mono); font-size: 11px; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; max-width: 340px;
-}
-.conRibbonSha { color: var(--accent); }
-.conRibbonSum { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
-
-.conBody { flex: 1; max-width: 1240px; width: 100%; margin: 0 auto; padding: 6px 26px 40px; }
+/* ── Content ──────────────────────────────────────────────────────────────── */
+.conBody { max-width: 1560px; width: 100%; margin: 0 auto; padding: 24px 32px 44px; box-sizing: border-box; }
 .conFoot {
   display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  max-width: 1240px; width: 100%; margin: 0 auto; padding: 14px 26px 24px;
-  border-top: 1px solid var(--line);
+  max-width: 1560px; width: 100%; margin: 0 auto; padding: 14px 24px 24px;
+  border-top: 1px solid var(--line); box-sizing: border-box;
 }
+.conSpacer { flex: 1; }
+
 @media (max-width: 900px) {
-  .conMast { height: auto; flex-wrap: wrap; padding: 10px 16px; row-gap: 0; }
-  .conTab { padding: 10px 8px; }
-  .conRibbon { padding: 0 16px; }
-  .conRibbonItem { max-width: 180px; }
+  .conMast { height: auto; flex-wrap: wrap; padding: 10px 14px; }
+  .conTabs { order: 3; width: 100%; margin-left: 0; flex-wrap: wrap; }
+  .conTab { padding: 10px 9px; }
+  .conBody, .conFoot { padding-left: 14px; padding-right: 14px; }
 }
 
-/* ── Utility bar: the corpus chip and the appearance switch ───────────────── */
+/* ── The v4 card ──────────────────────────────────────────────────────────── */
+/* Sampled, not styled-from-memory: #1a212b on #0f1318, #33404f border, 8px, top sheen. The
+   subtle grid inside hero cards is the design's graph-paper motif. */
+/* ── The card is now a ruled region, not a container ──────────────────────── */
+/* The name stays because ~20 rules and two module classes compose it; the object it names is
+   gone. No fill, no radius, no elevation, no hover lift — the module sheet's own header said
+   "hairlines instead of cards" and this is that sheet winning. A top rule separates each region
+   from the one above it, which is the only separation this world has.
+   The hover transform is deliberately not replaced: nine of these are not clickable, and an
+   interactive affordance on a static container was a finding, not a feature. */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule-hair);
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  box-shadow: var(--elev-1);
+  padding: 28px 26px 36px;
+  transition: box-shadow 0.3s var(--ease-out);
+}
+.card:hover {
+  border-color: var(--rule-hair);
+  border-top-color: var(--rule);
+  transform: none;
+  box-shadow: var(--elev-2);
+}
+/* The graph-paper motif survives as texture on the hero region only, at hairline strength. */
+.cardGrid {
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 27px, var(--rule-hair) 27px, var(--rule-hair) 28px),
+    repeating-linear-gradient(90deg, transparent, transparent 27px, var(--rule-hair) 27px, var(--rule-hair) 28px);
+}
+.popText { color: var(--ink-900); }
+/* Flat ink on a paper trough. The cyan→pink gradient it replaces encoded nothing — a meter's
+   fill length is already the value, so a colour ramp along it was decoration twice over. */
+.gradMeter {
+  height: 5px; border-radius: 0; overflow: hidden; background: var(--paper-sunk);
+}
+.gradMeter i { display: block; height: 100%; background: var(--ink-900); }
+
+/* ══ THE PAGE SYSTEM ══════════════════════════════════════════════════════ */
+/*
+ * What separates the reference from a stack of ruled boxes, in the order it matters:
+ *   1. Sections sit on ALTERNATING full-bleed grounds — paper, grey, near-black.
+ *   2. Orange is a real accent used at scale, not a hairline.
+ *   3. Section headings are LARGE and sentence-case, with a filled number chip above them.
+ *   4. A construction grid runs the whole page with crosshairs at its intersections.
+ * The previous pass built the quiet parts of the reference and none of the loud ones, which is
+ * how a restrained design becomes a flat one.
+ */
+
+/* ── Full-bleed section bands ─────────────────────────────────────────────── */
+/* Breaks .conBody's gutters to reach both edges, then re-inserts the content column inside.
+   A band is the section's ground, so the page reads as composed passages rather than one
+   undifferentiated sheet. */
+/* True full-bleed, edge to edge, regardless of how many padded ancestors it sits inside.
+   `margin-left: calc(50% - 50vw)` only escapes ONE containing block, so the band was still
+   inset by .ovSheet's 52px spine padding and by the scrollbar's share of 100vw — a gutter on
+   both sides, which is exactly not a band. Centring on the viewport with left/translate ignores
+   every ancestor's padding, and .conRoot clips the scrollbar overshoot.
+
+   `overflow-x: clip` rather than `hidden`: clip does not create a scroll container, so the
+   sticky masthead keeps sticking to the viewport. `hidden` here would silently unstick it. */
+/* The band's containing block is .ovSheet, so it can only break out cleanly if .ovSheet itself
+   carries no horizontal padding. The spine gutter therefore lives on .ovSheet's non-band
+   children (below) instead of on .ovSheet — otherwise `50% - 50vw` resolves against a padded
+   box and the band lands off-centre by exactly that padding, which is the 26px gutter this
+   had. Escaping ONE containing block is enough once that block is the full content column. */
+.band {
+  position: relative;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  width: 100vw;
+  padding: 64px 0 72px;
+}
+/* The content column is re-inserted inside the full-width band, so the ground reaches the edges
+   while the text still lines up with every other section on the page. */
+.band > .bandInner,
+.band > .gridField ~ .bandInner {
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 0 32px;
+  box-sizing: border-box;
+}
+.bandPaper { background: var(--band-paper); }
+.bandGrey { background: var(--band-grey); }
+/* Every alias is redeclared, not just the raw scale.
+   theme.css declares `--ink: var(--ink-900)` on .conRoot, and a custom property resolves at the
+   element where it is DECLARED — so --ink computed to #111315 there and was inherited as that
+   literal. Overriding --ink-900 here did nothing for it, and every module class using var(--ink),
+   var(--line) or var(--faint) went on painting near-black text on a near-black ground: an inbox
+   you could not read. Aliases must be re-pointed at the same level as the scale they alias. */
+.bandInk {
+  background: var(--band-ink); color: var(--band-ink-on);
+  --ink-900: var(--band-ink-on);
+  --ink-700: #b9c0c6;
+  --ink-500: #8b939b;
+  --ink-400: #6d757c;
+  --rule: #3a4046;
+  --rule-soft: rgba(240, 239, 237, 0.18);
+  --rule-hair: rgba(240, 239, 237, 0.09);
+  --paper: var(--band-ink);
+  --paper-raised: #1b1f23;
+  --paper-sunk: #0e1113;
+  /* the semantic layer */
+  --ground: var(--band-ink);
+  --surface: var(--band-ink);
+  --sunk: #0e1113;
+  --ink: var(--band-ink-on);
+  --bright: var(--band-ink-on);
+  --muted: #b9c0c6;
+  --faint: #8b939b;
+  --disabled: #6d757c;
+  --line: rgba(240, 239, 237, 0.18);
+  --hair: rgba(240, 239, 237, 0.09);
+  --hairline-light: rgba(240, 239, 237, 0.09);
+  --accent: var(--band-ink-on);
+  --accent-hi: var(--band-ink-on);
+  --warn: var(--band-ink-on);
+  --crit: var(--band-ink-on);
+  --ok: var(--band-ink-on);
+  --field-on: var(--ink-900);
+}
+/* Same reason: grey changes the ground, so the sunk tone has to move off it or a "recessed"
+   surface reads as raised. */
+.bandGrey {
+  --paper: var(--band-grey);
+  --ground: var(--band-grey);
+  --surface: var(--band-grey);
+  --paper-sunk: #d6d3ce;
+  --sunk: #d6d3ce;
+}
+/* The ink band carries a fine grain, the way the reference's dark passages do — a flat black
+   region at this scale reads as a hole in the page rather than a material. */
+.bandInk::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+.bandInner { position: relative; z-index: 1; }
+
+/* ── Section headers: chip, then a real headline ──────────────────────────── */
+/* `[03] PROCESS` as two filled chips, then the heading at display scale in sentence case. The
+   previous version had one mono all-caps eyebrow doing all three jobs, which is why every
+   section looked like a table header instead of the start of something. */
+.secHead { margin-bottom: 28px; }
+.secTag { display: inline-flex; align-items: stretch; margin-bottom: 18px; }
+.secTagN {
+  background: var(--signal); color: var(--signal-on);
+  font: 600 11px var(--mono); letter-spacing: 0.1em; padding: 5px 9px;
+}
+.secTagLabel {
+  background: var(--paper-sunk); color: var(--ink-900);
+  font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; padding: 5px 11px;
+}
+.bandInk .secTagLabel { background: rgba(240, 239, 237, 0.1); color: var(--band-ink-on); }
+.secTitle {
+  font-family: var(--display); font-weight: 500; font-size: clamp(34px, 4.4vw, 62px);
+  font-variation-settings: var(--display-normal);
+  line-height: 1.02; letter-spacing: -0.02em; color: var(--ink-900); margin: 0;
+}
+.secTitle b { font-weight: 800; font-variation-settings: var(--display-wide); }
+.secLede {
+  margin: 16px 0 0; font-size: 15px; line-height: 1.6; color: var(--ink-700); max-width: 62ch;
+}
+
+/* ── Orange chevron lists ─────────────────────────────────────────────────── */
+.chev { display: block; }
+.chevRow {
+  display: grid; grid-template-columns: 18px 1fr; gap: 0 10px; align-items: baseline;
+  padding: 7px 0; font-size: 14px; line-height: 1.5;
+}
+.chevRow::before { content: ">"; color: var(--signal); font-family: var(--mono); font-weight: 600; }
+
+/* ── The construction grid ────────────────────────────────────────────────── */
+/* Dashed columns across the whole width with a crosshair at each section's baseline, not one
+   rule in the margin. This is the motif that makes the reference read as a technical drawing. */
+.gridField {
+  position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--rule-hair) 0 1px,
+    transparent 1px calc(100% / 6)
+  );
+  background-size: calc(100% / 6) 100%;
+}
+.crosshair {
+  position: absolute; width: 11px; height: 11px; pointer-events: none; z-index: 1;
+  color: var(--signal);
+}
+.crosshair::before, .crosshair::after {
+  content: ""; position: absolute; background: currentColor;
+}
+.crosshair::before { left: 5px; top: 0; width: 1px; height: 11px; }
+.crosshair::after { top: 5px; left: 0; height: 1px; width: 11px; }
+
+/* ── Data as art: the corpus rendered as a halftone field ─────────────────── */
+/* The reference's art is halftone dot fields. Cortex does not need stock photography to answer
+   that — it already has a dot field, and it is real: one mark per block in the corpus, solid
+   where a passage was retracted. The art IS the data, which is the only kind of imagery this
+   product can honestly ship. */
+.dotField {
+  display: flex; flex-wrap: wrap; gap: 3px; align-content: flex-start;
+  max-height: 260px; overflow: hidden; margin-top: 8px;
+  mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent 100%);
+}
+.dotField i {
+  width: 6px; height: 6px; background: var(--rule-soft); display: block;
+  transition: background-color 90ms linear, transform 90ms var(--ease-out);
+}
+.dotField i.on { background: var(--ink-900); }
+.bandInk .dotField i.on { background: var(--band-ink-on); }
+
+/* Interactive: the field is an index of the corpus, so it behaves like one. */
+.dotFieldLive { cursor: crosshair; max-height: 300px; }
+.dotFieldLive i.hot { background: var(--signal); transform: scale(2.1); position: relative; z-index: 2; }
+
+/* On load the field PRINTS — marks arrive in sequence, the way a sheet comes off a press. The
+   stagger is capped at 600 marks so the last one lands under a second no matter how big the
+   brain is; past that they arrive together and nobody can tell. */
+@keyframes cx-print { from { opacity: 0; transform: scale(0.4); } to { opacity: 1; transform: none; } }
+.dotFieldLive i { animation: cx-print 260ms var(--ease-out) both; animation-delay: var(--d, 0ms); }
+
+/* The readout holds its height whether or not anything is hovered, so the field never reflows
+   under the cursor. */
+.fieldRead {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  min-height: 34px; margin-top: 18px; padding-top: 14px;
+  border-top: 1px solid var(--rule-soft);
+  font: 400 12px var(--mono); color: var(--ink-700);
+}
+.fieldReadPath { color: var(--ink-900); font-weight: 500; }
+.bandInk .fieldReadPath { color: var(--band-ink-on); }
+.fieldReadSep { color: var(--rule-soft); }
+.fieldReadRet { color: var(--signal); }
+.fieldReadGo { margin-left: auto; color: var(--signal); }
+.fieldReadIdle { color: var(--ink-500); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dotFieldLive i { animation: none !important; }
+  .dotFieldLive i.hot { transform: none; }
+}
+
+@media (max-width: 900px) {
+  .band { padding: 40px calc(50vw - 50%) 44px; }
+  .gridField { background-image: none; }
+}
+
+/* ══ THE SHEET ════════════════════════════════════════════════════════════ */
+/* Comp C's masthead over comp A's numbered spine. The spine is a dashed rule down the left
+   margin carrying a section number per region — the one piece of pure structure in the design,
+   and the thing that makes eight stacked regions read as one document instead of eight cards. */
+/* The sheet itself carries no spine and no padding.
+   The spine was comp A's device for ONE continuous sheet, and this page is no longer that — it
+   is a sequence of full-bleed bands, each numbered by its own chip. Run across the whole sheet
+   it did two bad things: it drew over headings and controls (it had gained z-index: 2 when the
+   gutter moved), and it duplicated numbering the chips already do. It now rules only the
+   overview's reading column, where a run of unbanded sections genuinely does need a spine —
+   and it sits behind content, where a rule belongs. */
+.ovSheet { counter-reset: sec; position: relative; }
+/* Only top-level regions are numbered. Scoping this to `.ovSheet .card` numbered every nested
+   card too, so counters landed mid-page beside the second column and collided with section
+   headings. The spine numbers the document's sections, not every box inside them. */
+.ovRead > .card,
+.ovRead > .ovGrid > .ovCol:first-child > .card { position: relative; counter-increment: sec; }
+.ovRead > .card::before,
+.ovRead > .ovGrid > .ovCol:first-child > .card::before {
+  content: counter(sec, decimal-leading-zero);
+  position: absolute; left: -52px; top: 22px;
+  font: 500 11px var(--mono); letter-spacing: 0.12em; color: var(--spine);
+}
+
+/* ── 00 · The masthead ────────────────────────────────────────────────────── */
+/* The thesis viewport: one colossal count, its identity beside it, and whether the thing is
+   live. Everything else on the page is subordinate to this row by an order of magnitude. */
+.ovMast {
+  display: grid; grid-template-columns: auto 1fr minmax(280px, 22%);
+  align-items: stretch; gap: 0 36px;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  padding: 30px 0 26px; margin-bottom: 0;
+}
+.ovMastN {
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(96px, 13vw, 210px); line-height: 0.82;
+  font-variation-settings: var(--display-wide);
+  letter-spacing: -0.02em; color: var(--ink-900);
+  font-variant-numeric: tabular-nums;
+}
+.ovMastMeta { display: flex; flex-direction: column; justify-content: center; gap: 9px; min-width: 0; }
+.ovMastLead {
+  font: 500 13px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-900);
+}
+.ovMastLine { font: 400 12px var(--mono); color: var(--muted); }
+.ovMastLine b { font-weight: 600; color: var(--ink-900); }
+
+/* The live field. Cyan is the product's rule — it marks live data — and on paper the only way
+   to say cyan is to flood a region and put ink on it. This is the largest instance on the page
+   and it is the one that is literally about liveness. */
+.ovLive {
+  background: var(--field-live); color: var(--field-on);
+  padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; justify-content: center;
+}
+.ovLiveHead {
+  font: 600 13px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.ovLiveLine { font: 400 12px var(--mono); line-height: 1.6; }
+.ovLiveLine b { font-weight: 600; }
+/* Degraded is not a colour change into red — it is the field withdrawing. A mirror that is off
+   or unreachable has nothing live to announce, so it stops announcing and says which mode it is
+   in, which is what the rest of this console already does everywhere else. */
+.ovLiveOff { background: none; color: var(--ink-900); border: 1px solid var(--rule); }
+
+/* ── The split: reading column against the inbox rail ─────────────────────── */
+.ovSplit { display: grid; grid-template-columns: 1fr minmax(280px, 22%); gap: 0 36px; align-items: start; }
+/* The spine lives here, on the one column that is a continuous run of ruled sections. Behind
+   content (z-index 0, and the sections sit above it), and stopping where the column stops
+   rather than running the height of the page. */
+.ovRead { min-width: 0; position: relative; padding-left: 52px; }
+.ovRead::before {
+  content: ""; position: absolute; left: 16px; top: 0; bottom: 0;
+  border-left: 1px dashed var(--spine); pointer-events: none; z-index: 0;
+}
+.ovRead > * { position: relative; z-index: 1; }
+
+/* The inbox rail. Full-height field when something waits, because the second job this console
+   exists for is clearing it and it used to open with an empty panel above the actionable one. */
+.ovInbox {
+  background: var(--field-live); color: var(--field-on);
+  padding: 22px 20px 26px; position: sticky; top: 76px; min-width: 0;
+}
+.ovInboxHead { font: 600 12px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; }
+.ovInboxN {
+  font-family: var(--display); font-weight: 800; font-size: 76px; line-height: 0.9;
+  font-variation-settings: var(--display-wide); font-variant-numeric: tabular-nums;
+  margin: 6px 0 14px;
+}
+.ovInboxRow { border-top: 1px solid var(--ink-900); padding: 10px 0; font: 400 12px var(--mono); line-height: 1.55; }
+/* Specificity matters here: theme.css sets `.conRoot a { color: var(--ink-900) }`, which outranks
+   a bare class and rendered this as black text on a black slab. The type selector has to be
+   matched, not assumed. Tap target is 44px tall — the console's controls failed that everywhere
+   and this one is new, so it starts compliant. */
+.conRoot a.ovInboxLink {
+  display: inline-flex; align-items: center; margin-top: 16px; padding: 0 16px; min-height: 44px;
+  background: var(--ink-900); color: var(--field-live);
+  font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  text-decoration: none;
+}
+.conRoot a.ovInboxLink:hover { text-decoration: none; background: var(--ink-900); color: #fff; }
+/* Zero is not an event. The field collapses to one quiet line rather than spending the loudest
+   element on the page saying nothing — which is exactly what a self-hoster meets on day one. */
+.ovInboxQuiet {
+  background: none; color: var(--muted); border-top: 1px solid var(--rule);
+  padding: 14px 0; position: static;
+  font: 400 12px var(--mono); letter-spacing: 0.04em;
+}
+
+@media (max-width: 1100px) {
+  .ovMast { grid-template-columns: 1fr; gap: 20px; }
+  .ovSplit { grid-template-columns: 1fr; gap: 0; }
+  .ovInbox { position: static; }
+}
+@media (max-width: 900px) {
+  .ovRead { padding-left: 34px; }
+  .ovRead::before { left: 8px; }
+  .ovRead > .card::before,
+  .ovRead > .ovGrid > .ovCol:first-child > .card::before { left: -34px; }
+}
+
+/* ── Corpus ledger ────────────────────────────────────────────────────────── */
+/* The ticks are DATA marks, not text, so they answer to legibility rather than to the 4.5:1
+   text rule — a filled rect at 5px reads by density. Retracted blocks take solid ink and the
+   rest take a hairline fill, which is also the honest reading of what a retraction is here:
+   the attention screen calls them "credit, not a problem", and painting them in warning amber
+   said the opposite of the copy twenty lines away. Solid means kept-and-corrected, not wrong. */
+.conRoot .blocks i { background: var(--rule-hair); }
+.conRoot .blocks i.ret { background: var(--ink-900); }
+
+/* Filter. Ninety rows with no way to reach one was the ledger's real defect — the operator's
+   own note is found by scrolling. */
+.ledgerBar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 4px 0 14px; }
+.ledgerFilter {
+  flex: 1 1 260px; min-width: 0; min-height: 44px; padding: 0 14px;
+  background: var(--paper); border: 1px solid var(--rule); border-radius: 0;
+  color: var(--ink-900); font-family: var(--mono); font-size: 12px;
+}
+.ledgerFilter::placeholder { color: var(--disabled); }
+.ledgerCount { font: 400 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.ledgerNone { padding: 22px 0; font: 400 12px var(--mono); color: var(--muted); }
+
+/* Mobile. Two separate defects met here: the row's 520px min-width forced the whole ledger into
+   horizontal scroll, and .blocks wrapping its ticks into a narrow column made ONE row of a busy
+   note ~800px tall — taller than the viewport, with its filename floating centred halfway down.
+   Below 900px the row becomes two lines and the ticks get a fixed-height strip that scrolls
+   sideways on its own rather than growing the row without limit. */
+@media (max-width: 900px) {
+  .conRoot .thead { display: none; }
+  .conRoot .row {
+    min-width: 0 !important;
+    grid-template-columns: 14px 1fr auto !important;
+    grid-template-areas: "caret path tokens" ". blocks blocks" !important;
+    row-gap: 6px !important;
+  }
+  .conRoot .row > :nth-child(1) { grid-area: caret; }
+  .conRoot .row > :nth-child(2) { grid-area: path; }
+  .conRoot .row > :nth-child(3) {
+    grid-area: blocks; max-height: 26px; overflow-x: auto; overflow-y: hidden;
+    flex-wrap: nowrap !important;
+  }
+  .conRoot .row > :nth-child(4) { grid-area: tokens; }
+  .conRoot .row > :nth-child(5) { display: none; }
+}
+
+/* ── Trends: the screen-level empty state ─────────────────────────────────── */
+/* One statement, then a schedule of what fills each instrument and when. This is a designed
+   state rather than six error strings sharing a viewport. */
+.trEmpty { padding: 10px 0 4px; max-width: 78ch; }
+.trEmptyLead {
+  font-family: var(--display); font-weight: 800; font-size: clamp(34px, 4vw, 54px);
+  font-variation-settings: var(--display-wide); line-height: 1; letter-spacing: -0.01em;
+  color: var(--ink-900); margin: 0 0 18px;
+}
+.trEmptyBody { font-size: 15px; line-height: 1.6; color: var(--ink-700); margin: 0 0 22px; max-width: 66ch; }
+.trEmptyList { border-top: 1px solid var(--rule); margin-bottom: 24px; }
+.trEmptyRow {
+  display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 0 24px;
+  padding: 12px 0; border-bottom: 1px solid var(--rule-hair); align-items: baseline;
+}
+.trEmptyWhat { font: 500 12px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-900); }
+.trEmptyWhen { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.conRoot a.trEmptyGo { margin-top: 0; }
+@media (max-width: 700px) {
+  .trEmptyRow { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* ── Map: the aperture ────────────────────────────────────────────────────── */
+/*
+ * The board breaks out of .conBody's max-width and padding to reach both edges of the viewport.
+ * A dark rectangle sitting inside a paper document with gutters either side reads as a panel
+ * someone forgot to restyle; the same darkness bled edge to edge reads as a window you are
+ * looking through. Same pixels, opposite meaning — the frame is doing the work, which is why
+ * this needed no change to the vendored engine.
+ *
+ * The two hairlines are the aperture's edge: paper stops, instrument starts, and the transition
+ * is stated rather than blurred.
+ */
+.mapBleed {
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  width: 100vw;
+  margin-top: -24px;
+  margin-bottom: -44px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  background: #0f1318;
+  position: relative;
+}
+/* The console's controls are paper everywhere else, so the board's own chrome is re-cut to the
+   same grammar: sharp corners, mono labels, a cyan field for what is live. Dark surfaces, since
+   they sit on the instrument, but unmistakably from this product. */
+.mapBleed :is(button, [class*="panel"], [class*="legend"], [class*="menu"]) { border-radius: 0 !important; }
+.mapBleed [class*="panelLabel"], .mapBleed [class*="legend"] {
+  font-family: var(--mono) !important; letter-spacing: 0.14em !important;
+}
+/* The lit ring in the legend is the live one, and cyan marks live data — the one rule this
+   whole redesign was built out of, and the map already had it right. */
+.mapBleed [class*="legend"] [class*="on"] { color: #1fbdd6 !important; }
+
+@media (max-width: 900px) {
+  .mapBleed { margin-top: -18px; margin-bottom: -24px; }
+}
+
+/* ── Ask: the demonstration ───────────────────────────────────────────────── */
+.askLabel {
+  display: block; font: 500 11px var(--mono); letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 12px;
+}
+.askBar { display: flex; gap: 0; align-items: stretch; }
+.askInput {
+  flex: 1; min-width: 0; min-height: 56px; padding: 0 16px;
+  background: var(--paper); border: 1px solid var(--rule); border-right: 0; border-radius: 0;
+  color: var(--ink-900); font-family: var(--sans); font-size: 17px;
+}
+.askInput::placeholder { color: var(--disabled); }
+.askInput:disabled { color: var(--muted); }
+.askGo {
+  flex: none; min-height: 56px; padding: 0 28px; border: 1px solid var(--ink-900);
+  background: var(--ink-900); color: var(--paper); border-radius: 0; cursor: pointer;
+  font: 600 12px var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
+}
+.askGo:disabled { background: var(--paper-sunk); border-color: var(--rule-hair); color: var(--disabled); cursor: default; }
+.askHint { margin-top: 10px; font: 400 12px var(--mono); color: var(--muted); max-width: 74ch; line-height: 1.6; }
+.askError { margin-top: 18px; padding: 12px 14px; border-left: 3px solid var(--ink-900); background: var(--paper-sunk); font-size: 13px; }
+
+/* The wait is the mechanism running, so it says which part is running. */
+.askWait { margin-top: 22px; font: 400 12px var(--mono); color: var(--muted); }
+.askWaitBar {
+  display: block; height: 2px; background: var(--field-live); margin-bottom: 10px;
+  animation: cx-load 2.4s var(--ease-out) infinite;
+}
+
+.askResult { margin-top: 26px; }
+/* The stamp is the product's verdict and gets the product's loudest treatment: a field. */
+.askStamp {
+  display: inline-block; padding: 8px 14px; margin-bottom: 18px;
+  font: 600 12px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  background: var(--paper-sunk); color: var(--ink-900);
+  animation: cx-flood 380ms var(--ease-out) both;
+}
+.askStampOk { background: var(--field-live); color: var(--field-on); }
+/* Abstaining correctly is a success on its own terms — it is not painted as a failure. */
+.askStampAbstain { background: var(--paper-sunk); color: var(--ink-900); box-shadow: inset 0 0 0 1px var(--rule); }
+.askStampBad { background: var(--field-crit); color: var(--field-on); }
+.askStampWarn { background: var(--field-warn); color: var(--field-on); }
+
+.askAnswer { font-size: 19px; line-height: 1.55; color: var(--ink-900); max-width: 68ch; margin: 0 0 24px; }
+.askCite { border-top: 1px solid var(--rule); padding-top: 16px; max-width: 84ch; }
+.askCiteHead { display: flex; gap: 16px; justify-content: space-between; align-items: baseline; }
+.askCitePath { font: 500 12px var(--mono); color: var(--ink-900); word-break: break-all; }
+.askCiteAt { font: 400 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.askEvidence {
+  margin: 12px 0 0; padding: 12px 0 12px 16px; border-left: 2px solid var(--field-live);
+  font: 400 13px/1.65 var(--mono); color: var(--ink-700); white-space: pre-wrap; word-break: break-word;
+}
+.askRetracted, .askWhy { margin-top: 12px; font: 400 12px var(--mono); color: var(--ink-900); }
+.askCiteNone { font-size: 13px; color: var(--ink-700); line-height: 1.6; }
+.askMeta {
+  display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 22px; padding-top: 14px;
+  border-top: 1px solid var(--rule-hair); font: 400 11px var(--mono); color: var(--muted);
+}
+.askMeta b { color: var(--ink-900); font-weight: 500; }
+
+/* ── The tool roster ──────────────────────────────────────────────────────── */
+.toolTable { margin-top: 4px; }
+.toolRow2 {
+  display: grid; grid-template-columns: 180px 1fr 150px 60px; gap: 0 20px;
+  align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--rule-hair);
+}
+.toolName2 { font: 500 12px var(--mono); color: var(--ink-900); }
+.toolWhat2 { font-size: 13px; line-height: 1.5; color: var(--ink-700); max-width: 68ch; }
+.toolDoors { display: flex; gap: 6px; }
+.toolDoor {
+  font: 500 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 3px 7px; color: var(--disabled); border: 1px solid var(--rule-hair);
+}
+.toolDoorOn { color: var(--field-on); background: var(--field-live); border-color: var(--field-live); }
+.toolCalls { font: 500 12px var(--mono); color: var(--disabled); text-align: right; font-variant-numeric: tabular-nums; }
+.toolCallsOn { color: var(--ink-900); }
+
+@media (max-width: 900px) {
+  .toolRow2 { grid-template-columns: 1fr; gap: 6px; }
+  .toolCalls { text-align: left; }
+  .askBar { flex-wrap: wrap; }
+  .askInput { border-right: 1px solid var(--rule); }
+  .askGo { width: 100%; }
+}
+
+/* ── Settings rows ────────────────────────────────────────────────────────── */
+/* A settings screen is a list of controls. The previous arrangement put a paragraph of prose
+   between each heading and its first control, a sub-line under most controls, and a disclosure
+   at the foot — three registers of explanation around one switch, so the reader scanned text to
+   find the thing they came to change. Explanation now lives in one place per section (the foot
+   disclosure) and one short sub-line where the control genuinely needs it. */
+.setHead {
+  display: flex; align-items: baseline; gap: 16px; justify-content: space-between;
+  padding-bottom: 12px; border-bottom: 1px solid var(--rule);
+}
+.setHeadMeta {
+  font: 400 11px var(--mono); color: var(--muted); text-align: right; white-space: nowrap;
+}
+.setRow {
+  display: flex; align-items: center; gap: 20px; justify-content: space-between;
+  min-height: 52px; padding: 8px 0; border-bottom: 1px solid var(--rule-hair);
+  flex-wrap: wrap;
+}
+.setRow:last-child { border-bottom: 0; }
+.setBody { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 220px; }
+.setTitle { font-size: 13px; color: var(--ink-900); }
+.setSub { font: 400 11px var(--mono); color: var(--muted); line-height: 1.5; }
+.setLock {
+  font: 500 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--field-on); background: var(--paper-sunk); padding: 3px 8px; white-space: nowrap;
+}
+
+/* Switches. 44px tall so the row is a real target — every control on this screen measured
+   40x24 or worse, and the steppers at 26x21 failed even WCAG 2.5.8's 24x24 floor. */
+.conRoot .swt {
+  appearance: none; flex: none; width: 52px; height: 30px; padding: 0; cursor: pointer;
+  background: var(--paper-sunk); border: 1px solid var(--rule); border-radius: 0;
+  position: relative; transition: background-color 0.14s var(--ease-out);
+}
+.conRoot .swt::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px;
+  background: var(--ink-900); transition: transform 0.16s var(--ease-out);
+}
+.conRoot .swt[aria-checked="true"] { background: var(--field-live); }
+.conRoot .swt[aria-checked="true"]::after { transform: translateX(22px); }
+.conRoot .swt:disabled { cursor: default; }
+.conRoot .swt.swtLocked { background: var(--paper-sunk); }
+.conRoot .swt.swtLocked::after { background: var(--disabled); }
+/* Disabled reads as inert through the token, not through opacity: --muted at 40% composited to
+   2.38:1, and this console uses disabled to mean "needs a key you have not set" — the one
+   message a newcomer must be able to read. */
+.conRoot .swt:disabled:not(.swtLocked) { background: var(--paper); border-color: var(--rule-hair); }
+.conRoot .swt:disabled::after { background: var(--disabled); }
+
+.conRoot .stepper { display: flex; align-items: center; gap: 4px; flex: none; }
+.conRoot .stepper .rdBtn,
+.conRoot .rdBtn {
+  min-width: 44px; min-height: 44px; padding: 0; border: 1px solid var(--rule);
+  background: var(--paper); color: var(--ink-900); border-radius: 0; cursor: pointer;
+  font: 500 14px var(--mono);
+}
+.conRoot .rdBtn:disabled { color: var(--disabled); border-color: var(--rule-hair); cursor: default; }
+.conRoot .gArea {
+  min-height: 36px; padding: 0 12px; border: 1px solid var(--rule); border-radius: 0;
+  background: var(--paper); color: var(--ink-900); cursor: pointer;
+  font: 500 11px var(--mono); letter-spacing: 0.08em;
+}
+.conRoot .gArea.gOn { background: var(--field-live); color: var(--field-on); border-color: var(--field-live); }
+.conRoot .gArea:disabled { color: var(--disabled); border-color: var(--rule-hair); cursor: default; }
+.conRoot .gArea:disabled.gOn { background: var(--paper-sunk); color: var(--disabled); border-color: var(--rule-hair); }
+
+@media (max-width: 700px) {
+  .setRow { align-items: flex-start; }
+}
+
+/* ── Triage actions ───────────────────────────────────────────────────────── */
+/* The three things this console can honestly do about a finding. All 44px tall, because the
+   whole point is that they are pressed. */
+.triAct {
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch;
+  margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule);
+}
+.conRoot a.triActGo,
+.conRoot a.triActAsk,
+.triActCopy {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+  font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  border-radius: 0; cursor: pointer; text-decoration: none;
+  transition: transform 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+/* The primary move: go to where the fix happens. */
+.conRoot a.triActGo {
+  background: var(--ink-900); color: var(--paper); border: 1px solid var(--ink-900);
+}
+.conRoot a.triActGo:hover { transform: translateY(-2px); text-decoration: none; color: var(--paper); }
+/* Secondary: interrogate it. Signal orange, because this is structure — it moves you somewhere. */
+.conRoot a.triActAsk {
+  background: none; color: var(--ink-900); border: 1px solid var(--signal);
+}
+.conRoot a.triActAsk:hover { transform: translateY(-2px); background: var(--signal); color: var(--signal-on); text-decoration: none; }
+/* Tertiary: take it with you. */
+.triActCopy {
+  background: none; color: var(--ink-900); border: 1px solid var(--rule-soft);
+}
+.triActCopy:hover { border-color: var(--rule); }
+
+/* The resolving row, for findings that have an honest fix behind a button. Separated from the
+   navigation row above by its own rule: those three take you somewhere, these two CHANGE the
+   brain and commit. Putting a write next to three no-op links invites a reflex click. */
+.triActFix { margin-top: 14px; padding-top: 16px; align-items: center; }
+.triActPrimary,
+.triActSecondary {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+  font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  border-radius: 0; cursor: pointer;
+  transition: transform 140ms var(--ease-out), background-color 140ms var(--ease-out);
+}
+/* An attestation, so it carries the weight of one. */
+.triActPrimary { background: var(--ink-900); color: var(--paper); border: 1px solid var(--ink-900); }
+.triActPrimary:hover:not(:disabled) { transform: translateY(-2px); }
+/* A classification, not a claim about the world -- quieter on purpose. */
+.triActSecondary { background: none; color: var(--ink-900); border: 1px solid var(--rule-soft); }
+.triActSecondary:hover:not(:disabled) { border-color: var(--rule); }
+.triActPrimary:disabled,
+.triActSecondary:disabled { opacity: 0.5; cursor: default; transform: none; }
+/* Wraps to its own line rather than squeezing the buttons, and stays readable at a measure. */
+.triActNote {
+  flex: 1 1 100%; max-width: 74ch;
+  font: 400 12px/1.5 var(--sans); color: var(--ink-600);
+}
+/* A request already committed and waiting on the nightly run. Shaped like the button it
+   replaced so the row does not reflow, but inert: there is nothing further to click. */
+.triActQueued {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px;
+  font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-600); border: 1px dashed var(--rule-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conRoot a.triActGo:hover, .conRoot a.triActAsk:hover,
+  .triActPrimary:hover:not(:disabled) { transform: none; }
+}
+
+/* ── Retracted passages ───────────────────────────────────────────────────── */
+/* Two columns, and the text one is measure-limited. These rows previously ran the full ~1810px
+   of the viewport with no max-width while .noteDesc twenty lines away was capped at 74ch — the
+   same content type, two different answers. Nobody reads a 200-character line. */
+.retRow {
+  display: grid; grid-template-columns: minmax(180px, 260px) 1fr; gap: 0 24px;
+  align-items: baseline; padding: 9px 0; border-top: 1px solid var(--rule-hair);
+}
+.retPath {
+  font: 400 12px var(--mono); color: var(--ink-900); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.retMark { margin-left: 7px; color: var(--muted); }
+.retText { font-size: 13px; line-height: 1.55; color: var(--ink-700); max-width: 74ch; }
+@media (max-width: 900px) {
+  .retRow { grid-template-columns: 1fr; gap: 3px; }
+}
+
+/* ── Hero: the masthead numerals ──────────────────────────────────────────── */
+/* flex-wrap is the fix for a confirmed bug: this row had none, so four cells at 34px padding
+   computed to 594px inside a 500px viewport and pushed 165px of horizontal scroll with 91
+   elements offscreen. Nothing below 900px adapted it because no breakpoint existed there. */
+.heroRow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; }
+.heroCell { padding: 0 34px; border-left: 1px solid var(--rule-soft); min-width: 0; flex: 1 1 200px; }
+.heroCell:first-child { border-left: 0; padding-left: 0; }
+.heroLabel {
+  font: 500 11px var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 10px; white-space: nowrap;
+}
+/* Archivo at wdth 125 — the reference's wide proportion is the whole point of retiring
+   Steelfish, which was compressed. Tabular figures so the four numerals share a rhythm. */
+.heroN {
+  font-family: var(--display); font-weight: 800; font-size: clamp(46px, 6vw, 78px);
+  font-variation-settings: var(--display-wide);
+  line-height: 0.9; color: var(--ink-900); font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.heroNWarn { color: var(--ink-900); }
+.heroCap { margin-top: 9px; font: 400 11px var(--mono); color: var(--muted); line-height: 1.55; }
+
+/* The ring gauge: one flat live-field stroke. This wraps layout only. */
+.ringWrap { display: flex; align-items: center; gap: 20px; padding-right: 30px; }
+.ringLabel { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.ringPct {
+  font-family: var(--display); font-weight: 800; font-size: 27px;
+  font-variation-settings: var(--display-wide);
+  color: var(--ink-900); line-height: 1; font-variant-numeric: tabular-nums;
+}
+/* Was 8.5px — under the 11px floor and the smallest text on the screen. */
+.ringSub { font: 500 11px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+/* Answering-model select: paper well, ink chevron, mono. */
+.modelSelect {
+  appearance: none; -webkit-appearance: none;
+  background:
+    var(--paper)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='9' height='11' viewBox='0 0 9 11'><path d='M1 3.5l3.5-2.5 3.5 2.5' fill='none' stroke='%23111315' stroke-width='1.3'/><path d='M1 7.5l3.5 2.5 3.5-2.5' fill='none' stroke='%23111315' stroke-width='1.3'/></svg>")
+    no-repeat right 10px center;
+  color: var(--ink-900);
+  border: 1px solid var(--rule); border-radius: 0;
+  font: 500 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 10px 30px 10px 10px; min-width: 190px; cursor: pointer;
+  transition: background-color 0.12s var(--ease-out);
+}
+.modelSelect:hover { border-color: var(--card-line-strong); }
+/* No :focus override here. The old rule set outline:none and substituted a box-shadow, which
+   hooked :focus rather than :focus-visible AND vanishes in forced-colors mode — globals.css
+   warns about exactly that in its own comment. theme.css's ring is the only focus treatment. */
+.modelSelect:disabled { color: var(--disabled); border-color: var(--rule-hair); cursor: default; }
+
+/* Activity bars: gradient body, pink pill cap. */
+.capChart { display: flex; align-items: stretch; gap: 7px; height: 150px; margin-top: 22px; border-bottom: 1px solid var(--card-line); }
+.capCol { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; min-width: 4px; }
+/* The pink cap is deleted. It was applied to EVERY bar, so it marked nothing; an accent that
+   fires on all members of a set is decoration wearing a signal's clothes. The peak bar earns
+   the live field instead — one bar, one meaning. */
+.capCap { display: none; }
+.capBody { width: 13px; max-width: 100%; border-radius: 0; background: var(--ink-900); }
+.capCol.on .capBody { background: var(--field-live); }
+
+/* Segmented window chips (24H · WEEK · MONTH). */
+.segWrap {
+  display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--card-line);
+  border-radius: 6px; background: rgba(0, 0, 0, 0.25);
+}
+.segBtn {
+  border: 0; background: none; color: var(--faint); border-radius: 4px;
+  font: 600 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 5px 10px; cursor: pointer;
+}
+.segBtn.on { background: var(--card-line); color: var(--bright); }
+.segBtn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Lowercase aside inside a caps label — "361 calls · click a bar". */
+.labelNote { font: 400 12px var(--mono); color: var(--faint); text-transform: none; letter-spacing: 0; margin-left: 10px; }
+
+/* Lowercase quiet link, the design's "all trends". */
+.softLink { font: 500 12px var(--mono); color: var(--accent); text-decoration: none; }
+.softLink:hover { text-decoration: underline; }
+
+/* Connections rows. */
+.connRow {
+  display: flex; align-items: center; gap: 12px; padding: 13px 0;
+  border-top: 1px solid var(--card-line);
+}
+.connRow:first-of-type { border-top: 0; }
+.connName { font-size: 14px; font-weight: 600; color: var(--ink); }
+.connSub { font: 400 11px var(--mono); color: var(--faint); margin-top: 3px; }
+.connGrant { margin-left: auto; flex: none; font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); white-space: nowrap; }
+.connRow > span:not(.connGrant) { min-width: 0; }
+.connSub { overflow: hidden; text-overflow: ellipsis; }
+.connGrantGold { color: var(--warn); }
+
+/* Checked-out stacked bar. */
+.stackBar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; margin: 12px 0 10px; }
+.stackBar i { display: block; height: 100%; }
+
+
+/* ── Corpus chip (rail) ───────────────────────────────────────────────────── */
 .conChip {
-  display: inline-flex; align-items: center; gap: 9px; height: 28px; padding: 0 12px;
+  display: inline-flex; align-items: center; gap: 9px; min-height: 28px; padding: 5px 12px;
   border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface);
   box-shadow: var(--elev-1);
-  font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  font: 500 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  overflow-wrap: anywhere;
 }
 .conChipDot { width: 6px; height: 6px; border-radius: 999px; background: var(--ok); flex: none; }
+
+/* ── Appearance switch (settings screen) ──────────────────────────────────── */
 .conApLabel {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
   color: var(--faint);
 }
 .conAp {
@@ -91,7 +910,7 @@
 }
 .conApBtn {
   height: 22px; padding: 0 12px; border: 0; border-radius: 3px; background: transparent;
-  color: var(--faint); font: 500 9.5px var(--mono); letter-spacing: 0.14em;
+  color: var(--faint); font: 500 10px var(--mono); letter-spacing: 0.14em;
   text-transform: uppercase; cursor: pointer;
   transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), transform 0.1s var(--ease-out);
 }
@@ -99,66 +918,24 @@
 .conApBtn:active { transform: translateY(1px); }
 .conApOn { background: var(--bright); color: var(--ground); }
 
-/* ── Footer: the build line, per the standalone board ─────────────────────── */
+/* ── Footer ───────────────────────────────────────────────────────────────── */
 .conFootMark {
-  font: 500 9.5px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label); text-transform: uppercase;
   color: var(--faint);
 }
 .conFootRule { width: 1px; height: 14px; background: var(--line); flex: none; }
-.conFootTag { font: 400 10.5px var(--mono); color: var(--faint); }
-
-/*
- * Light mode: the same semantic tokens, re-lit. Scoped to the console — the brand is dark-first
- * and the rest of the deployment stays on the slate ground. Only the aliases are overridden, so
- * every rule above keeps working untouched.
- */
-:root[data-appearance="light"] {
-  color-scheme: light;
-  --ground: #f7f9fc;
-  --surface: #ffffff;
-  --sunk: #eef1f6;
-  --ink: #131a23;
-  --bright: #070c12;
-  --muted: #4c5764;
-  --faint: #5c6673;
-  --disabled: #93a0ae;
-  --line: #ccd5e0;
-  --hair: #e3e8ef;
-  --hairline-light: rgba(0, 0, 0, 0.05);
-  --accent: #0b7386; /* 5.2:1 on --ground; #0e8ba1 measured 3.8:1 and failed AA at 10px */
-  --accent-hi: #0aa0ba;
-  --accent-soft: rgba(14, 139, 161, 0.12);
-  --ok: #237552; /* 5.3:1 */
-  --warn: #8a5f10; /* 5.4:1 */
-  --crit: #c0392f;
-  --ob-ink-600: #ccd5e0;
-  --ob-cyan-400: #0aa0ba;
-  --ob-cyan-500: #0b7386;
-  --elev-1: 0 1px 2px rgba(20, 30, 45, 0.06);
-  --elev-2: 0 2px 10px -3px rgba(20, 30, 45, 0.1);
-}
-:root[data-appearance="light"] body,
-:root[data-appearance="light"] .conRoot {
-  background: var(--ground);
-  color: var(--ink);
-}
-:root[data-appearance="light"] .conMast {
-  background: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
-}
-:root[data-appearance="light"] .conRibbon {
-  box-shadow: inset 0 10px 18px -12px rgba(20, 30, 45, 0.18);
-}
-
+.conFootTag { font: 400 11px var(--mono); color: var(--faint); }
 .conFootLink {
-  font: 400 10.5px var(--mono); color: var(--faint); text-decoration: none;
+  font: 400 11px var(--mono); color: var(--faint); text-decoration: none;
   transition: color 0.16s var(--ease-out);
 }
 .conFootLink:hover { color: var(--accent); text-decoration: none; }
 
-:root[data-appearance="light"] .conRoot {
-  --cx-bar: linear-gradient(180deg, #ffffff 0%, #eef2f7 100%);
-  --cx-vignette: radial-gradient(100% 60% at 50% 0%, rgba(120, 145, 180, 0.1) 0%, rgba(247, 249, 252, 0) 58%);
-}
+/* The [data-appearance="light"] palette that lived here is gone: it was an inversion of the dark
+   world kept behind a toggle, and theme.css now carries a light world authored as its own thing.
+   Its author had already hit this file's central constraint — the pink was darkened "to hold AA
+   on white" and the cyan dropped to #0b7386 because #0e8ba1 measured 3.8:1 — which is the same
+   wall that turned colour into field rather than ink. */
 
 /* ---- disclosure -------------------------------------------------------------------- */
 /* Global on purpose: Reveal is a client component shared by every screen, and the caret is
@@ -183,7 +960,7 @@
 .revCaretOpen, .revOpen .revCaret { transform: rotate(90deg); }
 .revBody {
   display: block; margin-top: 7px; max-width: 68ch;
-  font: 400 11.5px var(--ui, inherit); font-family: inherit;
+  font: 400 12px var(--ui, inherit); font-family: inherit;
   line-height: 1.55; color: var(--faint); text-transform: none; letter-spacing: normal;
 }
 /* Swatch legend: a colored tick and one word, replacing the "cyan = verified · steel =
@@ -195,3 +972,801 @@
   text-transform: uppercase; color: var(--faint);
 }
 .swatch i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* ── Overview arrangement: main column + right rail, the design's split ───── */
+/* The two columns are both DENSE — handoff prose on the left, a mono instrument stack on the
+   right — and .card carries no horizontal padding, so 24px was the entire separation between two
+   walls of text. At 1900px the right rail's "MEMORY PIPELINE" sat four pixels from the left
+   column's "6 open" and the eye could not tell which column it was reading.
+   Scales with the viewport: a modest gutter where space is scarce, a real one where it is not. */
+.ovGrid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 72px clamp(28px, 4vw, 72px); align-items: start; }
+/* The explicit minmax(0) track is load-bearing: with the default implicit `auto` track, one
+   card whose content refuses to shrink (a nowrap footer note, a chart at min-content) sizes
+   the WHOLE column past its box, and every card then overflows into the neighbouring column —
+   the "10 open / MEMORY PIPELINE" collision. Cards get the column's width, never the reverse. */
+.ovCol { display: grid; grid-template-columns: minmax(0, 1fr); gap: 44px; min-width: 0; align-content: start; }
+@media (max-width: 1100px) { .ovGrid { grid-template-columns: minmax(0, 1fr); } }
+.heroWrap { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.heroModel { margin-left: auto; display: grid; gap: 9px; justify-items: start; padding-left: 26px; }
+.ringBox { position: relative; width: 112px; height: 112px; flex: none; }
+
+/* ── Trends, the design's panels ──────────────────────────────────────────── */
+.statStrip { display: flex; flex-wrap: wrap; gap: 14px 0; }
+.statCell { flex: 1; min-width: 170px; padding: 0 22px; border-left: 1px solid var(--hairline-light, rgba(255, 255, 255, 0.05)); }
+.statCell:first-child { border-left: 0; padding-left: 0; }
+.statFig { display: flex; align-items: baseline; gap: 10px; margin-top: 10px; }
+.heroNstat { font-size: 38px; }
+.statDelta { font: 500 10px var(--mono); letter-spacing: 0.06em; color: var(--muted); }
+/* A delta is signed by meaning, never by decoration: direction comes from the glyph and the
+   field, not from a warm hue applied to every delta regardless of which way it went. */
+.statDelta.up { color: var(--ink-900); }
+.statDelta.down { color: var(--ink-900); }
+.trGrid { grid-template-columns: minmax(0, 1fr) 360px; gap: clamp(28px, 4vw, 72px); }
+@media (max-width: 1100px) { .trGrid { grid-template-columns: minmax(0, 1fr); } }
+
+.mcPlot {
+  position: relative; height: 190px;
+  background: repeating-linear-gradient(180deg, transparent 0 37px, var(--hairline-light, rgba(255, 255, 255, 0.04)) 37px 38px);
+}
+.mcPlot > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.mcRule { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); pointer-events: none; }
+.mcDot {
+  position: absolute; width: 9px; height: 9px; border-radius: 999px;
+  background: var(--faint); border: 2px solid var(--card);
+  transform: translate(-50%, -50%); pointer-events: none;
+}
+.mcDotMem { background: var(--accent); box-shadow: 0 0 8px rgba(31, 189, 214, 0.28); }
+.mcTags { position: absolute; top: 10px; display: flex; flex-direction: column; gap: 6px; pointer-events: none; z-index: 2; }
+.mcTag {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px;
+  background: var(--sunk); border: 1px solid var(--line); border-radius: 4px;
+  font: 500 11px var(--mono); color: var(--muted); white-space: nowrap;
+}
+.mcTag i { width: 3px; height: 12px; background: var(--faint); display: block; }
+.mcTagMem { color: var(--bright); }
+.mcTagMem i { background: var(--accent); }
+.mcZones { position: absolute; inset: 0; display: flex; }
+.mcZones button { flex: 1; border: 0; background: transparent; padding: 0; cursor: crosshair; }
+.mcAxis { display: flex; justify-content: space-between; margin-top: 10px; font: 400 10px var(--mono); color: var(--faint); }
+.swatchDash { border: 1px dashed var(--faint); background: none !important; }
+
+.patRow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--card-line); }
+.patRow:first-of-type { border-top: 0; }
+.patArrow { flex: none; }
+.patBody { flex: 1; min-width: 0; }
+.patTitle { display: block; font-size: 13px; color: var(--ink); }
+.patSub { display: block; font: 400 11px var(--mono); color: var(--faint); margin-top: 3px; }
+.patChip {
+  flex: none; font: 500 10px var(--mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent); background: color-mix(in oklab, var(--accent) 14%, transparent);
+  padding: 3px 8px; border-radius: 3px; white-space: nowrap;
+}
+.patChipPop { color: var(--field-on); background: var(--field-warn); }
+
+.heatWrap { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 5px; align-items: center; }
+.heatDay { font: 400 10px var(--mono); color: var(--faint); text-align: center; }
+.heatBand { font: 400 10px var(--mono); color: var(--faint); white-space: nowrap; }
+.heatCell2 { display: block; height: 26px; border-radius: 4px; transition: transform 0.12s var(--ease-out); }
+.heatCell2:hover { transform: scale(1.1); }
+.heatKey { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 14px; font: 400 10px var(--mono); color: var(--faint); }
+.heatKey i { width: 14px; height: 14px; border-radius: 3px; display: block; }
+
+.shareBar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; gap: 2px; margin-bottom: 6px; }
+.shareBar i { display: block; height: 100%; }
+.shareRow {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 0;
+  border-bottom: 1px solid var(--card-line); text-decoration: none;
+}
+.shareRow:last-of-type { border-bottom: 0; }
+.shareRow > i { width: 7px; height: 7px; border-radius: 2px; display: block; flex: none; }
+.shareName { flex: 1; min-width: 0; font: 500 12px var(--mono); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sharePct { font: 500 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; width: 38px; text-align: right; }
+
+/* ── The iOS switch — settings' one control for every boolean ─────────────── */
+.swt {
+  position: relative; width: 40px; height: 24px; flex: none;
+  border: 0; padding: 0; border-radius: 999px; cursor: pointer;
+  background: var(--sunk); box-shadow: inset 0 0 0 1px var(--card-line);
+  transition: background 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
+}
+.swt::after {
+  content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+  border-radius: 999px; background: var(--faint);
+  transition: transform 0.18s var(--ease-out), background 0.18s var(--ease-out);
+}
+.swt[aria-checked="true"] { background: var(--accent); box-shadow: none; }
+.swt[aria-checked="true"]::after { transform: translateX(16px); background: #fff; }
+.swt:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Settings rows, iOS-grouped: label left, control right, hairline between. */
+.setRow { display: flex; align-items: center; gap: 14px; padding: 13px 0; border-top: 1px solid var(--card-line); }
+.setRow:first-of-type, .setHead + .setRow { border-top: 0; }
+.setBody { flex: 1; min-width: 0; }
+.setTitle { display: block; font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setSub { display: block; font: 400 11px var(--mono); color: var(--faint); margin-top: 3px; }
+.setHead { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; margin-bottom: 4px; }
+
+/* Per-model disclosure rows: summary line + caret, detail unfolds beneath. */
+.mdlRow { border-top: 1px solid var(--card-line); }
+.mdlRow:first-of-type { border-top: 0; }
+.mdlSum {
+  display: flex; align-items: center; gap: 11px; width: 100%; padding: 12px 0;
+  border: 0; background: none; text-align: left; cursor: pointer; color: inherit; font: inherit;
+}
+.mdlCaret { flex: none; width: 12px; font-size: 9px; color: var(--faint); transition: transform 0.15s var(--ease-out); }
+.mdlSum[aria-expanded="true"] .mdlCaret { transform: rotate(90deg); }
+.mdlName { font: 500 12px var(--mono); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mdlNameOn { color: var(--accent); }
+.mdlSub { flex: 1; min-width: 0; font: 400 11px var(--mono); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mdlChip {
+  flex: none; padding: 3px 8px; border: 1px solid var(--card-line); border-radius: 3px;
+  font: 500 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); white-space: nowrap;
+}
+.mdlChipPass { border-color: var(--ok); color: var(--ok); }
+.mdlChipWarn { border-color: var(--warn); color: var(--warn); }
+.mdlDetail { padding: 2px 0 14px 23px; display: grid; gap: 10px; }
+
+/* ══ MOTION ═══════════════════════════════════════════════════════════════ */
+/*
+ * The world's native motion is a sheet being ruled and printed, so that is the only motion
+ * here: rules DRAW across, fields FLOOD in, values RISE into their slots. Nothing fades in
+ * place, nothing scales, nothing bounces — a measurement sheet has no springs in it.
+ *
+ * Three rules this obeys, because this is an Operate surface someone opens several times a day:
+ *   1. Content is visible by default. Every animation moves a transform or a clip, never
+ *      opacity from 0 on the text itself, so a paint that never runs still shows the numbers.
+ *   2. The whole orchestration is under 700ms and runs once on load. The splash this replaces
+ *      cost 2.8 seconds of every single visit.
+ *   3. Rising is not staggered past six children by nth-child — the previous system did that
+ *      and every panel after the sixth arrived with delay 0, out of sequence. The spine's
+ *      sections drive the stagger with a custom property instead, so it never runs out.
+ */
+@keyframes cx-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes cx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes cx-flood { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes cx-ringdraw { from { stroke-dasharray: 0 100; } }
+@keyframes cx-load { from { width: 0; } to { width: 100%; } }
+@keyframes cx-spine { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes cx-bar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* Liveness is the one thing that keeps moving after arrival, and only when it is true. The
+   product's rule is that cyan marks live data; a slow breath on the live field is that rule
+   said in time rather than in colour. It stops entirely when the mirror is not live. */
+@keyframes cx-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.86; } }
+/* A ground arriving: the band's colour wipes up into place. */
+@keyframes cx-wipe { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+/* A printed mark landing: overshoot slightly, then settle. The only easing on this surface
+   that is allowed to overshoot, because a stamp physically does. */
+@keyframes cx-stamp {
+  0% { opacity: 0; transform: translateY(-6px) scale(0.9); }
+  70% { opacity: 1; transform: translateY(0) scale(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+/* Type being set: the line is revealed from its own baseline rather than faded in. */
+@keyframes cx-clip {
+  from { clip-path: inset(0 0 100% 0); transform: translateY(12px); }
+  to { clip-path: inset(0 0 -12% 0); transform: none; }
+}
+
+/* The spine draws itself top-down first — the sheet gets ruled before anything is printed. */
+.ovSheet::before { transform-origin: top; animation: cx-spine 420ms var(--ease-out); }
+
+/* Section rules draw left-to-right. This is the structural gesture of the whole design. */
+.ovSheet > .ovMast,
+.conBody .card { transform-origin: left top; }
+.ovSheet > .ovMast { animation: cx-rule 380ms var(--ease-out) both; }
+
+/* Sections rise in sequence down the spine. --i is set per section below and simply keeps
+   counting, so section nine is as correctly ordered as section one. */
+.conBody .card { animation: cx-rise 420ms var(--ease-out) both; animation-delay: calc(60ms + var(--i, 0) * 55ms); }
+.ovSheet > .ovSplit > .ovRead > .card { --i: 1; }
+.ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card:nth-child(1) { --i: 2; }
+.ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card:nth-child(2) { --i: 3; }
+.ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card:nth-child(3) { --i: 4; }
+.ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card:nth-child(4) { --i: 5; }
+
+/* The masthead numeral rises out of its own rule, clipped — it reads as the sheet feeding up
+   past the line rather than as text fading in. */
+.ovMastN { animation: cx-rise 520ms var(--ease-out) 80ms both; }
+.ovMastMeta > * { animation: cx-rise 420ms var(--ease-out) both; }
+.ovMastMeta > *:nth-child(1) { animation-delay: 150ms; }
+.ovMastMeta > *:nth-child(2) { animation-delay: 190ms; }
+.ovMastMeta > *:nth-child(3) { animation-delay: 230ms; }
+.ovMastMeta > *:nth-child(4) { animation-delay: 270ms; }
+
+/* Fields flood from the left, the way ink lands. Then the live one breathes; the degraded one
+   does not, which is the difference being stated in motion as well as in words. */
+.ovLive, .ovInbox:not(.ovInboxQuiet) { animation: cx-flood 480ms var(--ease-out) 220ms both; }
+.ovLive:not(.ovLiveOff) { animation: cx-flood 480ms var(--ease-out) 220ms both, cx-breathe 4.5s ease-in-out 900ms infinite; }
+.ovInboxN { animation: cx-rise 420ms var(--ease-out) 420ms both; }
+.conTab.on { animation: cx-flood 300ms var(--ease-out) both; }
+.wsKind { animation: cx-flood 260ms var(--ease-out) both; }
+
+/* Bars grow from their baseline, which is where a bar comes from. */
+.capBody, .barVerified, .barRest { transform-origin: bottom; animation: cx-bar 440ms var(--ease-out) both; }
+.ringArc { animation: cx-ringdraw 900ms var(--ease-out); }
+
+.conRoot button:active { transform: translateY(1px); }
+
+/* ── Pointer response ─────────────────────────────────────────────────────── */
+/* A surface that never answers the cursor feels like a printout. These are the smallest moves
+   that make it answer: a row admits it is a row, a chevron leans toward what it points at, a
+   tab's field grows from the edge it belongs to. Nothing here moves layout. */
+.conRoot .row,
+.retRow,
+.toolRow2,
+.wsRow {
+  transition: background-color 120ms var(--ease-out);
+}
+.conRoot .row:hover,
+.retRow:hover,
+.toolRow2:hover,
+.wsRow:hover { background: var(--paper-sunk); }
+
+.retPath, .toolName2 { transition: transform 140ms var(--ease-out); }
+.retRow:hover .retPath,
+.toolRow2:hover .toolName2 { transform: translateX(3px); }
+
+.chevRow::before { transition: transform 140ms var(--ease-out); }
+.chevRow:hover::before { transform: translateX(3px); }
+
+/* The active tab's field grows up from the bar's own baseline instead of appearing whole. */
+.conTab.on { transform-origin: bottom; }
+.conTab { position: relative; }
+.conTab::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--ink-900); transform: scaleX(0); transform-origin: left;
+  transition: transform 160ms var(--ease-out);
+}
+.conTab:hover::after { transform: scaleX(1); }
+.conTab.on::after { display: none; }
+
+/* Fields lift their text a hair on hover — the block is a physical thing being pressed. */
+.conRoot a.ovInboxLink, .askGo, .secTagN { transition: transform 140ms var(--ease-out); }
+.conRoot a.ovInboxLink:hover, .askGo:hover:not(:disabled) { transform: translateY(-2px); }
+
+/* ── Scroll-driven reveal ─────────────────────────────────────────────────── */
+/*
+ * The load-time orchestration above only animates what is on screen when the page arrives.
+ * Everything below the fold finished animating before the reader ever got to it, so past the
+ * first viewport the sheet was static — which is not what the reference does. Its sections
+ * reveal as they enter view, and that is the motion this was missing.
+ *
+ * Driven by the scroll position itself (`animation-timeline: view()`), not by a timer and not
+ * by JavaScript: no observers, no scroll listeners, nothing on the main thread. Where the
+ * browser lacks scroll timelines the @supports block never applies and the load-time animation
+ * above stands, which is a complete experience rather than a broken one.
+ *
+ * `both` matters: without it a section sitting above the entry range would render at the
+ * animation's start state and stay invisible.
+ */
+@supports (animation-timeline: view()) {
+  /* ── Bands ─────────────────────────────────────────────────────────────── */
+  /* The band's own ground wipes up as the passage arrives, so entering a new section is an
+     event rather than a colour that was always there. The ground moves, never the text — a
+     heading that slides while you are starting to read it is a cost, not a flourish. */
+  .band::before {
+    content: ""; position: absolute; inset: 0; background: inherit;
+    transform-origin: bottom; z-index: 0; pointer-events: none;
+    animation: cx-wipe 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 40%;
+  }
+  .band > * { position: relative; z-index: 1; }
+
+  /* The section chip STAMPS — it is a printed mark, so it lands rather than fades. */
+  .secTag {
+    animation: cx-stamp 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 5% entry 35%;
+  }
+  /* The heading wipes up from its own baseline, clipped, like type being set. */
+  .secTitle {
+    animation: cx-clip 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 8% entry 50%;
+  }
+  .secLede {
+    animation: cx-rise 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 12% entry 55%;
+  }
+  /* The corpus field fades up as its band arrives, on top of its own per-mark print. */
+  .dotFieldLive {
+    animation: cx-rise 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 10% entry 60%;
+  }
+
+  .conBody .card {
+    /* The duration is nominal — the timeline drives progress, not the clock. */
+    animation: cx-rise 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 60%;
+    animation-delay: 0s;
+  }
+  /* The section rule draws itself across as the section arrives — the sheet being ruled, which
+     is the structural gesture of this whole design, now happening while you read rather than
+     only at load. */
+  .ovSheet > .ovSplit > .ovRead > .card::after,
+  .ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card::after {
+    content: ""; position: absolute; top: -1px; left: 0; right: 0; height: 1px;
+    background: var(--rule); transform-origin: left; z-index: 1;
+    animation: cx-rule 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 45%;
+  }
+  /* Bars and the ring fill as their chart scrolls in, so a chart is never met already drawn. */
+  .capBody, .barVerified, .barRest {
+    animation: cx-bar 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 10% entry 70%;
+  }
+  /* Rows arrive in place as their block enters. Cheap because it is one transform per row and
+     the compositor owns it. */
+  .wsRow, .retRow, .toolRow2, .setRow {
+    animation: cx-rise 1ms linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 40%;
+  }
+  /* The masthead is above the fold by definition, so it keeps the load-time arrival — a
+     view() timeline on an element already in view would resolve to its end state instantly. */
+  .ovSheet > .ovMast, .ovMastN, .ovMastMeta > * { animation-timeline: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Everything arrives in place. Note this kills the live field's breath too — a persistent
+     infinite animation is exactly what this preference exists to stop. */
+  .conBody .card, .ovSheet::before, .ovSheet > .ovMast, .ovMastN, .ovMastMeta > *,
+  .ovLive, .ovLive:not(.ovLiveOff), .ovInbox, .ovInboxN, .conTab.on, .wsKind,
+  .capBody, .barVerified, .barRest, .ringArc, .askStamp, .askWaitBar,
+  .wsRow, .retRow, .toolRow2, .setRow,
+  .band::before, .secTag, .secTitle, .secLede, .dotFieldLive,
+  .ovSheet > .ovSplit > .ovRead > .card::after,
+  .ovSheet > .ovSplit > .ovRead > .ovGrid > .ovCol > .card::after {
+    animation: none !important;
+  }
+  .card, .card:hover { transform: none; }
+  .retRow:hover .retPath, .toolRow2:hover .toolName2,
+  .chevRow:hover::before, .conRoot a.ovInboxLink:hover, .askGo:hover:not(:disabled) {
+    transform: none !important;
+  }
+  .conTab::after { transition: none !important; }
+}
+
+/* ── The loading screen ───────────────────────────────────────────────────── */
+.splash {
+  position: fixed; inset: 0; z-index: 60; border: 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: inherit; font: inherit; text-align: center; padding: 0;
+  /* Paper, not the dark world: the splash is the console's own first frame (depth pass
+     2026-09-01) — ink hairline grid on warm paper, the faintest signal-orange breath. */
+  background:
+    linear-gradient(rgba(17, 19, 21, 0.06) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(17, 19, 21, 0.06) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(1100px 640px at 50% 36%, color-mix(in oklab, #d8500f 5%, #f0efed), #f0efed 62%);
+  opacity: 1; transition: opacity 0.45s var(--ease-out), transform 0.45s var(--ease-out);
+}
+.splashOut { opacity: 0; transform: scale(1.05); pointer-events: none; }
+.splashMark {
+  display: block; animation: cx-rise 0.7s var(--ease-out) 0.05s backwards;
+  filter: drop-shadow(0 2px 4px rgba(17, 19, 21, 0.14)) drop-shadow(0 10px 24px rgba(17, 19, 21, 0.08));
+}
+.splashHello {
+  margin-top: 30px; font: 500 11px var(--mono); letter-spacing: 0.34em;
+  text-transform: uppercase; color: #5f666d;
+  animation: cx-rise 0.7s var(--ease-out) 0.18s backwards;
+}
+.splashWord {
+  margin-top: 14px; font-family: var(--display); font-weight: 700; font-size: 72px;
+  line-height: 1; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #111315;
+  animation: cx-rise 0.7s var(--ease-out) 0.28s backwards;
+}
+.splashBar {
+  margin-top: 28px; width: 250px; height: 2px; background: #e6e4e0;
+  overflow: hidden; display: block; animation: cx-rise 0.7s var(--ease-out) 0.42s backwards;
+}
+.splashBar i {
+  display: block; height: 100%;
+  background: #d8500f;
+  animation: cx-load 1.75s var(--ease-out) 0.5s both;
+}
+.splashStats {
+  margin-top: 22px; font: 400 11px var(--mono); color: var(--faint);
+  animation: cx-rise 0.7s var(--ease-out) 0.55s backwards;
+}
+.splashSkip {
+  position: absolute; bottom: 26px; font: 400 10px var(--mono); letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--faint); opacity: 0.55;
+  animation: cx-rise 0.8s var(--ease-out) 1.4s backwards;
+}
+
+/* ── Activity header (the design's one-line arrangement) ──────────────────── */
+.actHead { display: flex; align-items: center; gap: 14px; margin-bottom: 26px; }
+.actLabel {
+  flex: none; font: 500 10px var(--mono); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muted);
+}
+.actNote {
+  flex: 1; min-width: 0; font: 400 11px var(--mono); color: var(--faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.capBtn { border: 0; background: transparent; padding: 0 2px; cursor: pointer; transition: opacity 0.15s var(--ease-out); }
+.capBtn:hover { opacity: 1 !important; }
+
+/* ── Working state (the bubble) ──────────────────────────────────────────── */
+.wsRow { display: flex; gap: 14px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--card-line); }
+.wsRow:first-of-type { border-top: 0; }
+/* These five rules were silently dead. They named --font-mono, --ob-ink-200, --ob-ink-300 and
+   --ob-ink-500, none of which is defined anywhere in the repo — the ink scale stops at 600, and
+   it is a BACKGROUND scale being used here as a foreground one. An undefined var() inside a
+   `font:` shorthand invalidates the whole declaration at computed-value time, so family, size,
+   weight and line-height all fell back to inherited: .pipeFig rendered the mirror head SHA in
+   the UI face at body size, on the panel whose job is proving git and Postgres agree, while the
+   same SHA rendered correctly in mono 300px away under Recent saves.
+   Kind tags are fields now, which is also what makes them legible on paper. */
+.wsKind {
+  flex: none; font: 600 10px/1.6 var(--mono); letter-spacing: 0.08em;
+  padding: 2px 8px; border-radius: 0; border: 0;
+  background: var(--paper-sunk); color: var(--ink-900);
+}
+.wsKindFocus { background: var(--field-live); color: var(--field-on); }
+.wsKindHandoff { background: var(--field-live); color: var(--field-on); }
+.wsKindQuestion { background: var(--field-warn); color: var(--field-on); }
+.wsBody { flex: 1; min-width: 0; font-size: 13px; line-height: 1.45; }
+.wsMeta { flex: none; font: 500 11px/1.6 var(--mono); color: var(--muted); white-space: nowrap; }
+
+/* ── Memory pipeline (git → mirror) ──────────────────────────────────────── */
+.pipeRow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--card-line); }
+.pipeRow:first-of-type { border-top: 0; }
+.pipeName { flex: 1; font-size: 13px; }
+.pipeFig { font: 600 12px/1.6 var(--mono); color: var(--ink-900); }
+.pipeSub { font: 500 11px/1.6 var(--mono); color: var(--muted); }
+
+/* Chart quiet state — a designed hush, not an invisible chart. */
+.capQuiet {
+  min-height: 120px; display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 24px 32px; margin-top: 12px;
+  border: 1px dashed var(--card-line); border-radius: 0;
+  color: var(--muted); font-size: 13px; line-height: 1.6; max-width: none;
+}
+
+/* Working-state drill-in rides under the body text, quiet until asked. */
+.wsDrill { display: block; margin-top: 2px; }
+
+/* The model block wraps into a squeeze anywhere below ~1800px — every common laptop width —
+   so below that it gets a deliberate full-width row, aligned to the stat grid it sits under. */
+@media (max-width: 1800px) {
+  .heroModel { margin-left: 0; flex-basis: 100%; padding-left: 0; }
+}
+
+/* ── Loading skeleton ──────────────────────────────────────────────────────
+   Held at the size the real content will occupy, so nothing jumps when it
+   lands. The shimmer is slow and low-contrast on purpose: this appears on
+   every navigation, and a fast bright pulse nine times a session is a tic. */
+.skelHero { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: clamp(24px, 3vw, 48px); align-items: center; padding: 26px 0 34px; border-top: 1px solid var(--rule); }
+.skelNum { height: 132px; border-radius: 2px; }
+.skelLines { display: grid; gap: 12px; }
+.skelCard { display: grid; gap: 11px; padding: 22px 0 26px; border-top: 1px solid var(--rule); }
+.skelLine { height: 14px; border-radius: 2px; }
+.skelNum, .skelLine {
+  background: linear-gradient(90deg, var(--rule-hair) 0%, var(--rule-soft) 45%, var(--rule-hair) 90%);
+  background-size: 280% 100%;
+  animation: skelSweep 2.1s var(--ease-out) infinite;
+}
+@keyframes skelSweep { from { background-position: 140% 0; } to { background-position: -40% 0; } }
+/* A still skeleton is still the right shape, and motion is the part that is optional. */
+@media (prefers-reduced-motion: reduce) { .skelNum, .skelLine { animation: none; } }
+
+/* ── Heat: under the hood (corpus band 01, on the ink ground) ─────────────────── */
+/* Temperature-banded rows — the treatment the operator picked (2026-08-11); the folder-tile
+   and grid variants are deleted, not parked. The palette is the console's own, not a
+   thermometer's: orange is the product's one heat accent (the HOT band label), cyan marks live
+   — and the seat is literally what is live in every session, so seat marking takes the live
+   field. Intensity is a segmented pixel meter in the corpus hero's own language: one row of
+   the block-field's 6px marks at its 3px gap (the operator's second amendment — the translucent
+   bars "looked terrible"). Lit cells are the field's solid marks, unlit its faint base marks;
+   no track, no fill, no hairline — the pixel row IS the meter. */
+.htWrap { display: flex; flex-direction: column; gap: 20px; }
+
+.htColdStart {
+  font: 400 12px/1.6 var(--mono); color: var(--ink-700); max-width: 92ch;
+  border-left: 3px solid var(--signal); background: rgba(240, 239, 237, 0.05);
+  padding: 10px 14px; margin-bottom: 18px;
+}
+.htErr {
+  font: 400 12px/1.6 var(--mono); color: var(--ink-900); max-width: 92ch;
+  border-left: 3px solid var(--signal); background: rgba(240, 239, 237, 0.05);
+  padding: 10px 14px;
+}
+
+.htGroup { margin-bottom: 22px; }
+.htGroupHead {
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+  padding: 8px 0; border-bottom: 1px solid var(--rule-soft); margin-bottom: 10px;
+}
+.htGroupLabel {
+  font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-900);
+}
+.htGroupN { font: 400 11px var(--mono); color: var(--ink-500); font-variant-numeric: tabular-nums; }
+.htBand-hot { color: var(--signal); }
+.htBand-cold { color: var(--ink-500); }
+
+.htRow {
+  display: grid; grid-template-columns: minmax(220px, 1fr) 150px 80px 130px 44px 120px;
+  gap: 12px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--card-line);
+}
+.htRow:hover { background: rgba(240, 239, 237, 0.05); }
+.htRowOpen {
+  border: 0; background: none; text-align: left; cursor: pointer; color: var(--ink-900);
+  padding: 6px 0; min-width: 0; font: inherit;
+}
+.htRowPath {
+  font: 400 12px var(--mono); display: block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.htRowOpen:hover .htRowPath { text-decoration: underline; }
+/* The intensity meter, borrowed cell-for-cell from the hero block-field (.dotField i):
+   the same 6px square, the same 3px gap, the same two materials — solid marks in the band's
+   off-white ink for the lit cells, the faint rule-soft base mark for the unlit. 17 cells fill
+   the 150px column exactly (17 × 9px − 3px). */
+.htMeter { display: flex; gap: 3px; }
+.htMeter i { width: 6px; height: 6px; display: block; background: var(--rule-soft); }
+.htMeter i.on { background: var(--ink-900); }
+.htRowN {
+  font: 400 11px var(--mono); color: var(--ink-500);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.htRowSeat {
+  font: 500 9px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--ink-500); text-align: center;
+}
+.htRow.htSeat .htRowSeat { background: var(--field-live); color: var(--field-on); padding: 2px 0; }
+
+.htPinBtn {
+  border: 1px solid var(--rule-soft); background: none; color: var(--ink-700);
+  min-height: 26px; padding: 2px 10px; cursor: pointer;
+  font: 500 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+}
+.htPinBtn:hover:not(:disabled) { border-color: var(--signal); color: var(--ink-900); }
+.htPinBtn:disabled { opacity: 0.5; cursor: default; }
+.htPinBtn.htPin-hot { border-color: var(--signal); color: var(--signal); }
+.htPinBtn.htPin-cold { border-color: var(--rule); color: var(--ink-500); }
+
+/* Legend. */
+.htLegend {
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  padding-top: 14px; border-top: 1px solid var(--rule-soft);
+  font: 400 11px var(--mono); color: var(--ink-500);
+}
+.htLegendItem { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.htLegendItem i { width: 12px; height: 12px; display: inline-block; }
+.htSwSeat { background: rgba(240, 239, 237, 0.2); box-shadow: inset 0 -3px 0 var(--field-live); }
+.htLegendNote { flex: 1 1 100%; max-width: 110ch; line-height: 1.6; }
+
+/* The pin row inside the ledger expansion (paper ground — tokens adapt). */
+.htPinRow {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--hair); padding-top: 10px;
+}
+.htPinLabel {
+  font: 500 10px var(--mono); letter-spacing: var(--tracking-label);
+  text-transform: uppercase; color: var(--faint);
+}
+.htPinState { font: 500 11px var(--mono); color: var(--ink); }
+.htPinState.htPin-hot { color: var(--signal); }
+.htPinState.htPin-cold { color: var(--muted); }
+.htPinNote { font: 400 11px/1.5 var(--mono); color: var(--faint); max-width: 70ch; }
+.htPinNone { font: 400 11px var(--mono); color: var(--faint); }
+
+@media (max-width: 900px) {
+  .htRow { grid-template-columns: minmax(0, 1fr) 90px; }
+  .htRow .htMeter, .htRow .htRowN:nth-of-type(2), .htRow .htRowSeat { display: none; }
+}
+
+/* ── Handoff staging (corpus band 02, paper) ──────────────────────────────── */
+.hoWrap { display: flex; flex-direction: column; gap: 18px; }
+.hoBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.hoGo {
+  min-height: 44px; padding: 0 20px; border: 1px solid var(--ink-900);
+  background: var(--ink-900); color: var(--paper); cursor: pointer;
+  font: 600 11px var(--mono); letter-spacing: 0.14em; text-transform: uppercase;
+}
+.hoGo:disabled { background: var(--paper-sunk); border-color: var(--rule-hair); color: var(--disabled); cursor: default; }
+.hoHint { font: 400 11px var(--mono); color: var(--muted); }
+.hoErr {
+  padding: 12px 14px; border-left: 3px solid var(--ink-900); background: var(--paper-sunk);
+  font-size: 13px; line-height: 1.6; max-width: 86ch;
+}
+/* The coverage line VERBATIM — it is the bundle's own sentence, so it renders as a quote. */
+.hoCoverage {
+  font: 400 12px/1.6 var(--mono); color: var(--ink-900); background: var(--paper-sunk);
+  padding: 12px 14px; border-left: 2px solid var(--field-live); overflow-wrap: anywhere;
+}
+.hoCols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 40px; align-items: start; }
+.hoColHead {
+  font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--ink-900); padding-bottom: 8px; border-bottom: 1px solid var(--rule); margin-bottom: 4px;
+}
+.hoPiece {
+  display: grid; grid-template-columns: 58px minmax(150px, 230px) 56px 1fr;
+  gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--rule-hair); align-items: baseline;
+}
+.hoKind {
+  font: 600 9px/1.9 var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  text-align: center; background: var(--paper-sunk); color: var(--ink-900);
+}
+.hoKind-page { background: var(--field-live); color: var(--field-on); }
+.hoKind-pinned { background: var(--signal); color: var(--signal-on); }
+.hoKind-rank { background: none; box-shadow: inset 0 0 0 1px var(--rule); color: var(--muted); }
+.hoLabel { font: 400 12px var(--mono); color: var(--ink-900); overflow-wrap: anywhere; }
+.hoBytes {
+  font: 400 11px var(--mono); color: var(--muted); text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.hoWhy { font: 400 11px/1.55 var(--mono); color: var(--ink-700); overflow-wrap: anywhere; }
+.hoOut .hoLabel { color: var(--muted); }
+.hoMore, .hoNone { font: 400 11px/1.6 var(--mono); color: var(--muted); padding: 10px 0; max-width: 86ch; }
+.hoWarn {
+  font: 400 12px/1.6 var(--mono); color: var(--ink-900); border-left: 3px solid var(--signal);
+  padding: 10px 12px; background: var(--paper-sunk); max-width: 92ch;
+}
+@media (max-width: 1100px) {
+  .hoCols { grid-template-columns: 1fr; gap: 22px; }
+  .hoPiece { grid-template-columns: 58px 1fr 56px; }
+  .hoPiece .hoWhy { grid-column: 1 / -1; }
+}
+
+/* ── The kinetic layer ─────────────────────────────────────────────────────────
+   Motion is the mechanism settling, never decoration: entrances run ONCE, on scroll
+   into view, on the house curve, and only after kinetic.tsx arms the element — the
+   server markup is fully visible without JavaScript, and prefers-reduced-motion gets
+   the finished sheet with nothing armed at all. Vocabulary matches the corpus of
+   cx-* keyframes above: rise (a numeral out of its rule), print (a chip stamped),
+   rule (a hairline drawn), flood (a field filled left to right). */
+.conRoot.cxReady [data-cx]:not(.cxIn) { opacity: 0; }
+.conRoot.cxReady [data-cx="rise"]:not(.cxIn) { transform: translateY(22px); }
+.conRoot.cxReady [data-cx="print"]:not(.cxIn) { transform: scale(0.72); }
+.conRoot.cxReady [data-cx="rule"]:not(.cxIn) { transform: scaleX(0); transform-origin: left; }
+.conRoot.cxReady [data-cx="flood"]:not(.cxIn) { opacity: 1; clip-path: inset(0 100% 0 0); }
+.conRoot.cxReady [data-cx].cxIn {
+  opacity: 1;
+  transform: none;
+  clip-path: inset(0 0 0 0);
+  transition:
+    opacity 0.7s var(--ease-out) var(--cx-d, 0ms),
+    transform 0.7s var(--ease-out) var(--cx-d, 0ms),
+    clip-path 0.8s var(--ease-out) var(--cx-d, 0ms);
+}
+
+/* Hover is a row shifting under the reading finger — background raises one paper step,
+   the row eases right. No card ever lifts; the sheet has no elevation to borrow. */
+.conRoot .wsRow,
+.conRoot .connRow,
+.conRoot .pipeRow {
+  transition: background 0.2s var(--ease-out), padding-left 0.25s var(--ease-out);
+}
+.conRoot .wsRow:hover,
+.conRoot .connRow:hover,
+.conRoot .pipeRow:hover { background: var(--paper-raised); padding-left: 10px; }
+
+/* ── The CX mark ──────────────────────────────────────────────────────────── */
+.conCx {
+  background: var(--signal);
+  color: var(--signal-on);
+  font-family: var(--display);
+  font-variation-settings: var(--display-wide);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  padding: 5px 8px 4px;
+  margin-right: 12px;
+}
+
+/* ── Verdict grid — how answers checked out, at numeral scale ─────────────── */
+.vGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--rule-soft);
+  border: 1px solid var(--rule-soft);
+  margin-top: 12px;
+}
+.vCell {
+  background: var(--paper);
+  padding: 14px 16px 12px;
+  transition: background 0.2s var(--ease-out);
+}
+.vCell:hover { background: var(--paper-raised); }
+.vNum {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--display);
+  font-variation-settings: var(--display-wide);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+}
+.vNum i { width: 11px; height: 11px; flex: none; }
+.vLab {
+  margin-top: 7px;
+  font: 500 10px var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+/* The masthead chip's live dot — cyan because the count is read from the live head this
+   render, the one place the masthead states a fact about data rather than identity. */
+.conChipDot { width: 8px; height: 8px; flex: none; background: var(--field-live); }
+
+/* ── The depth pass (2026-09-01) ───────────────────────────────────────────────
+   Meters and bars are wells sunk into the sheet; the ink band is a slab that casts
+   onto the paper on both edges; the masthead rests just above the page it rules. */
+.conRoot .stackBar,
+.conRoot .gradMeter { box-shadow: var(--sunk-well); background: var(--paper-sunk); }
+.conRoot .bandInk {
+  box-shadow: 0 2px 3px rgba(17, 19, 21, 0.20), 0 14px 34px rgba(17, 19, 21, 0.10),
+    0 -2px 3px rgba(17, 19, 21, 0.14), 0 -10px 26px rgba(17, 19, 21, 0.06);
+}
+.conRoot .conMast { box-shadow: 0 4px 14px rgba(17, 19, 21, 0.05); }
+.conRoot .vCell { background: var(--surface); }
+
+/* ── Working state as the ink slab (the spec's black splitter, at card scale) ──
+   The chosen board carried the bubble in the ink band: orange number chips,
+   rows that slide right as an orange edge draws in. Scoped as a card variant so it
+   lives in the grid without stacking a second full-bleed band on the page. */
+.cardInk {
+  background: var(--band-ink);
+  border: 0;
+  color: var(--band-ink-on);
+  box-shadow: 0 2px 4px rgba(17, 19, 21, 0.22), 0 14px 32px rgba(17, 19, 21, 0.14);
+}
+.cardInk:hover { box-shadow: 0 3px 6px rgba(17, 19, 21, 0.26), 0 18px 40px rgba(17, 19, 21, 0.17); }
+.cardInk .wsRow { border-bottom: 1px solid rgba(240, 239, 237, 0.14); position: relative; }
+.cardInk .wsRow::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--signal); transform: scaleY(0); transition: transform 0.25s var(--ease-out);
+}
+.cardInk .wsRow:hover { background: none; padding-left: 18px; }
+.cardInk .wsRow:hover::before { transform: scaleY(1); }
+.wsId {
+  background: var(--signal); color: var(--signal-on);
+  font: 700 11px var(--mono); padding: 3px 8px; margin-right: 10px; flex: none;
+  min-width: 30px; text-align: center;
+}
+.cardInk .wsKind, .cardInk .wsKindFocus, .cardInk .wsKindHandoff, .cardInk .wsKindQuestion {
+  background: rgba(240, 239, 237, 0.1); color: var(--band-ink-on);
+}
+.cardInk .wsMeta { color: rgba(240, 239, 237, 0.72); }
+
+/* ── Morphs (design review, 2026-09-01): the shapes settle, not just fade ──
+   Same contract as every entrance: once, on the house curve, scoped under .cxReady so
+   reduced-motion never sees them, `backwards` fill so no animation ever pins a final
+   transform over a state class (the reveal caret still swings open after settling). */
+@keyframes cx-pop { from { transform: scale(0); opacity: 0; } }
+@keyframes cx-swing { from { transform: rotate(-90deg) scale(0.5); opacity: 0; } }
+.conRoot.cxReady [data-cx].cxIn .dotField i {
+  animation: cx-pop 0.5s var(--ease-out) var(--d, 0ms) backwards;
+}
+.conRoot.cxReady [data-cx].cxIn .ringArc {
+  animation: cx-ringdraw 1.1s var(--ease-out) 0.2s backwards;
+}
+.conRoot.cxReady [data-cx].cxIn .revCaret {
+  animation: cx-swing 0.45s var(--ease-out) 0.4s backwards;
+}
+.conRoot.cxReady [data-cx].cxIn .vNum i,
+.conRoot.cxReady [data-cx].cxIn .wsId {
+  animation: cx-pop 0.45s var(--ease-out) 0.25s backwards;
+}
+.conRoot.cxReady [data-cx].cxIn .modelSelect {
+  animation: cx-pop 0.5s var(--ease-out) 0.3s backwards;
+  transform-origin: left center;
+}
+.conRoot.cxReady .conChipDot { animation: cx-pop 0.5s var(--ease-out) 0.5s backwards; }
+
+/* The guest card's scope row stacks: the sentence owns its line, the folder chips wrap
+   below it — a shared track crushed the sentence to one word per line. */
+.conRoot .setRowStack { flex-direction: column; align-items: stretch; gap: 10px; }

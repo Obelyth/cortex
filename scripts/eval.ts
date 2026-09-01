@@ -219,8 +219,13 @@ async function judgeOnce(
     // The other providers go through the reader's own hardened path. Its schema is the reply
     // schema, so the verdict rides in the `answer` field; a judge that will not follow that is
     // a judge that cannot rule, which is exactly what null means.
+    // Judge prompts are one-shot per label, so nothing goes in the cacheable `stable` slot —
+    // a cache write with no read to follow would only pay the write premium.
     const raw = await modelReader(
-      `${prompt}\n\nPut exactly "CORRECT" or "INCORRECT" as the first word of "answer", then your one-sentence reason. Leave tag and quote empty.`,
+      {
+        stable: "",
+        question: `${prompt}\n\nPut exactly "CORRECT" or "INCORRECT" as the first word of "answer", then your one-sentence reason. Leave tag and quote empty.`,
+      },
       j.model
     );
     const parsed = JSON.parse(raw) as { answer?: unknown };
