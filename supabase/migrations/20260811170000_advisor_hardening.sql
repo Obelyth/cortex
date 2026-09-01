@@ -37,5 +37,12 @@ revoke execute on function public.search_notes(q text, k integer)
   from anon, authenticated;
 revoke execute on function public.sync_apply(expected_head text, new_head text, upserts jsonb, removes text[])
   from anon, authenticated;
-revoke execute on function public.rls_auto_enable()
-  from anon, authenticated;
+-- rls_auto_enable() is created by no migration in this chain — it exists only on databases
+-- where it was installed out of band. REVOKE has no IF EXISTS form, so on a fresh database
+-- this statement would raise 42883 and roll back the whole file. Guard on existence: where
+-- the function is absent there is nothing to lock, and that is a no-op, not an error.
+do $$ begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    revoke execute on function public.rls_auto_enable() from anon, authenticated;
+  end if;
+end $$;

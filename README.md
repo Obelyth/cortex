@@ -71,7 +71,7 @@ a download:
 /bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
 ```
 
-The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your two secrets locally, tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).
+The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your three secrets locally (the console passcode among them — accept the suggestion or type your own), tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands and the console passcode for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FObelyth%2Fcortex)
 
@@ -232,7 +232,7 @@ everything else is the one command.
 ### Rotating secrets
 
 1. Run `npm run onboard` and answer **no** when it offers to keep the existing secrets. It generates fresh values, sets them on the project, redeploys, and reprints the wiring commands.
-2. Re-wire every surface: the claude.ai custom connector gets the new URL; each machine re-runs its `claude mcp add` line. Until then, wired surfaces hold the revoked values and fail closed.
+2. Re-wire every surface: the claude.ai custom connector gets the new URL; each machine re-runs its `claude mcp add` line. Until then, wired surfaces hold the revoked values and fail closed. Stamped browsers need no re-wiring — the console simply asks for the new passcode on their next visit.
 3. `GUEST_PATH_SECRET` is not managed by the wizard: set a new value in the Vercel project env and redeploy — or unset it, which is how a guest is revoked entirely. Every guest surface shares that one secret, however many you have wired, so rotating it revokes all of them together and leaves the trusted doors untouched. That coupling is the point: guests are revoked as a class, without re-wiring your own machines. They also share the one daily ask budget — the counter is per deployment per UTC day, not per guest — so a busy surface can spend the whole allowance before a quieter one asks anything; raise `dailyAsks` on the settings screen before wiring a second guest you expect to use daily.
 4. Treat a leaked **trusted** credential as a compromise, not a nuisance: rotate first, then audit the brain repo's recent commits for writes you did not make.
 

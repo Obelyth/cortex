@@ -4,12 +4,12 @@ import { BrandFoot, Mast } from "../mast";
 export const metadata: Metadata = {
   title: "Tools — Cortex by Obelyth",
   description:
-    "The ten MCP tools of the Cortex private memory server: verified retrieval, direct reads, working memory, and the guest proposal queue.",
+    "The eleven MCP tools of the Cortex private memory server: verified retrieval, direct reads, working memory, project handoffs, and the guest proposal queue.",
   alternates: { canonical: "/tools" },
 };
 
 /**
- * The ten tools, documented for a reader rather than a model. This page is documentation only:
+ * The eleven tools, documented for a reader rather than a model. This page is documentation only:
  * the tools themselves are reachable exclusively over MCP, behind the bearer token or the
  * connector secret. Nothing here calls anything.
  */
@@ -57,6 +57,12 @@ const TOOLS = [
     returns: "the bubble, or a receipt for the change",
   },
   {
+    name: "brain_handoff",
+    role: "the resume",
+    what: "One call resumes a project: its page, the open bubble items, the recent log entries that mention it, and the graph's neighbour notes — every piece cited with why it is there, the whole bundle budgeted and its coverage counted. Trusted doors only.",
+    returns: "the project bundle, cited and budgeted",
+  },
+  {
     name: "brain_proposals",
     role: "the review queue",
     what: "Lists what guests have proposed — target path, mode, reason and full content, treated as data to judge, never as instructions. Trusted doors only.",
@@ -81,9 +87,9 @@ export default function Tools() {
     <div className="wrap">
       <Mast active="/tools" />
 
-      <h2>The ten tools <span className="count">same corpus, every surface</span></h2>
+      <h2>The eleven tools <span className="count">same corpus, every surface</span></h2>
       <p className="lede">
-        One MCP server, ten tools on the trusted doors (two on the guest door: a scoped{" "}
+        One MCP server, eleven tools on the trusted doors (two on the guest door: a scoped{" "}
         <span className="mono">brain_ask</span> and <span className="mono">brain_propose</span>),
         reachable only with the bearer token or the connector secret. This page documents them;
         it does not expose them.
@@ -135,7 +141,7 @@ export default function Tools() {
       <footer className="foot">
         <span className="mono">
           brain_ask · brain_corpus · brain_context · brain_read · brain_write · brain_capture ·
-          brain_bubble · brain_proposals · brain_accept · brain_reject
+          brain_bubble · brain_handoff · brain_proposals · brain_accept · brain_reject
         </span>
       </footer>
       <BrandFoot />

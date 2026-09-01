@@ -117,27 +117,27 @@ const CORTEX_SEAM = [
   "- Rotate the sample-app API token found hardcoded in `apps/beacon`'s `config.yml` — still unrotated and still in the file as of 2026-07-25 (see projects/beacon.md).",
   "",
   "",
-  "## Known defects (found 2026-07-25 — two fixed 2026-07-27, the rest still open)",
+  "## Standing defects (logged 2026-07-25 — two closed 2026-07-27, the rest still open)",
 ].join("\n");
 
-/** notes/branch-targets.md:22-25 — the deviating-branch table. */
+/** notes/pr-targets.md:22-25 — the deviating-branch table. */
 const BRANCH_TABLE = [
   "| Project | PRs target | Notes |",
   "|---|---|---|",
-  "| Aurora | **`Main-DevTest`** | `Main-DevTest → main` is a separate later promote. |",
-  "| Meridian v2 | **confirm each time** | Not fixed. Ask the operator rather than assuming. |",
-  "| Harbor | see project page | 07-25 verification found **no `dev` branch** — recent PRs merge straight from feature branches into `main`. |",
+  "| Aurora | **`Dev-Staging`** | `Dev-Staging → main` lands in a separate later promote. |",
+  "| Meridian v2 | **ask every time** | Never settled. Check with the operator instead of assuming a target. |",
+  "| Harbor | see project page | 07-25 review turned up **no `staging` branch** — recent PRs land on `main` straight from feature branches. |",
 ].join("\n");
 
 /**
- * notes/engineering-workflow.md:14-16 — a `>` precedence chain, hard-wrapped.
+ * notes/escalation-ladder.md:14-16 — a `>` precedence chain, hard-wrapped.
  * The bullet line is included because it is the other half of the block: lines 14-15 are one
  * list item joined by a soft wrap, and line 16 is where the wrap happens to start with `>`.
  */
 const PRECEDENCE = [
-  "- **ENGINEERING-STANDARDS.md** — the meta-system: encode every lesson into the",
-  "  highest layer that applies itself (template > GitHub > hook > CLAUDE.md > skill",
-  "  > memory); \"I'll remember\" is rank-0 and always fails.",
+  "- **PLAYBOOK.md** — the escalation ladder: route every incident to the",
+  "  narrowest tier that can own it (runbook > pager > channel > standup > wiki",
+  "  > backlog); \"someone will notice\" is tier-0 and always fails.",
 ].join("\n");
 
 const SHA = "d94641c0aaaa1111";
@@ -315,23 +315,23 @@ describe("markdown stripping is positional, not a blanket [*_`>#] strip", () => 
     expect(verifyQuote(CORTEX_METRICS, "arithmetic top-1 58.4%, MRR 0.727").verified).toBe(true);
     // Where the closing marker follows a letter, the fold works as documented.
     expect(normalise("**bold** text here")).toBe("bold text here");
-    expect(verifyQuote("the **Main-DevTest** branch is the target", "the Main-DevTest branch").verified).toBe(true);
+    expect(verifyQuote("the **Dev-Staging** branch is the target", "the Dev-Staging branch").verified).toBe(true);
   });
 
   it("OK: `>` survives, so a precedence chain cannot flatten into a list", () => {
-    // `template > GitHub > hook > CLAUDE.md > skill > memory` is an ordering — each beats the
+    // `runbook > pager > channel > standup > wiki > backlog` is an ordering — each beats the
     // next.
     //
     // was: normalised it was six nouns in a row, and a quote asserting they are peers verified
     // against the line that says they are ranked.
     // now: the `>` characters are mid-line, so they stay, and the flattened version matches
     // nothing in the file.
-    expect(verifyQuote(PRECEDENCE, "(template GitHub hook CLAUDE.md skill memory)")).toMatchObject({
+    expect(verifyQuote(PRECEDENCE, "(runbook pager channel standup wiki backlog)")).toMatchObject({
       verified: false,
       reason: "NOT FOUND in the cited file",
     });
     // The real chain, quoted as written, still verifies.
-    expect(verifyQuote(PRECEDENCE, "(template > GitHub > hook > CLAUDE.md > skill").verified).toBe(true);
+    expect(verifyQuote(PRECEDENCE, "(runbook > pager > channel > standup > wiki").verified).toBe(true);
   });
 
   it("OK: `#` is not interchangeable — a count and an issue reference stay distinct", () => {
@@ -382,7 +382,7 @@ describe("markdown stripping is positional, not a blanket [*_`>#] strip", () => 
 describe("matching is scoped to one block", () => {
   it("OK: a quote welded from two different sections is refused, with the boundary named", () => {
     // The fixture's last "Next" bullet says the sample token is STILL UNROTATED. The next H2
-    // is "Known defects (found 2026-07-25 — two fixed 2026-07-27...)". Two blank lines and
+    // is "Standing defects (logged 2026-07-25 — two closed 2026-07-27...)". Two blank lines and
     // an `##` separate them.
     //
     // was: normalise() deleted all three, and the result was a single fluent passage in which
@@ -391,7 +391,7 @@ describe("matching is scoped to one block", () => {
     // now: refused, and the reason says why, so the reader is not left thinking the text is
     // absent when it is the JOIN that is fabricated.
     const spliced =
-      "still unrotated and still in the file as of 2026-07-25 (see projects/beacon.md). Known defects (found 2026-07-25 — two fixed 2026-07-27, the rest still open)";
+      "still unrotated and still in the file as of 2026-07-25 (see projects/beacon.md). Standing defects (logged 2026-07-25 — two closed 2026-07-27, the rest still open)";
     expect(CORTEX_SEAM.includes(spliced)).toBe(false);
     for (const line of CORTEX_SEAM.split("\n")) expect(normalise(line)).not.toContain(normalise(spliced));
     expect(verifyQuote(CORTEX_SEAM, spliced)).toMatchObject({
@@ -422,18 +422,18 @@ describe("matching is scoped to one block", () => {
   });
 
   it("OK: table rows do not weld, so a fact cannot move from one project onto another", () => {
-    // was: spliced across the row break, "no dev branch" trailed Meridian v2 — a different
+    // was: spliced across the row break, "no staging branch" trailed Meridian v2 — a different
     // project with a different answer — and the verifier called the whole thing verbatim, in
     // a note whose entire purpose is not getting that wrong.
     const spliced =
-      "Meridian v2 | confirm each time | Not fixed. Ask the operator rather than assuming. | | Harbor | see project page | 07-25 verification found no dev branch";
+      "Meridian v2 | ask every time | Never settled. Check with the operator instead of assuming a target. | | Harbor | see project page | 07-25 review turned up no staging branch";
     expect(verifyQuote(BRANCH_TABLE, spliced)).toMatchObject({
       verified: false,
       reason: "spans a paragraph, list or section boundary — not a contiguous quote",
     });
     for (const line of BRANCH_TABLE.split("\n")) expect(normalise(line)).not.toContain(normalise(spliced));
     // One row is one block, and still quotable on its own.
-    const row = verifyQuote(BRANCH_TABLE, "Meridian v2 | confirm each time | Not fixed. Ask the operator rather than assuming.");
+    const row = verifyQuote(BRANCH_TABLE, "Meridian v2 | ask every time | Never settled. Check with the operator instead of assuming a target.");
     expect(row.verified).toBe(true);
     expect(row.line).toBe(4);
   });
@@ -479,18 +479,18 @@ describe("matching is scoped to one block", () => {
     // and 15 of the real file are one list item; the quote below crosses that wrap.
     expect(splitBlocks(PRECEDENCE)[0].text.split("\n")).toHaveLength(2);
     expect(
-      verifyQuote(PRECEDENCE, "the meta-system: encode every lesson into the highest layer that applies itself").verified
+      verifyQuote(PRECEDENCE, "the escalation ladder: route every incident to the narrowest tier that can own it").verified
     ).toBe(true);
   });
 
   it("BUG: a soft-wrapped line that happens to begin with `>` is split off as a blockquote", () => {
-    // notes/engineering-workflow.md:15-16 wraps the precedence chain so that
-    // the continuation line starts `  > memory);`. That `>` is content — the last link of the
+    // notes/escalation-ladder.md:15-16 wraps the precedence chain so that
+    // the continuation line starts `  > backlog);`. That `>` is content — the last link of the
     // chain — but it is at the start of a line, so splitBlocks() opens a new block AND
     // LINE_LEAD strips it. Two consequences, both wrong for this line:
     //
     //   1. The full chain is not quotable at all: it now spans two blocks.
-    //   2. The whole-file normal form silently reads `... > skill memory)`, turning the last
+    //   2. The whole-file normal form silently reads `... > wiki backlog)`, turning the last
     //      ranked pair into a juxtaposition — the same class of damage the positional strip
     //      was introduced to prevent, just relocated to line-leading position.
     //
@@ -501,11 +501,11 @@ describe("matching is scoped to one block", () => {
     // wrapped chain against one missed retraction on a dead production URL is not a close
     // call. Recorded so the trade is deliberate rather than forgotten.
     expect(splitBlocks(PRECEDENCE)).toHaveLength(2);
-    expect(verifyQuote(PRECEDENCE, "template > GitHub > hook > CLAUDE.md > skill > memory")).toMatchObject({
+    expect(verifyQuote(PRECEDENCE, "runbook > pager > channel > standup > wiki > backlog")).toMatchObject({
       verified: false,
       reason: "NOT FOUND in the cited file",
     });
-    expect(normalise(PRECEDENCE)).toContain("> skill memory)");
+    expect(normalise(PRECEDENCE)).toContain("> wiki backlog)");
   });
 });
 

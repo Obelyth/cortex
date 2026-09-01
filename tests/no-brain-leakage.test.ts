@@ -60,26 +60,14 @@ const SCAN_ROOT_FILES = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "ROADMAP
 const SELF = "tests/no-brain-leakage.test.ts";
 
 /**
- * PRIVATE-ONLY: files that exist in the operator's private deployment and are never ported here
- * except in sanitized form.
- *
- * This list is the export boundary written down as code, which is the point. Deciding "does this
- * file ship?" used to happen in someone's head during a port, once per file, under time pressure.
- * Here it is a committed policy the test enforces: on the private side these files quote the
- * brain freely; the copies shipped here carry synthetic fixtures only, and they reference the
- * live-brain layout (../brain, its well-known note paths) by design, which is why the gate does
- * not scan them. Everything else in the tree — including the public-only surfaces such as
- * ops/groundskeeper, the onboarding scripts and brain-template/ — is scanned in full.
- *
- *   docs/superpowers/specs/**  design specs; the private originals are dense with measured facts
- *                              about the operator's real corpus
- *   tests/hard-*.test.ts       the live-brain suites; on the private side, reading the real
- *                              thing IS their purpose
+ * NOTHING SHIPPED IS EXEMPT. On the private side this gate excluded tests/hard-*.test.ts and
+ * docs/superpowers/specs/** — there, those files read the operator's real brain on purpose and
+ * were never ported. This repo SHIPS both: the hard-* suites carry sanitized synthetic fixtures
+ * and the specs are the sanitized design docs. Sanitized-from-private files are exactly where
+ * residual leakage is most likely — the one time this gate walked past them, verbatim brain
+ * lines rode a port inside a hard-* fixture — so the old exclusion list is gone rather than
+ * narrowed. If a file cannot pass this scan, it cannot ship; there is no third category.
  */
-const PRIVATE_ONLY = [/^docs\/superpowers\/specs\//, /^tests\/hard-[^/]+\.test\.ts$/];
-
-const isPrivateOnly = (rel: string) => PRIVATE_ONLY.some((re) => re.test(rel));
-
 function walk(dir: string, base = ""): string[] {
   const out: string[] = [];
   if (!existsSync(dir)) return out;
@@ -99,7 +87,7 @@ function repoSources(): Array<[string, string]> {
   for (const d of SCAN_DIRS) files.push(...walk(join(REPO, d), d));
   for (const f of SCAN_ROOT_FILES) if (existsSync(join(REPO, f))) files.push(f);
   return files
-    .filter((f) => f !== SELF && !isPrivateOnly(f))
+    .filter((f) => f !== SELF)
     .filter((f) => /\.(ts|tsx|js|mjs|jsx|css|md|json|sql|sh|py)$/.test(f))
     .map((f) => [f, readFileSync(join(REPO, f), "utf8")] as [string, string]);
 }
@@ -120,8 +108,13 @@ function brainPaths(): string[] {
  * A named note under projects/ is the opposite. Nothing about the format requires that name; it
  * exists only because the operator has a project by that name, and printing it in a public repo
  * says so. That is the whole distinction: the shape is documentation, the name is disclosure.
+ *
+ * projects/cortex.md is the one projects/ name that is structure, not disclosure: every cortex
+ * deployment grows a project note about cortex itself, under the product's own name. The test
+ * suites use it as their brain-presence sentinel and their fixtures cite it, so treating it as
+ * private would flag the product for naming its own product.
  */
-const SCHEMA_PATHS = new Set(["profile.md", "INDEX.md", "README.md"]);
+const SCHEMA_PATHS = new Set(["profile.md", "INDEX.md", "README.md", "projects/cortex.md"]);
 const isSchemaPath = (p: string) => SCHEMA_PATHS.has(p) || /^log\/\d{4}-\d{1,2}-\d{1,2}\.md$/.test(p);
 
 /**
@@ -325,6 +318,46 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
       hits,
       `real credential values found in shipped source (rotate them, then replace the fixture with a synthetic value):\n  ${hits.join("\n  ")}`
     ).toEqual([]);
+  });
+
+  /**
+   * Exact-path matching misses the near miss, which is the shape a leak actually takes.
+   *
+   * A fixture written from memory lands one segment off the real name — notes/<stem>.md where the
+   * brain holds notes/<stem>-something.md. The path is not real, so the exact check passes it, and
+   * the disclosure is identical: the stem is the project, and the stem is what was private.
+   *
+   * Only path-shaped literals are inspected, never prose, so a stem that is also an ordinary word
+   * cannot fire on a sentence that merely uses it.
+   */
+  it("no near miss of a real note path appears in any shipped source file", () => {
+    const base = (p: string) => p.split("/").pop()!.replace(/\.md$/, "").toLowerCase();
+    const real = brainPaths().filter((p) => !isSchemaPath(p));
+
+    // Truncation, not overlap. `quarry` against a real `quarry-api` is the same name with a
+    // qualifier dropped; `harbor-policy` against a real `harbor-targets` is two different notes
+    // that happen to start with an ordinary word, and policing that would fire on English.
+    //
+    // The examples here are fictional on purpose. Describing a leak is how the last two got
+    // reintroduced: the note came out, and the comment explaining the note went back in.
+    const truncates = (a: string, b: string) =>
+      a !== b && a.length > 4 && b.startsWith(a) && b[a.length] === "-";
+
+    const hits: string[] = [];
+    for (const [file, text] of repoSources()) {
+      for (const m of text.matchAll(/(?:notes|projects|archive)\/[A-Za-z0-9._-]+\.md/g)) {
+        // A schema path is the deliberately-public exception the exact check carves out; its stem
+        // is the product's own name, so a "near miss" of it discloses nothing either.
+        if (isSchemaPath(m[0])) continue;
+        const b = base(m[0]);
+        const origin = real.find((p) => truncates(b, base(p)) || truncates(base(p), b));
+        if (!origin || m[0] === origin) continue; // the exact-path check owns the exact case
+        const line = text.slice(0, m.index!).split("\n").length;
+        hits.push(`${file}:${line} names a note one qualifier off a real one (${origin})`);
+      }
+    }
+
+    expect(hits, `near-miss brain note paths found in shipped source:\n  ${hits.join("\n  ")}`).toEqual([]);
   });
 
   it("the gate itself is looking at something — guards against a silently empty corpus", () => {

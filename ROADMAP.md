@@ -16,7 +16,7 @@ production, and nothing below ships without its tests.*
 
 The foundation this roadmap stands on, live today:
 
-- Ten tools over MCP, three doors with distinct trust levels — terminal, connector, guest
+- Eleven tools over MCP, three doors with distinct trust levels — terminal, connector, guest
 - A deterministic verifier: every answer stamped `VERIFIED` / `CORRECTED` / `SUPERSEDED` /
   `NOT IN BRAIN` against the file at its commit
 - Pluggable readers — Claude, OpenAI, Gemini on an allowlist; Claude holds the default it
@@ -49,6 +49,10 @@ with `SUPABASE_URL` unset the server behaves exactly as it did before any of it 
 - **A retrieval eval.** `scripts/eval-retrieval.ts` scores any narrowing strategy against a
   labelled set, deterministically and without model calls, so a change to retrieval is a
   measurement rather than an argument. It has already declined a feature — see below.
+- **The handoff.** `brain_handoff` — promised below under Q3 2026, shipped 2026-08 —
+  resumes a project in one call: the project page, its open bubble items, the recent log
+  entries that mention it, and the graph's neighbour notes, every piece cited with why it
+  is there, the whole bundle budgeted and its coverage counted. Trusted doors only.
 
 ## Q3 2026 — Continuity & Proof
 
@@ -62,6 +66,8 @@ with `SUPABASE_URL` unset the server behaves exactly as it did before any of it 
 - **`brain_handoff`** — one call returns a project's whole working context: its page,
   recent logs, relevant notes, open threads — as one cited bundle. Start in Claude Code,
   continue in Cursor, same context. The groundskeeper keeps bundles warm overnight.
+  *Shipped 2026-08, inside its own quarter — recorded in the context tier above rather
+  than erased here, the same rule the 2027 section follows.*
 - **The eval, in your hands** — a labels template ships in `brain-template/`, and the
   console surfaces your own `npm run eval` results. "Claude earned the default" becomes
   your deployment's own measurement, on your corpus. Any reader can take the chair by
