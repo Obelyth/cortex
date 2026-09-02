@@ -51,7 +51,7 @@ describe("the router cannot be structurally forged from a note", () => {
 
   // Line-based parsing already blocks a literal newline, but a LONE CR is not a line break to the
   // parser and is a cursor-return to a terminal — enough to redraw a row over the one above it.
-  it.each([["\r", "carriage return"], [" ", "line separator"], ["", "bell"]])(
+  it.each([["\r", "carriage return"], ["\u2028", "line separator"], ["", "bell"]])(
     "strips a %s (%s) rather than rendering it",
     (ch) => {
       const line = routerLine(entryFor("notes/a.md", note(`"before${ch}after"`)));

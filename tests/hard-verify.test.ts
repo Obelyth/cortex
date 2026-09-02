@@ -566,7 +566,7 @@ describe("NFKC and invisible characters", () => {
   });
 
   it("OK: real whitespace variants fold as intended (NBSP, ideographic, line separator)", () => {
-    for (const cp of [" ", "　", " ", " ", " "]) {
+    for (const cp of [" ", "　", "\u2028", "\u2029", " "]) {
       expect(verifyQuote("Production is still dark", `Production is${cp}still dark`).verified).toBe(true);
     }
   });
@@ -754,8 +754,8 @@ describe("parity with brain/tools/eval/verify_citation.py", () => {
       expect(verifyQuote("Production is still dark", `Production is${cp}still dark`).verified).toBe(false);
       expect(normalise(`Production is${cp}still dark`)).toContain(cp);
     }
-    expect(verifyQuote("Production is still dark", "Production isstill dark").verified).toBe(true);
-    expect(normalise("Production isstill dark")).toBe("Production is still dark");
+    expect(verifyQuote("Production is still dark", "Production is\u0085still dark").verified).toBe(true);
+    expect(normalise("Production is\u0085still dark")).toBe("Production is still dark");
   });
 
   it("OK: a leading BOM is deleted before trimming, so both sides produce the same normal form", () => {
