@@ -32,7 +32,7 @@ if (!url) {
 }
 
 const DIR = join(process.cwd(), "supabase", "migrations");
-const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort();
+const files = readdirSync(DIR).filter((f) => f.endsWith(".sql")).sort((a, b) => a.localeCompare(b));
 if (files.length === 0) {
   console.error(`no .sql files under ${DIR}`);
   process.exit(2);

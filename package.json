@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "onboard": "node scripts/onboard.mjs",
     "update": "node scripts/update.mjs",
-    "ingest": "node scripts/ingest.mjs"
+    "ingest": "node scripts/ingest.mjs",
+    "coverage": "vitest run --coverage.enabled"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
@@ -33,7 +34,7 @@
     "typescript": "^7",
     "vitest": "^4"
   },
-  "description": "CORTEX by OBELYTH — a private markdown brain served to every Claude surface over MCP, with a verified read path.",
+  "description": "CORTEX by OBELYTH \u2014 a private markdown brain served to every Claude surface over MCP, with a verified read path.",
   "repository": {
     "type": "git",
     "url": "https://github.com/Obelyth/cortex"
