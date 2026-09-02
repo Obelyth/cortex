@@ -1,0 +1,24 @@
+# SonarQube Cloud, CI-based analysis. Automatic Analysis was retired for this
+# repo on 2026-09-02 after it stopped picking up pull requests; this workflow
+# is what feeds the "SonarCloud Code Analysis" check the main ruleset requires.
+name: Build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0 # full history: blame data drives new-code detection
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
