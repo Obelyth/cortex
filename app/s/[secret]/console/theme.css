@@ -1,0 +1,149 @@
+/*
+ * CONSOLE LIGHT WORLD — the token layer, re-authored rather than inverted.
+ *
+ * Scoped to .conRoot on purpose. globals.css keeps :root dark because the public / page shares
+ * it, and that page is not in this redesign's scope. Flipping :root would have redesigned a
+ * surface nobody asked for.
+ *
+ * Why this is not a palette swap: --ob-ink-* in globals.css is a BACKGROUND scale that descends
+ * into darkness (950 darkest → 600 lightest). On paper that role reverses — backgrounds come from
+ * a paper scale and the ink scale becomes foreground. Every semantic alias is therefore re-derived
+ * here from new raw values, never remapped onto the dark ones.
+ *
+ * The measurement that shaped the whole system: on this paper, the product's colours die as ink.
+ *   cyan  #1fbdd6 on #f0efed = 1.96:1   amber #e0ad48 = 1.78:1   green #4cc08a = 1.98:1
+ * All three fail body text (4.5:1) and large text (3:1). The same cyan carrying near-black text
+ * measures 8.25:1. So colour became FIELD, not ink — a filled region with dark text on it.
+ * "Cyan marks live data" survives as a rule; only its medium changed.
+ *
+ * Consequence for anyone editing this file: a coloured stroke, a coloured label, or coloured
+ * body text on this ground is a contrast failure, not a style choice. If you want a value to
+ * carry a colour, flood its container and put near-black on top.
+ */
+.conRoot {
+  color-scheme: light;
+
+  /* —— Paper scale (backgrounds, light → recessed) ——————————— */
+  --paper: #f0efed;
+  --paper-raised: #f7f6f4;
+  --paper-sunk: #e6e4e0;
+
+  /* —— Ink ramp (foreground, dark → faint) ————————————————— */
+  --ink-900: #111315; /* 16.20:1 on paper — running text and numerals */
+  --ink-700: #3a3f44; /*  9.15:1 — secondary text */
+  --ink-500: #5f666d; /*  5.51:1 — labels, captions, mono meta */
+  --ink-400: #7c848c; /*  3.71:1 — genuinely inert only, never running copy */
+
+  /* —— Rules. Separation is hairlines; there is no elevation on paper. —— */
+  --rule: #111315;             /* the structural hairline — full strength */
+  --rule-soft: rgba(17, 19, 21, 0.16);
+  --rule-hair: rgba(17, 19, 21, 0.08);
+
+  /* —— Fields. Colour lives here and nowhere else. ——————————— */
+  --field-live: #1fbdd6;       /* cyan — live data, 8.25:1 carrying --ink-900 */
+  --field-warn: #e0ad48;       /* amber — attention, 10.6:1 carrying --ink-900 */
+  --field-ok: #4cc08a;         /* green — healthy */
+  --field-crit: #e8695f;       /* red — failure */
+  --field-on: var(--ink-900);  /* what every field carries. Always near-black. */
+
+  /* SIGNAL ORANGE. The reference's true accent, and the thing this redesign was missing: it is
+     not only a dashed rule, it is a colour used at scale — filled section chips, chevrons,
+     full-bleed slabs. It carries WHITE, not ink (5.05:1 on #d8500f), which is what lets it work
+     as a field on both grounds. Cyan and orange do not compete because they answer different
+     questions: cyan means LIVE (a fact about data), orange means STRUCTURE (a fact about the
+     document — which section you are in, where a list item begins, where an action is). */
+  --signal: #d8500f;
+  --signal-on: #ffffff;
+  --spine: #d8500f;            /* the dashed construction rule; never carries text */
+
+  /* The three grounds a section can sit on. Alternating them is what turns a stack of ruled
+     regions into a composed page — the single biggest thing separating the reference from a
+     monotone sheet. */
+  --band-paper: #f0efed;
+  --band-grey: #e4e2de;
+  --band-ink: #14171a;
+  --band-ink-on: #f0efed;
+
+  /* —— Semantic aliases, re-pointed at the paper world ————————— */
+  --ground: var(--paper);
+  --surface: var(--paper-raised); /* sheets rest one step above the ground since the depth pass */
+  --sunk: var(--paper-sunk);
+  --ink: var(--ink-900);
+  --bright: var(--ink-900);
+  --muted: var(--ink-500);
+  --faint: var(--ink-500);     /* collapsed onto --muted: 3.71:1 is not a text tone */
+  --disabled: var(--ink-400);
+  --line: var(--rule-soft);
+  --hair: var(--rule-hair);
+  --hairline-light: var(--rule-hair);
+  --accent: var(--ink-900);    /* an "accent" as INK is just ink here — see the note above */
+  --accent-hi: var(--ink-900);
+  --accent-soft: rgba(31, 189, 214, 0.18);
+  --warn: var(--ink-900);
+  --crit: var(--ink-900);
+  --ok: var(--ink-900);
+
+  /* —— Motion ——————————————————————————————————————————————— */
+  /* --ease-out was referenced by 48 transition rules across this console and defined nowhere.
+     An undefined var() inside a shorthand invalidates the whole declaration at computed-value
+     time, so every one of those transitions computed to `all 0s` — no transition at all. The
+     hovers, the tab underline, the field lifts: none of them had ever run. Same failure mode as
+     the --font-mono / --ob-ink-* rules, which is the argument for the CI grep that asserts every
+     var(--…) in console CSS resolves.
+     Decelerating, no overshoot: this world's motion is a mechanism settling, not a spring. */
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* —— Geometry. Zero radius is the world, not a preference. ————— */
+  --radius-sm: 0;
+  --radius-md: 0;
+  /* Depth (design review, 2026-09-01 — more dimension instead of a flat look): paper has
+     physical depth now — a sheet rests on a close ink shadow, offset AND softly blurred,
+     never a glow and never a zero-blur slab. elev-1 is a sheet at rest; elev-2 is the same
+     sheet attended to. Colourless ink only; cyan still never glows. */
+  --elev-1: 0 1px 2px rgba(17, 19, 21, 0.10), 0 3px 10px rgba(17, 19, 21, 0.05);
+  --elev-2: 0 2px 4px rgba(17, 19, 21, 0.13), 0 12px 28px rgba(17, 19, 21, 0.08);
+  --sunk-well: inset 0 1px 3px rgba(17, 19, 21, 0.14);
+  --glow-cyan: none;
+
+  background: var(--paper);
+  color: var(--ink-900);
+  font-family: var(--sans);
+  min-height: 100vh;
+  position: relative;
+  /* Absorbs the full-bleed bands' scrollbar overshoot. `clip`, never `hidden` — hidden would
+     create a scroll container and silently unstick the masthead. */
+  overflow-x: clip;
+}
+
+/* The paper has to reach past .conRoot's own box: the root layout paints body from the dark
+   :root ground, and overscroll would show it. :has() carries the html/body case in every
+   current browser; the fixed layer below is the belt to that braces and also covers overscroll. */
+html:has(.conRoot),
+body:has(.conRoot) {
+  background: #f0efed;
+}
+.conRoot::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--paper);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Focus is a solid ink ring. The dark world used a cyan glow; on paper a shadow-based ring is
+   both low-contrast and invisible in forced-colors mode, which globals.css already warned about
+   in its own comment. Ink at 16:1 needs no glow. */
+.conRoot :focus-visible {
+  outline: 2px solid var(--ink-900);
+  outline-offset: 2px;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* Links are ink with a rule under them; colour is not available to carry linkness here. */
+.conRoot a { color: var(--ink-900); text-decoration: none; }
+.conRoot a:hover { color: var(--ink-900); text-decoration: underline; text-underline-offset: 3px; }
+
+.conRoot ::selection { background: var(--field-live); color: var(--ink-900); }

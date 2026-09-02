@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFrontmatter, routerLine, buildRouter } from "../lib/frontmatter";
+import { parseFrontmatter, routerLine, buildRouter, routerCut } from "../lib/frontmatter";
 
 describe("parseFrontmatter", () => {
   it("reads description and tags from a real feedback-note shape", () => {
@@ -147,6 +147,60 @@ describe("buildRouter", () => {
 
   it("is deterministic — same input, byte-identical output", () => {
     expect(buildRouter(files)).toBe(buildRouter(new Map([...files].reverse())));
+  });
+});
+
+describe("buildRouter — the budget is the document's, wrapper included", () => {
+  // Enough notes that the wrapper (header + coverage + `## <dir>` headings) is dwarfed by rows,
+  // and budgets can land anywhere inside the row run.
+  const many = new Map<string, string>(
+    Array.from({ length: 40 }, (_, i) => [
+      `notes/note-${String(i).padStart(2, "0")}.md`,
+      `---\ndescription: "A note about topic ${i}, with enough words to give the row realistic length."\n---\n\nbody`,
+    ])
+  );
+
+  it("BUG GUARD: the returned document never exceeds the budget — wrapper bytes included", () => {
+    // The old cut enforced row bytes only, so the rendered document ran over by exactly the
+    // wrapper (~121 bytes on the live corpus, measured 2026-08-17) and the overshoot drifted
+    // with the shape of the corpus. Probe budgets across the whole range, including ones that
+    // land mid-row, and demand the contract the constant's name promises.
+    const uncapped = buildRouter(many).length;
+    for (const budget of [800, 1200, 2000, 3000, uncapped - 1, uncapped, uncapped + 500]) {
+      const out = buildRouter(many, new Map(), budget);
+      if (out.length > budget) {
+        // The one sanctioned overshoot: even a single row plus the wrapper cannot fit. Then the
+        // first row renders anyway (an empty router hides everything), and nothing else does.
+        expect(out.match(/^- notes\//gm)?.length ?? 0).toBe(1);
+      }
+      expect(out.length, `budget ${budget}`).toBeLessThanOrEqual(Math.max(budget, out.length));
+    }
+    // And at the realistic budgets, the contract is strict.
+    for (const budget of [2000, 3000, uncapped, uncapped + 500]) {
+      expect(buildRouter(many, new Map(), budget).length, `budget ${budget}`).toBeLessThanOrEqual(
+        budget
+      );
+    }
+  });
+
+  it("what the budget refuses is said out loud, and nothing is lost from the cut", () => {
+    const out = buildRouter(many, new Map(), 2000);
+    expect(out).toMatch(/further notes? did not fit this router's budget/);
+    const cut = routerCut(many, new Map(), 2000);
+    expect(cut.rendered.length + cut.dropped.length).toBe(40);
+    // The dropped count in the prose is the cut's own number, not a second derivation.
+    expect(out).toContain(`_${cut.dropped.length} further note`);
+  });
+
+  it("a capped render is still deterministic — same input, byte-identical output", () => {
+    expect(buildRouter(many, new Map(), 2000)).toBe(
+      buildRouter(new Map([...many].reverse()), new Map(), 2000)
+    );
+  });
+
+  it("an uncapped call is untouched by the fitting loop", () => {
+    expect(buildRouter(many).length).toBeGreaterThan(2000);
+    expect(buildRouter(many)).toBe(buildRouter(many, new Map(), Infinity));
   });
 });
 

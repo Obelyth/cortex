@@ -37,15 +37,15 @@ export function stripOAuthHints(res: Response): Response {
  * "what may I do here".
  */
 function build(guest: boolean) {
+  // mcp-handler v2 takes ONE options object, and dropped basePath / maxDuration / disableSse /
+  // redisUrl outright -- v2 is HTTP-only, so there is no SSE transport to disable and no Redis to
+  // point at. maxDuration belongs to the route segment config now, not the handler.
   const mcpHandler = createMcpHandler(
     (server) => {
       registerTools(server, { guest });
     },
-    { serverInfo: { name: guest ? "cortex (guest)" : "cortex", version: "1.0.0" } },
     {
-      basePath: "/api",
-      maxDuration: 60,
-      disableSse: true,
+      serverInfo: { name: guest ? "cortex (guest)" : "cortex", version: "1.0.0" },
       verboseLogs: false,
     }
   );

@@ -6,5 +6,19 @@ node_modules/
 next-env.d.ts
 .claude/
 results/
-# older docs suggested this name for pulled secrets; never commit it
-.env.pull
+
+# Local design-tooling scratch: generated mockups, prompts and critiques. 4.8 MB of AI
+# output that describes the console rather than being part of it, and it regenerates on
+# demand — it was committed by an over-broad `git add -A`, not by intent.
+.impeccable/
+# Same tool, same accident. PRODUCT.md carries an `impeccable:product-schema` marker and is
+# rewritten by the design skill, so tracking it means a diff on every design pass describing
+# the product rather than changing it. The README is the durable answer to "what is this".
+PRODUCT.md
+
+# Review agents write throwaway probe suites here while a workflow runs, and a `git add -A` in
+# that window sweeps them into a commit -- which is exactly how one reached main. Ignoring the
+# prefix is a backstop, not the fix: the fix is staging paths instead of -A. Named `zz-` so they
+# sort last and are obvious in a listing.
+tests/zz-*.test.ts
+.env*

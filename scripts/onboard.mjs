@@ -9,7 +9,7 @@
  * Safe to re-run: every step checks before it acts.
  */
 import { execFileSync, execSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import { mkdtempSync, cpSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -126,6 +126,19 @@ const MCP_TOKEN = randomBytes(32).toString("hex");
 const CONNECTOR_PATH_SECRET = randomBytes(32).toString("hex");
 ok("MCP_TOKEN and CONNECTOR_PATH_SECRET generated (64 hex chars each)");
 say("");
+// The console's second factor (lib/stamp.ts): a device's first visit answers a passcode
+// prompt, and only the right answer stamps it — unset means the console fails CLOSED.
+// A human types this on every new device, so it is short and unambiguous rather than
+// 64 hex chars; the prompt takes your own instead if you prefer. The value is set
+// verbatim (trimmed), and the MCP doors never read it.
+const ABC = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/O/1/l/i — nothing to misread later
+const group = () => Array.from({ length: 4 }, () => ABC[randomInt(ABC.length)]).join("");
+const suggested = `${group()}-${group()}-${group()}`;
+const CONSOLE_PASSCODE =
+  (await rl.question(`  Console passcode — typed once per new device at the console door [${suggested}]: `))
+    .trim() || suggested;
+ok(`CONSOLE_PASSCODE ${CONSOLE_PASSCODE === suggested ? "generated" : "set"} — unlocks the web console; MCP doors never read it`);
+say("");
 act("One step needs your browser — a fine-grained GitHub PAT, scoped to ONLY the brain repo:");
 say(`      https://github.com/settings/personal-access-tokens/new`);
 say(`      Repository access: Only select repositories → ${brainRepo}`);
@@ -146,12 +159,17 @@ execSync("vercel link --yes", { cwd: ROOT, stdio: "inherit" });
 // Re-run safety: if this project already carries a token, a silent regeneration would break
 // every wired surface. Keeping the existing secrets is the default.
 let keepExisting = false;
+let hasPasscode = false;
 try {
   const existing = sh("vercel env ls production", { cwd: ROOT });
+  hasPasscode = existing.includes("CONSOLE_PASSCODE");
   if (existing.includes("MCP_TOKEN")) {
     const kr = (await rl.question("  This project already has secrets. Keep them (re-wiring stays valid)? [Y/n] ")).trim().toLowerCase();
     keepExisting = kr !== "n";
-    if (!keepExisting) act("rotating — every wired device and the claude.ai connector must be re-wired after this");
+    if (!keepExisting) {
+      act("rotating — every wired device and the claude.ai connector must be re-wired after this");
+      act("   (stamped browsers are cheaper: the console just re-prompts for the new passcode)");
+    }
   }
 } catch { /* not linked before — fresh setup */ }
 
@@ -161,16 +179,20 @@ const envs = {
   GITHUB_TOKEN,
   MCP_TOKEN,
   CONNECTOR_PATH_SECRET,
+  CONSOLE_PASSCODE,
   ...(ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY } : {}),
 };
 for (const [k, v] of Object.entries(envs)) {
-  if (keepExisting && (k === "MCP_TOKEN" || k === "CONNECTOR_PATH_SECRET")) { ok(`env ${k} kept`); continue; }
+  // The passcode is kept like the other secrets on a keep re-run — but a project from before
+  // the console door had a passcode gets one anyway, or the wizard would hand out a console
+  // URL that renders CONSOLE LOCKED.
+  if (keepExisting && (k === "MCP_TOKEN" || k === "CONNECTOR_PATH_SECRET" || (k === "CONSOLE_PASSCODE" && hasPasscode))) { ok(`env ${k} kept`); continue; }
   try { execSync(`vercel env rm ${k} production --yes`, { cwd: ROOT, stdio: "ignore" }); } catch {}
   execSync(`vercel env add ${k} production`, { cwd: ROOT, input: v, stdio: ["pipe", "ignore", "inherit"] });
   ok(`env ${k} set (production)`);
 }
 // When keeping, the real secret values are needed for verification and wiring output.
-let liveToken = MCP_TOKEN, liveSecret = CONNECTOR_PATH_SECRET;
+let liveToken = MCP_TOKEN, liveSecret = CONNECTOR_PATH_SECRET, livePasscode = CONSOLE_PASSCODE;
 if (keepExisting) {
   const tmpEnv = join(ROOT, ".vercel", ".onboard-env.tmp");
   execSync(`vercel env pull --environment production ${tmpEnv} --yes`, { cwd: ROOT, stdio: "ignore" });
@@ -178,6 +200,7 @@ if (keepExisting) {
   rmSync(tmpEnv, { force: true });
   liveToken = (pulled.match(/^MCP_TOKEN="?([^"\n]+)/m) || [])[1] ?? MCP_TOKEN;
   liveSecret = (pulled.match(/^CONNECTOR_PATH_SECRET="?([^"\n]+)/m) || [])[1] ?? CONNECTOR_PATH_SECRET;
+  livePasscode = (pulled.match(/^CONSOLE_PASSCODE="?([^"\n]+)/m) || [])[1] ?? CONSOLE_PASSCODE;
 }
 // The most common first-deploy failure, said BEFORE the deploy rather than after the check
 // fails: team-default Deployment Protection puts an SSO page in front of the doors.
@@ -235,10 +258,13 @@ say(`  Claude Code (any machine — run once, user scope):
 
   The secret-gated pages (do not share these URLs):
       console         ${url}/s/${liveSecret}/console
+      passcode        ${livePasscode}
       live map        ${url}/s/${liveSecret}/map
+  A device's first console visit asks for the passcode, and the right answer stamps
+  the device — from then on the link opens like a plain bookmark.
 `);
-say(`  Store MCP_TOKEN and CONNECTOR_PATH_SECRET in your password manager now —
-  this is the only time they are shown together.\n`);
+say(`  Store MCP_TOKEN, CONNECTOR_PATH_SECRET and CONSOLE_PASSCODE in your password
+  manager now — this is the only time they are shown together.\n`);
 say(`  Optional tiers, when you want them (each documented in .env.example):
       guest door       GUEST_PATH_SECRET (a second, different secret) + the Upstash KV
                        integration on the Vercel Marketplace — it injects KV_REST_API_* itself

@@ -52,7 +52,12 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
   let chosen: string[];
   let missing: string[] = [];
 
-  if (opts.paths?.length) {
+  // PRESENCE, not length. `paths: []` is a caller saying "none of them" — a model that filtered
+  // the router down to zero matches and asked for exactly that. The old truthiness test made an
+  // empty array fall through to the listing branch and return the ENTIRE corpus up to the
+  // budget: the largest, most expensive, highest-exposure reply this tool can produce, in
+  // answer to a request for nothing.
+  if (opts.paths !== undefined) {
     chosen = opts.paths.filter((p) => files.has(p));
     missing = opts.paths.filter((p) => !files.has(p));
   } else if (opts.question) {

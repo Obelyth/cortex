@@ -16,5 +16,10 @@ export default defineConfig({
     include: ["tests/**/*.test.ts"],
     unstubEnvs: true,
     unstubGlobals: true,
+    coverage: {
+      provider: "v8",
+      include: ["app/**/*.{ts,tsx}", "lib/**/*.ts"],
+      reporter: ["text-summary", "lcov"],
+    },
   },
 });

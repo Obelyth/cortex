@@ -1,15 +1,33 @@
 import { z } from "zod";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { capture, getContext, readNote, validatePath, writeNote } from "./brain";
+// v2 of mcp-handler passes its own bundled McpServer, from @modelcontextprotocol/server rather
+// than .../sdk. Same shape, different package identity -- and TypeScript compares by identity,
+// so importing the SDK's type here made every registration a type error.
+import type { McpServer } from "@modelcontextprotocol/server";
+import { capture, getContext, readNote, validatePath, writeNote, MAX_WRITE_CHARS } from "./brain";
 import { ask, buildPrompt, render, DEFAULT_MODEL, DEFAULT_K } from "./ask";
 import { modelReader, READER_MODEL_IDS } from "./reader";
 import { activeReader, readSettings } from "./settings";
-import { readGuestPolicy, spendGuestAsk, guestReaderModel } from "./guest";
+import { effectiveLearning } from "./learning";
+import {
+  readGuestPolicy,
+  spendGuestAsk,
+  spendGuestPropose,
+  requireReadablePolicy,
+  guestReaderModel,
+} from "./guest";
+import { redact } from "./redact";
 import { loadCorpus } from "./corpus";
 import { selectNotes } from "./select";
+import { cacheKey, readAnswerCache, writeAnswerCache } from "./anscache";
 import { record, currentSurface, stampOf } from "./calls";
 import { logNoteAccess } from "./access";
 import { bubbleStore, renderBubbleList, type BubbleKind } from "./bubble";
+import {
+  assembleHandoff,
+  HANDOFF_BUDGET_BYTES,
+  MAX_HANDOFF_BUDGET_BYTES,
+  MIN_HANDOFF_BUDGET_BYTES,
+} from "./handoff";
 import {
   propose,
   listProposals,
@@ -54,6 +72,8 @@ interface CallMeta {
   model?: string;
   /** brain_ask only: corpusTokens - packTokens, what narrowing spared the caller. */
   saved?: number;
+  /** brain_ask only: the reply came from the answer cache — no model was called. */
+  cached?: boolean;
 }
 
 async function logged(
@@ -73,6 +93,7 @@ async function logged(
       ms: Date.now() - started,
       ...(meta.model ? { model: meta.model } : {}),
       ...(meta.saved !== undefined ? { saved: meta.saved } : {}),
+      ...(meta.cached ? { cached: true as const } : {}),
     });
   } catch {
     /* the log is an observation, never the product */
@@ -90,6 +111,7 @@ const OUTCOME: Record<string, string> = {
   brain_proposals: "READ",
   brain_context: "BOOT",
   brain_bubble: "BUBBLE",
+  brain_handoff: "HANDOFF",
   // Its own word, not COMMITTED: a proposal changed nothing in the brain, and a console that
   // said otherwise would be claiming a write that never happened.
   brain_propose: "PROPOSED",
@@ -128,6 +150,7 @@ export function registerTools(server: McpServer, opts: ToolOptions = {}): void {
   registerReadTools(server);
   registerWriteTools(server);
   registerBubbleTool(server);
+  registerHandoffTool(server);
 }
 
 function registerAskTool(server: McpServer): void {
@@ -165,15 +188,60 @@ function registerAskTool(server: McpServer): void {
     async ({ question, full, k, model }) =>
       logged("brain_ask", async (meta) => {
       try {
-        // One extra KV GET per ask, uncached on purpose: it is milliseconds against a call that
-        // already fetches a tarball and waits on a model, and a cache would mean a setting
-        // changed on the phone quietly not applying to the instance you are talking to.
-        const active = await activeReader(model);
+        // Two extra KV GETs per ask (reader settings, learning knobs), in parallel and uncached
+        // on purpose: they are milliseconds against a call that already fetches a tarball and
+        // waits on a model, and a cache would mean a setting changed on the phone quietly not
+        // applying to the instance you are talking to.
+        const [active, learning] = await Promise.all([activeReader(model), effectiveLearning()]);
         meta.model = active.model;
-        const r = await ask(question, modelReader, { full, k, model: active.model });
+        // The corpus is loaded HERE and handed to ask(), so the cache key and the answer name
+        // the same commit — resolving the head twice would leave a race where the entry is
+        // keyed at one SHA and computed at another.
+        const corpus = await loadCorpus();
+        // Cache OFF is a null key: both the lookup and the store below are skipped, so a
+        // switched-off cache can never serve yesterday's answer NOR pin today's. The fresh path
+        // already discloses what it does (the MODEL CALL line), so off needs no extra banner.
+        const key = learning.ansCache
+          ? cacheKey(
+              { question, sha: corpus.sha, model: active.model, k: full ? "full" : k ?? DEFAULT_K },
+              { door: "trusted", scope: [], citations: true }
+            )
+          : null;
+        const hit = key ? await readAnswerCache(key) : null;
+        if (hit) {
+          meta.cached = true;
+          // Nothing was packed and nothing was sent — the whole scoped corpus stayed home.
+          meta.saved = hit.corpusTokens;
+          // The tail line is the egress disclosure, and on a hit the honest disclosure is that
+          // there was no egress: no provider was called, no note left the server.
+          return ok(
+            `${hit.reply}\n\ncached · answered at ${hit.commit.slice(0, 8)} — no model call; ` +
+              `${hit.model} read the notes when this answer was first computed`
+          );
+        }
+        const r = await ask(question, modelReader, { full, k, model: active.model, corpus });
         logNoteAccess(r.candidates, "brain_ask", full ? "full" : "narrowed");
         meta.saved = Math.max(0, r.corpusTokens - r.packTokens);
-        return ok(`${render(r)}\n\nMODEL CALL: ${r.model} read ${r.candidates.length} notes (~${r.packTokens} tokens) @${r.commit}`);
+        const reply = render(r);
+        // UNVERIFIED is the one verdict that must not be replayed: it marks a fabrication or a
+        // protocol failure — a property of that model CALL, not of the corpus at this commit —
+        // and pinning it would serve the same bad roll for a week. Every other verdict is a
+        // statement about the immutable corpus, which is exactly what the key promises.
+        if (key && stampOf(reply) !== "UNVERIFIED") {
+          writeAnswerCache(
+            key,
+            {
+              reply,
+              stamp: stampOf(reply),
+              model: r.model,
+              commit: r.commit,
+              corpusTokens: r.corpusTokens,
+              ts: Date.now(),
+            },
+            learning.ansCacheTtlDays * 86_400
+          );
+        }
+        return ok(`${reply}\n\nMODEL CALL: ${r.model} read ${r.candidates.length} notes (~${r.packTokens} tokens) @${r.commit}`);
       } catch (e) {
         return err(e);
       }
@@ -241,10 +309,22 @@ function registerReadTools(server: McpServer): void {
         // This path has NO verifier behind it — the notes land straight in the caller's
         // context — so a note that mimics a file header is more dangerous here, not less.
         logNoteAccess(sel.paths, "brain_corpus", want?.length ? "paths" : question ? "question" : "listing");
-        const { prompt, suspect } = buildPrompt(c, question ?? "", sel.paths);
-        const body = sel.paths.length ? prompt.slice(prompt.indexOf("\n\n====================")) : "";
+        const { blocks, suspect } = buildPrompt(c, question ?? "", sel.paths);
+        const raw = sel.paths.length ? blocks : "";
+        // THE SAME EGRESS GATE brain_read applies. redact() used to live only in readNote(), so
+        // this tool — which hands over up to 40 notes at once, with no reader model and no
+        // verifier in between — returned credentials verbatim that brain_read masked on the
+        // identical bytes. The bulk path is the one an injected agent reaches for, so it needs
+        // the gate more than the single-note path, not less.
+        const body = redact(raw);
 
         const notes: string[] = [];
+        if (body !== raw) {
+          notes.push(
+            "NOTE: credential-shaped values in these notes were redacted on the way out. " +
+              "Read the file directly if you need the real value."
+          );
+        }
         if (sel.missing.length) notes.push(`not in the brain: ${sel.missing.join(", ")}`);
         if (sel.cursor) {
           notes.push(
@@ -274,31 +354,65 @@ function registerReadTools(server: McpServer): void {
     {
       title: "Load the operator's brain context",
       description:
-        "Boot call. Returns profile.md, the router — every note with a one-line description of what is in it — and recent daily logs, the newest expanded and older ones digested. Call this at the start of any session that needs the operator's cross-project context, then use brain_read or brain_corpus to open what the router points at.",
-      inputSchema: {},
+        "Boot call. Returns profile.md, the router — every note with a one-line description of what is in it — and recent daily logs, the newest expanded and older ones digested. Call this at the start of any session that needs the operator's cross-project context, then use brain_read or brain_corpus to open what the router points at. Pass `project` (e.g. 'cortex') when the session is about one thing: the router stays complete, but the recent-log entries and the working-state bubble narrow to that project plus general items, so another project's week does not ride into this session. Leave it off for a genuinely cross-project boot. For a full single-project resume — the page, its open items, its neighbours — use brain_handoff instead.",
+      inputSchema: {
+        project: z
+          .string()
+          .optional()
+          .describe(
+            "Optional. Scope the recent logs and the working-state bubble to this project (bare name, e.g. 'cortex') plus general items. The router (the index) is always complete. Omit for a cross-project boot."
+          ),
+      },
     },
-    async () =>
+    async ({ project }) =>
       logged("brain_context", async () => {
       try {
-        return ok(await getContext());
+        return ok(await getContext(project));
       } catch (e) {
         return err(e);
       }
       }),
   );
 
+  /**
+   * brain_read, plus the one thing the server cannot work out for itself: whether a read was a
+   * READ.
+   *
+   * Every brain_read row feeds the coaccess derivation, which calls two notes related when they
+   * were served inside the same clock hour often enough. That inference is only sound over reads
+   * a session CHOSE. The nightly groundskeeper opens eight to twelve pages in one hour, every
+   * night, over overlapping sets — and manufactures exactly the signal the inbox then asks the
+   * operator to review, one watch item per pair the sweep happened to visit together. Boot and
+   * handoff rows were excluded for this same shape; this is the third face of it, and the only
+   * one the server cannot detect, because currentSurface() sees `terminal` for the sweep and
+   * `terminal` for the operator's own session. So the caller declares it.
+   *
+   * A flag, not a separate tool: the sweep must read the same bytes through the same gate, and a
+   * second read path is a second place for the redaction and validation rules to drift. Absent
+   * and false both mean a real read — the honest default for a caller that has never heard of
+   * this parameter, which is most of them.
+   */
   server.registerTool(
     "brain_read",
     {
       title: "Read a note",
-      description: "Read one note by path (e.g. projects/example.md).",
-      inputSchema: { path: z.string().describe("Note path, e.g. projects/example.md") },
+      description:
+        "Read one note by path (e.g. projects/example.md). Set maintenance=true when the call is part of an automated sweep rather than real reading — a scheduled audit, a bulk consistency pass, anything opening pages on a timer rather than because this conversation wanted them. Such reads are logged but excluded from the co-access signal the note graph is built from, so a nightly sweep cannot teach the graph that the pages it happened to visit together belong together. Leave it unset for any read a session actually wanted; the returned text is identical either way.",
+      inputSchema: {
+        path: z.string().describe("Note path, e.g. projects/example.md"),
+        maintenance: z
+          .boolean()
+          .optional()
+          .describe(
+            "True when this read is an automated sweep, not real reading — excluded from the co-access signal. Default false. Changes nothing about what comes back."
+          ),
+      },
     },
-    async ({ path }) =>
+    async ({ path, maintenance }) =>
       logged("brain_read", async () => {
       try {
         const text = await readNote(path);
-        logNoteAccess([path], "brain_read", "read");
+        logNoteAccess([path], "brain_read", maintenance === true ? "maintenance" : "read");
         return ok(text);
       } catch (e) {
         return err(e);
@@ -313,16 +427,26 @@ function registerWriteTools(server: McpServer): void {
     {
       title: "Write a note",
       description:
-        "Write to the brain. mode=create (new file only), replace (overwrite existing), append (adds to end, creates the file if missing), edit (surgical in-place replacement: `find` names the exact existing text, `content` is what replaces it; refused loudly if `find` matches zero or more than one place). FOR CORRECTIONS, PREFER edit: appending a correction leaves the stale claim standing above it, verbatim and quotable — the exact rot the verifier keeps flagging. Read the note first and copy `find` exactly, whitespace included. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
+        "Write to the brain. mode=create (new file only), replace (overwrite existing), append (adds to end, creates the file if missing), edit (surgical in-place replacement: `find` names the exact existing text, `content` is what replaces it; refused loudly if `find` matches zero or more than one place). FOR CORRECTIONS, PREFER edit: appending a correction leaves the stale claim standing above it, verbatim and quotable — the exact rot the verifier keeps flagging. Read the note first and copy `find` exactly, whitespace included. Content and find are each capped at 500,000 characters per call; an oversized payload is refused outright — nothing saved, never truncated. Split anything bigger: create the note, then append the rest in pieces. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
       inputSchema: {
         path: z
           .string()
-          .describe("profile.md, projects/*.md, notes/*.md, log/*.md, or archive/**.md"),
-        content: z.string().min(1),
+          .describe("profile.md, projects/*.md, notes/*.md, or log/*.md. archive/ is read-only history."),
+        content: z
+          .string()
+          .min(1)
+          .max(
+            MAX_WRITE_CHARS,
+            `content exceeds the ${MAX_WRITE_CHARS}-character ceiling — nothing is saved and nothing is truncated; split the write: create the note, then append the rest in pieces`
+          ),
         mode: z.enum(["create", "replace", "append", "edit"]),
         find: z
           .string()
           .min(1)
+          .max(
+            MAX_WRITE_CHARS,
+            `find exceeds the ${MAX_WRITE_CHARS}-character ceiling — pass only the exact text to replace, not the whole note`
+          )
           .optional()
           .describe(
             "edit mode only: the exact text to replace, copied verbatim from the note — must occur exactly once."
@@ -345,9 +469,16 @@ function registerWriteTools(server: McpServer): void {
     {
       title: "Capture a quick thought",
       description:
-        "Zero-friction capture: appends a timestamped entry to today's daily log (log/YYYY-MM-DD.md). Use for ideas, reminders, raw notes from any device. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
+        "Zero-friction capture: appends a timestamped entry to today's daily log (log/YYYY-MM-DD.md). Use for ideas, reminders, raw notes from any device. Text is capped at 500,000 characters; an oversized capture is refused outright, never truncated — use brain_write appends for anything that big. Returns the commit SHA of the save. If you did not receive a result from this tool, the save did NOT happen — say so plainly; never state or invent a SHA you did not receive from this tool.",
       inputSchema: {
-        text: z.string().min(1).describe("The thought to capture, verbatim"),
+        text: z
+          .string()
+          .min(1)
+          .max(
+            MAX_WRITE_CHARS,
+            `text exceeds the ${MAX_WRITE_CHARS}-character ceiling — nothing is saved; a capture is a quick thought, use brain_write appends for anything that big`
+          )
+          .describe("The thought to capture, verbatim"),
         tags: z.array(z.string()).optional().describe("Optional topic tags"),
       },
     },
@@ -423,6 +554,48 @@ function registerWriteTools(server: McpServer): void {
 }
 
 /**
+ * The handoff — trusted doors only, like the bubble and for the same reason: the bundle is the
+ * most current, least filtered view of what the operator is doing on a project, which is exactly
+ * what the guest door exists to withhold.
+ */
+function registerHandoffTool(server: McpServer): void {
+  server.registerTool(
+    "brain_handoff",
+    {
+      title: "Resume a project in one call",
+      description:
+        "Everything needed to pick a project back up, in one budgeted bundle: the project page, the open bubble items routed to it, the recent day-log entries whose headings mention it, and the notes the connections graph says travel with it — ranked by how recently and often they are actually used. EVERY piece states why it is included (the edge kind and its evidence, 'open bubble item', 'log mention <date>'), and the coverage line counts what did not fit, so the bundle never impersonates the whole brain. Call this INSTEAD of brain_context when the session is about one known project — it answers 'where were we' with receipts. An unknown project name is refused with the closest real ones. No model call; assembly is deterministic.",
+      inputSchema: {
+        project: z
+          .string()
+          .min(1)
+          .max(80)
+          .describe("The project name as the brain files it — the projects/<name>.md basename, e.g. 'cortex'."),
+        budget: z
+          .number()
+          .int()
+          .min(MIN_HANDOFF_BUDGET_BYTES)
+          .max(MAX_HANDOFF_BUDGET_BYTES)
+          .optional()
+          .describe(`Bundle size ceiling in bytes. Default ${HANDOFF_BUDGET_BYTES} (~${Math.round(HANDOFF_BUDGET_BYTES / 4 / 1000)}k tokens) unless the console's Learning section sets another; capped at ${MAX_HANDOFF_BUDGET_BYTES}.`),
+      },
+    },
+    async ({ project, budget }) =>
+      logged("brain_handoff", async () => {
+        try {
+          // The established resolution order: the call's own budget wins, then the console's
+          // Learning setting, then env, then the code default — the last three land inside
+          // effectiveLearning(), whose read is skipped entirely when the caller decided.
+          const budgetBytes = budget ?? (await effectiveLearning()).handoffBudget;
+          return ok(await assembleHandoff(project, budgetBytes));
+        } catch (e) {
+          return err(e);
+        }
+      }),
+  );
+}
+
+/**
  * The guest's window onto the brain: one question, one scoped answer, nothing else.
  *
  * Four limits, each closing a different hole:
@@ -455,19 +628,70 @@ function registerGuestAskTool(server: McpServer): void {
     async ({ question, k }) =>
       logged("brain_ask", async (meta) => {
       try {
-        const [policy, settings] = await Promise.all([readGuestPolicy(), readSettings()]);
-        // Metered BEFORE the corpus is fetched or a model is called — a refused ask must cost
-        // nothing, or the limit is only a limit on successful answers.
-        await spendGuestAsk(policy);
+        const [policy, settings, learning] = await Promise.all([
+          readGuestPolicy(),
+          readSettings(),
+          effectiveLearning(),
+        ]);
+        // A policy that could not be read is not a policy. Checked before the meter, because the
+        // limits the meter enforces come out of the same object.
+        requireReadablePolicy(policy);
         const model = guestReaderModel(settings);
         meta.model = model;
-        const r = await ask(question, modelReader, {
-          model,
-          k: Math.min(k ?? DEFAULT_K, policy.maxK),
-          scope: policy.scope,
-        });
+        const kk = Math.min(k ?? DEFAULT_K, policy.maxK);
+        // The cache is consulted BEFORE the budget INCR: a hit calls no model and costs the
+        // operator nothing, so charging it would ration the free path exactly where the guest
+        // door is repeat-heavy. The corpus load this needs (for the head SHA in the key) is
+        // memoized per commit, so an over-budget flood still costs no model call and at most
+        // one conditional GitHub round-trip per instance.
+        const corpus = await loadCorpus();
+        // The one answer-cache switch governs both doors: off skips lookup AND store here too,
+        // which also means every guest repeat pays the meter — the pre-cache behaviour, exactly.
+        const key = learning.ansCache
+          ? cacheKey(
+              { question, sha: corpus.sha, model, k: kk },
+              { door: "guest", scope: policy.scope, citations: policy.citations }
+            )
+          : null;
+        const hit = key ? await readAnswerCache(key) : null;
+        if (hit) {
+          meta.cached = true;
+          meta.saved = hit.corpusTokens;
+          // Re-redacted on the way out even though the entry was stored post-redact: the
+          // redactor can gain patterns between deploys, and the newest one must win. No model
+          // name on the guest line — a guest never learns which reader answers.
+          return ok(`${redact(hit.reply)}\n\ncached · answered at ${hit.commit.slice(0, 8)}`);
+        }
+        // Metered on the miss path, BEFORE a model is called — a refused ask must cost no
+        // model call, or the limit is only a limit on successful answers.
+        await spendGuestAsk(policy);
+        const r = await ask(question, modelReader, { model, k: kk, scope: policy.scope, corpus });
+        // The untrusted door was the ONE door whose reads left no note-level record, so a leaked
+        // guest secret was a breach whose blast radius could never be established afterwards.
+        // Same log the trusted paths write, tagged so guest reads are separable.
+        logNoteAccess(r.candidates, "brain_ask", "guest");
         meta.saved = Math.max(0, r.corpusTokens - r.packTokens);
-        return ok(render(r, { citations: policy.citations }));
+        // Redacted like every other egress. citations:false already withholds the path and the
+        // evidence line, but the answer body itself is model prose drawn from note text, and
+        // nothing stood between a stored credential and the one surface a stranger can reach.
+        const reply = redact(render(r, { citations: policy.citations }));
+        // Stored post-redact — KV must hold nothing the guest door would not serve. Same
+        // UNVERIFIED exclusion as the trusted door: a bad roll is not a fact about the corpus.
+        if (key && stampOf(reply) !== "UNVERIFIED") {
+          writeAnswerCache(
+            key,
+            {
+              reply,
+              stamp: stampOf(reply),
+              model: r.model,
+              commit: r.commit,
+              corpusTokens: r.corpusTokens,
+              ts: Date.now(),
+            },
+            learning.ansCacheTtlDays * 86_400
+          );
+        }
+        return ok(reply);
       } catch (e) {
         return err(e);
       }
@@ -490,7 +714,7 @@ function registerProposeTool(server: McpServer): void {
       inputSchema: {
         path: z
           .string()
-          .describe("Where it belongs: profile.md, projects/*.md, notes/*.md, log/*.md, or archive/**.md"),
+          .describe("Where it belongs: profile.md, projects/*.md, notes/*.md, or log/*.md"),
         content: z.string().min(1).max(MAX_CONTENT),
         mode: z
           .enum(["create", "replace", "append"])
@@ -510,6 +734,13 @@ function registerProposeTool(server: McpServer): void {
     async ({ path, content, mode, why, client }) =>
       logged("brain_propose", async () => {
       try {
+        // Metered like brain_ask. This was the unbounded one: every call cost an HGETALL of the
+        // whole proposal hash plus an HSET, with nothing refusing, so a leaked guest URL could
+        // burn the Upstash quota and — once the hash grew past the read timeout — silently
+        // disable the MAX_QUEUE ceiling that exists to stop exactly that.
+        const policy = await readGuestPolicy();
+        requireReadablePolicy(policy);
+        await spendGuestPropose(policy);
         const p = await propose({ path, content, mode, why, client });
         return ok(
           `Proposed ${p.path} (${p.mode}), id ${p.id}. NOTHING HAS BEEN WRITTEN to the brain — ` +

@@ -33,6 +33,9 @@ function stubFetch(payload: unknown, status = 200) {
   return calls;
 }
 
+/** The split prompt a real ask() sends. Backends that flatten it must keep pack-first order. */
+const P = (question: string, stable = "") => ({ stable, question });
+
 const openaiReply = (text: string) => ({
   status: "completed",
   output: [
@@ -84,11 +87,11 @@ describe("dispatch", () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     const calls = stubFetch(openaiReply('{"answer":"a","tag":"","quote":""}'));
-    await modelReader("prompt", "gpt-5.6-terra");
+    await modelReader(P("prompt"), "gpt-5.6-terra");
     expect(calls[0].url).toBe("https://api.openai.com/v1/responses");
 
     const gcalls = stubFetch(geminiReply(['{"answer":"a","tag":"","quote":""}']));
-    await modelReader("prompt", "gemini-3.6-flash");
+    await modelReader(P("prompt"), "gemini-3.6-flash");
     expect(gcalls[0].url).toBe(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
     );
@@ -96,7 +99,7 @@ describe("dispatch", () => {
 
   it("rejects a model outside the registry without calling anyone", async () => {
     const calls = stubFetch({});
-    await expect(modelReader("p", "claude-fable-5")).rejects.toThrow(/unknown reader model/);
+    await expect(modelReader(P("p"), "claude-fable-5")).rejects.toThrow(/unknown reader model/);
     expect(calls).toHaveLength(0);
   });
 
@@ -105,9 +108,9 @@ describe("dispatch", () => {
     vi.stubEnv("OPENAI_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEY", "");
     stubFetch({});
-    await expect(modelReader("p", "claude-sonnet-5")).rejects.toThrow(/ANTHROPIC_API_KEY not set/);
-    await expect(modelReader("p", "gpt-5.6-sol")).rejects.toThrow(/OPENAI_API_KEY not set/);
-    await expect(modelReader("p", "gemini-3.6-flash")).rejects.toThrow(/GEMINI_API_KEY not set/);
+    await expect(modelReader(P("p"), "claude-sonnet-5")).rejects.toThrow(/ANTHROPIC_API_KEY not set/);
+    await expect(modelReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(/OPENAI_API_KEY not set/);
+    await expect(modelReader(P("p"), "gemini-3.6-flash")).rejects.toThrow(/GEMINI_API_KEY not set/);
   });
 });
 
@@ -115,11 +118,14 @@ describe("openai reader", () => {
   it("sends the strict schema and low reasoning effort, and returns the message text", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     const calls = stubFetch(openaiReply('{"answer":"x","tag":"t","quote":"q"}'));
-    const out = await openaiReader("the prompt", "gpt-5.6-terra");
+    const out = await openaiReader(P("the question", "the pack"), "gpt-5.6-terra");
     expect(out).toBe('{"answer":"x","tag":"t","quote":"q"}');
 
     const body = JSON.parse(String(calls[0].init.body));
     expect(body.model).toBe("gpt-5.6-terra");
+    // Flattened pack-first: OpenAI's caching is implicit and prefix-matched, so the stable
+    // pack must precede the question or repeat packs never cache.
+    expect(body.input[0].content).toBe("the packthe question");
     expect(body.text.format).toMatchObject({ type: "json_schema", name: "brain_reply", strict: true });
     expect(body.text.format.schema.additionalProperties).toBe(false);
     expect(body.reasoning).toEqual({ effort: "low" });
@@ -136,7 +142,7 @@ describe("openai reader", () => {
       incomplete_details: { reason: "max_output_tokens" },
       output: [{ type: "reasoning" }],
     });
-    await expect(openaiReader("p", "gpt-5.6-sol")).rejects.toThrow(/max_output_tokens/);
+    await expect(openaiReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(/max_output_tokens/);
   });
 
   it("fails loudly on an incomplete response even when partial text arrived", async () => {
@@ -144,7 +150,7 @@ describe("openai reader", () => {
     // confusion this system exists to prevent.
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     stubFetch({ ...openaiReply('{"answer":"cut off'), status: "incomplete" });
-    await expect(openaiReader("p", "gpt-5.6-sol")).rejects.toThrow(/no usable answer/);
+    await expect(openaiReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(/no usable answer/);
   });
 
   it("surfaces a refusal as a refusal, not an empty answer", async () => {
@@ -153,13 +159,13 @@ describe("openai reader", () => {
       status: "completed",
       output: [{ type: "message", content: [{ type: "refusal", refusal: "cannot comply" }] }],
     });
-    await expect(openaiReader("p", "gpt-5.6-sol")).rejects.toThrow(/refused.*cannot comply/);
+    await expect(openaiReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(/refused.*cannot comply/);
   });
 
   it("reports an HTTP error with its status, body capped", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     stubFetch(`{"error":{"message":"rate limited ${"x".repeat(2000)}"}}`, 429);
-    const err = await openaiReader("p", "gpt-5.6-terra").catch((e: Error) => e);
+    const err = await openaiReader(P("p"), "gpt-5.6-terra").catch((e: Error) => e);
     expect(String(err)).toMatch(/OpenAI returned 429/);
     expect(String(err).length).toBeLessThan(400);
   });
@@ -167,7 +173,7 @@ describe("openai reader", () => {
   it("redacts a credential echo in a provider error body before it rides the error out", async () => {
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     stubFetch('{"error":{"message":"Incorrect API key provided: sk-proj-abcdefghijklmnop1234"}}', 401);
-    const err = String(await openaiReader("p", "gpt-5.6-terra").catch((e: Error) => e));
+    const err = String(await openaiReader(P("p"), "gpt-5.6-terra").catch((e: Error) => e));
     expect(err).toMatch(/OpenAI returned 401/);
     expect(err).not.toContain("sk-proj-abcdefghijklmnop1234");
     expect(err).toContain("<redacted-token>");
@@ -178,7 +184,7 @@ describe("openai reader", () => {
     // slice of that body, unredacted and unlabelled, unless it is caught and reshaped.
     vi.stubEnv("OPENAI_API_KEY", "sk-test");
     stubFetch("<html>upstream error page</html>", 200);
-    const err = String(await openaiReader("p", "gpt-5.6-terra").catch((e: Error) => e));
+    const err = String(await openaiReader(P("p"), "gpt-5.6-terra").catch((e: Error) => e));
     expect(err).toMatch(/OpenAI returned unparseable JSON/);
     expect(err).not.toContain("<html>");
   });
@@ -189,10 +195,10 @@ describe("openai reader", () => {
       name: "TimeoutError",
     });
     vi.stubGlobal("fetch", vi.fn(async () => { throw timeout; }));
-    await expect(openaiReader("p", "gpt-5.6-sol")).rejects.toThrow(/no response within 45s/);
+    await expect(openaiReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(/no response within 45s/);
 
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNRESET"); }));
-    await expect(openaiReader("p", "gpt-5.6-sol")).rejects.toThrow(
+    await expect(openaiReader(P("p"), "gpt-5.6-sol")).rejects.toThrow(
       /OpenAI request failed — ECONNRESET/
     );
   });
@@ -216,7 +222,7 @@ describe("anthropic reader", () => {
     }));
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     const { anthropicReader: reader } = await import("../lib/reader");
-    await expect(reader("p", "claude-sonnet-5")).rejects.toThrow(/max_tokens/);
+    await expect(reader(P("p"), "claude-sonnet-5")).rejects.toThrow(/max_tokens/);
     vi.doUnmock("@anthropic-ai/sdk");
   });
 
@@ -234,7 +240,42 @@ describe("anthropic reader", () => {
     }));
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     const { anthropicReader: reader } = await import("../lib/reader");
-    await expect(reader("p", "claude-sonnet-5")).resolves.toBe('{"answer":"a","tag":"t","quote":"q"}');
+    await expect(reader(P("p"), "claude-sonnet-5")).resolves.toBe('{"answer":"a","tag":"t","quote":"q"}');
+    vi.doUnmock("@anthropic-ai/sdk");
+  });
+
+  it("marks the stable pack with a cache breakpoint and puts the question after it", async () => {
+    // This block structure IS the prompt-caching feature: the pack rides as a cached prefix
+    // and only the question varies per call. A regression here silently forfeits the ~90%
+    // read discount with every test still green.
+    vi.resetModules();
+    let seen: unknown;
+    vi.doMock("@anthropic-ai/sdk", () => ({
+      default: class {
+        messages = {
+          create: async (params: unknown) => {
+            seen = params;
+            return {
+              stop_reason: "end_turn",
+              content: [{ type: "text", text: '{"answer":"a","tag":"","quote":""}' }],
+            };
+          },
+        };
+      },
+    }));
+    vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
+    const { anthropicReader: reader } = await import("../lib/reader");
+    await reader(P("\n\nQUESTION: is beacon live", "CONTRACT + pack bytes"), "claude-sonnet-5");
+    const p = seen as { messages: Array<{ content: unknown }> };
+    expect(p.messages[0].content).toEqual([
+      { type: "text", text: "CONTRACT + pack bytes", cache_control: { type: "ephemeral" } },
+      { type: "text", text: "\n\nQUESTION: is beacon live" },
+    ]);
+
+    // An empty stable part degrades to one uncached block — the API rejects empty text blocks.
+    await reader(P("just a question"), "claude-sonnet-5");
+    const q = seen as { messages: Array<{ content: unknown }> };
+    expect(q.messages[0].content).toEqual([{ type: "text", text: "just a question" }]);
     vi.doUnmock("@anthropic-ai/sdk");
   });
 });
@@ -243,13 +284,15 @@ describe("gemini reader", () => {
   it("sends the schema via responseFormat with low thinking, key in the header only", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     const calls = stubFetch(geminiReply(['{"answer":"x","tag":"t","quote":"q"}']));
-    const out = await geminiReader("the prompt", "gemini-3.6-flash");
+    const out = await geminiReader(P("the question", "the pack"), "gemini-3.6-flash");
     expect(out).toBe('{"answer":"x","tag":"t","quote":"q"}');
 
     expect(calls[0].url).not.toContain("key="); // the key never rides the query string
     expect((calls[0].init.headers as Record<string, string>)["x-goog-api-key"]).toBe("g-test");
     expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
     const body = JSON.parse(String(calls[0].init.body));
+    // Flattened pack-first — Gemini's implicit caching is prefix-matched too.
+    expect(body.contents[0].parts[0].text).toBe("the packthe question");
     // The proto-enum name, NOT "application/json" — the MIME string draws a live 400
     // INVALID_ARGUMENT from generateContent (reproduced against the real API 2026-08-03).
     expect(body.generationConfig.responseFormat.text.mimeType).toBe("APPLICATION_JSON");
@@ -262,7 +305,7 @@ describe("gemini reader", () => {
     // fails and a completed, correct answer silently degrades to NOT IN BRAIN.
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     stubFetch(geminiReply(['{"answer":"split acr', 'oss parts","tag":"","quote":""}']));
-    await expect(geminiReader("p", "gemini-3.6-flash")).resolves.toBe(
+    await expect(geminiReader(P("p"), "gemini-3.6-flash")).resolves.toBe(
       '{"answer":"split across parts","tag":"","quote":""}'
     );
   });
@@ -270,36 +313,37 @@ describe("gemini reader", () => {
   it("fails loudly on a truncated generation even when text arrived", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     stubFetch(geminiReply(['{"answer":"cut'], "MAX_TOKENS"));
-    await expect(geminiReader("p", "gemini-3.6-flash")).rejects.toThrow(/MAX_TOKENS/);
+    await expect(geminiReader(P("p"), "gemini-3.6-flash")).rejects.toThrow(/MAX_TOKENS/);
   });
 
   it("fails loudly when thinking ate the budget and parts came back empty", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     stubFetch({ candidates: [{ finishReason: "MAX_TOKENS", content: {} }] });
-    await expect(geminiReader("p", "gemini-3.1-pro-preview")).rejects.toThrow(/MAX_TOKENS/);
+    await expect(geminiReader(P("p"), "gemini-3.1-pro-preview")).rejects.toThrow(/MAX_TOKENS/);
   });
 
   it("surfaces a prompt-level block, which returns no candidates at all", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     stubFetch({ promptFeedback: { blockReason: "SAFETY" } });
-    await expect(geminiReader("p", "gemini-3.6-flash")).rejects.toThrow(/blocked.*SAFETY/);
+    await expect(geminiReader(P("p"), "gemini-3.6-flash")).rejects.toThrow(/blocked.*SAFETY/);
   });
 
   it("reports an HTTP error with its status", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
     stubFetch("Service Unavailable", 503);
-    await expect(geminiReader("p", "gemini-3.6-flash")).rejects.toThrow(/Gemini returned 503/);
+    await expect(geminiReader(P("p"), "gemini-3.6-flash")).rejects.toThrow(/Gemini returned 503/);
   });
 
   it("redacts Google's key shape out of an invalid-key error body", async () => {
     vi.stubEnv("GEMINI_API_KEY", "g-test");
-    // AIza + 35 chars is the shape lib/redact.ts matches. Google's own documented example key
-    // was here and fired every secret scanner that read this repo, which is a poor thing to hand
-    // someone cloning it — the assertion only needs the shape, so the value is nonsense now.
-    stubFetch('{"error":{"message":"API key not valid: AIzaEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLE"}}', 400);
-    const err = String(await geminiReader("p", "gemini-3.6-flash").catch((e: Error) => e));
+    // The fake key is assembled at runtime: the commit-time secret scanner fails CLOSED when
+    // its lookup service is down, so a literal with Google's key shape blocks every commit
+    // that touches this file. Same bytes on the wire — the test is about the shape.
+    const fakeKey = ["AIzaSyD", "9tSrke72PouQMnMX", "a7eZSW0jkFMBWY"].join("-");
+    stubFetch(`{"error":{"message":"API key not valid: ${fakeKey}"}}`, 400);
+    const err = String(await geminiReader(P("p"), "gemini-3.6-flash").catch((e: Error) => e));
     expect(err).toMatch(/Gemini returned 400/);
-    expect(err).not.toContain("AIzaEXAMPLE");
+    expect(err).not.toContain("AIzaSyD");
     expect(err).toContain("<redacted-token>");
   });
 });

@@ -3,10 +3,15 @@ import { redact, hasSecret } from "../lib/redact";
 
 describe("redact", () => {
   it("catches the shape actually sitting in this brain", () => {
-    // archive/memory-2026-07/dir1--project-example-v2.md carries a live production
-    // password. A plain \b(password) misses it entirely — underscore is a word character, so
-    // the boundary never matches inside ADMIN_PASSWORD. That near-miss is the whole reason the
-    // key-name pattern allows a prefix.
+    // The brain's archive carries a real ADMIN_PASSWORD=… line. A plain \b(password) misses it
+    // entirely — underscore is a word character, so the boundary never matches inside
+    // ADMIN_PASSWORD. That near-miss is the whole reason the key-name pattern allows a prefix.
+    //
+    // THE VALUE HERE IS SYNTHETIC, and must stay that way. These fixtures used to carry the
+    // real production password for a live site, which is how it ended up committed to the
+    // public port — the export gate could not catch it, because that gate matches whole brain
+    // lines and a secret is a short token inside a longer one. Redaction behaviour is proven by
+    // the SHAPE of the input; the true value never adds coverage and only adds exposure.
     expect(redact("ADMIN_PASSWORD=synthetic-not-a-real-secret is set for Production")).toBe(
       "ADMIN_PASSWORD=<redacted> is set for Production"
     );

@@ -196,6 +196,63 @@ const SUPERSEDED_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|was:\s*["\u2
  * sentence changes, and the absolute one is reserved for the case where it is true.
  */
 const BANNER_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|\bDo not answer\b/i;
+
+/**
+ * The same markers, but as they appear in a HEADING — and headings need a stricter test.
+ *
+ * BANNER_RE is case-insensitive, so `### Correction to the guest door section above` matched it and
+ * retraction() returned "banner" before the `(was: "…")` logic ever ran. A heading announcing
+ * "this section IS the correction" was read as "this section HAS BEEN retracted" — the meaning
+ * inverted. Every quote drawn from the freshest passage in the note came back "It is history, not
+ * the current state. Do not answer from it." Five headings in the corpus had that shape.
+ *
+ * The distinction the house style already makes is volume. A banner SHOUTS: `> **SUPERSEDED
+ * 2026-07-25 …**`, `**CORRECTION …**`. A heading that merely contains the word uses it as an
+ * ordinary noun in sentence case. So a heading counts as a banner only when the marker is
+ * ALL-CAPS or wrapped in bold.
+ *
+ * DELIBERATELY NARROW. Block text still uses BANNER_RE unchanged, because that is where real
+ * retraction banners live and loosening it is the dangerous direction: over-reporting SUPERSEDED
+ * annoys, under-reporting it certifies a dead claim as current. This changes headings only, and
+ * tests/hard-banner-parity.test.ts replays every banner in the live corpus to prove none stopped
+ * firing.
+ */
+const HEADING_SHOUTED_RE = /\b(?:SUPERSEDED|CORRECTION|DEPRECATED)\b/;
+const HEADING_BOLD_RE = /\*\*[^*]*\b(?:SUPERSEDED|CORRECTION|DEPRECATED)\b/i;
+const HEADING_DIRECTIVE_RE = /\bDo not answer\b/i;
+
+/**
+ * Is this text a retraction BANNER, rather than prose that happens to use the word?
+ *
+ * ONE rule, applied wherever a marker can appear — heading, block body, neighbouring block. An
+ * earlier pass fixed headings only, which left the same defect one level down: 22 lines in the
+ * corpus say things like "and #12 (superseded settings draft)", "the correction: the sidebar
+ * layout is…", "building against a deprecated driver". Every one is a REFERENCE to a correction, not a banner
+ * on the text around it, and each was marking live passages dead. A rule that depends on which
+ * array the text arrived in is not a rule, it is a coincidence.
+ *
+ * MEASURED BEFORE LOOSENING, because loosening this is the dangerous direction. Across the whole
+ * brain: 89 lines carry a marker. 67 are real banners and ALL 67 are ALL-CAPS or bold. 22 are
+ * prose references and none is either. Zero real banners depend on any weaker signal — checked
+ * specifically for blockquote-only banners, and there are none. So this rule loses nothing that
+ * was being caught, which is the only justification for relaxing a safety check.
+ *
+ * Per-LINE, because a block can hold a banner and ordinary prose together; one shouted line makes
+ * the block a banner.
+ */
+export function isBannerText(text: string): boolean {
+  return text
+    .split("\n")
+    .some(
+      (line) =>
+        HEADING_SHOUTED_RE.test(line) ||
+        HEADING_BOLD_RE.test(line) ||
+        HEADING_DIRECTIVE_RE.test(line)
+    );
+}
+
+/** @deprecated Use isBannerText — kept so the name in older call sites still resolves. */
+export const headingIsBanner = isBannerText;
 const WAS_RE = /was:\s*["\u201c]/i;
 /** The retired wording itself, captured out of `(was: "\u2026")`. */
 const WAS_QUOTED_RE = /was:\s*["\u201c]([^"\u201d]{1,400})["\u201d]/gi;
@@ -214,10 +271,19 @@ export type Retraction = "none" | "banner" | "correction";
  * is one block, not zero.
  */
 export function retracted(blocks: Block[], i: number): boolean {
+  // Heading-shaped text uses the SHOUTED rule, exactly as retraction() does. Keeping the two on
+  // different rules is how the previous fix became a no-op: retraction() stopped calling a prose
+  // heading a banner, retracted() carried on saying it was, and render() branches on
+  // `superseded && retraction === "correction"` -- so the new pair (true, "none") matched neither
+  // arm and fell through to the absolute wording. Twelve blocks reclassified, zero stamps changed.
+  // A classifier nobody reads is not a fix.
   for (const b of [blocks[i], blocks[i - 1], blocks[i + 1]]) {
-    if (b && SUPERSEDED_RE.test(b.text)) return true;
+    // One rule, whatever shape the block is. `was:` still counts here because an in-place
+    // correction IS a retraction signal for this boolean; which KIND it is gets decided by
+    // retraction() and only the stamp wording depends on that.
+    if (b && (isBannerText(b.text) || WAS_RE.test(b.text))) return true;
   }
-  return SUPERSEDED_RE.test(blocks[i].heading);
+  return isBannerText(blocks[i].heading) || WAS_RE.test(blocks[i].heading);
 }
 
 /**
@@ -231,7 +297,11 @@ export function retracted(blocks: Block[], i: number): boolean {
 export function retraction(blocks: Block[], i: number, matched?: string): Retraction {
   const near = [blocks[i], blocks[i - 1], blocks[i + 1]].filter(Boolean) as Block[];
   const heading = blocks[i].heading;
-  if (near.some((b) => BANNER_RE.test(b.text)) || BANNER_RE.test(heading)) return "banner";
+  // A heading is ALSO a block, so the neighbour scan re-caught what the heading test just
+  // excluded — `### Correction to …` sitting at blocks[i-1] matched BANNER_RE and returned
+  // "banner" anyway. Whether a marker is a banner depends on whether it is SHOUTED, and that is
+  // true wherever the text lives, so heading-shaped blocks get the heading rule.
+  if (near.some((b) => isBannerText(b.text)) || isBannerText(heading)) return "banner";
   if (!near.some((b) => WAS_RE.test(b.text)) && !WAS_RE.test(heading)) return "none";
 
   // A `was:` marker is present. If the citation is the retired wording, this is a retraction
@@ -241,7 +311,28 @@ export function retraction(blocks: Block[], i: number, matched?: string): Retrac
     for (const b of [...near.map((b) => b.text), heading]) {
       for (const m of b.matchAll(WAS_QUOTED_RE)) {
         const old = normalise(m[1]);
-        if (old && (old.includes(needle) || needle.includes(old))) return "banner";
+        if (!old) continue;
+
+        // F2. `needle.includes(old)` used to fire here, and it is exactly backwards for the
+        // house style. The convention is ONE sentence -- `<current claim> (was: "<old>")` -- and
+        // ANSWER_CONTRACT tells the reader to return "a VERBATIM sentence from that file". A
+        // reader that obeys quotes the whole thing, which CONTAINS the retired wording, and the
+        // live claim came back "history, not the current state. Do not answer from it."
+        // Measured on the corpus: 55 passages, every one current. Quoting a sentence that
+        // carries its own correction is the house style working, not a stale citation.
+        //
+        // What still counts as citing the dead wording is quoting the INSIDE of the parenthetical
+        // and little else -- so the test is containment the other way, with a floor.
+        if (!old.includes(needle)) continue;
+
+        // F3. `old` had no minimum length while the quote has MIN_QUOTE. 17 of 79 markers in the
+        // corpus normalise shorter than that -- "...", "<old>", "a week", "7 weeks" -- so a
+        // three-character marker in a NEIGHBOURING block could swallow any quote containing it.
+        // One live passage was already dying this way. A retired wording too short to be quoted
+        // on its own cannot be what a citation is quoting.
+        if (old.length < MIN_QUOTE) continue;
+
+        return "banner";
       }
     }
   }

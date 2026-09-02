@@ -14,6 +14,7 @@
  */
 import { gh, repo } from "./github";
 import type { CompareResult } from "./github";
+import { storableText } from "./frontmatter";
 
 export interface NoteRow {
   path: string;
@@ -43,6 +44,9 @@ export interface MirrorStore {
   /** The head the mirror believes it reflects, or null for a store never synced. */
   head(): Promise<string | null>;
   all(): Promise<NoteRow[]>;
+  /** Just the paths. The stale-row computation needs nothing else, and all() ships every note's
+   *  full content — half a megabyte downloaded and thrown away to derive a list of strings. */
+  paths(): Promise<string[]>;
   /**
    * The ONLY write path for rows, and it is atomic: upserts, removes and the head advance apply
    * in one transaction, guarded by a compare-and-swap on the head the caller believed it was
@@ -110,6 +114,24 @@ function pgrstStore(base: string, key: string): MirrorStore {
     return res;
   }
 
+  /**
+   * Paged, because PostgREST caps a response at its own max-rows regardless of what we ask.
+   * Trusting a single response would silently serve a partial brain the day the corpus outgrows
+   * the cap — the exact silent-loss failure this system forbids.
+   */
+  async function paged<T>(query: string): Promise<T[]> {
+    const out: T[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const res = await call(query, {
+        headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
+      });
+      const rows = (await res.json()) as T[];
+      out.push(...rows);
+      if (rows.length < PAGE) return out;
+    }
+  }
+
   return {
     async head() {
       const res = await call("sync_state?select=head_sha&id=is.true");
@@ -118,19 +140,11 @@ function pgrstStore(base: string, key: string): MirrorStore {
     },
 
     async all() {
-      // Paged, because PostgREST caps a response at its own max-rows regardless of what we ask.
-      // Trusting a single response would silently serve a partial brain the day the corpus
-      // outgrows the cap — the exact silent-loss failure this system forbids.
-      const out: NoteRow[] = [];
-      const PAGE = 1000;
-      for (let from = 0; ; from += PAGE) {
-        const res = await call("notes?select=path,content,commit_sha&order=path.asc", {
-          headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
-        });
-        const rows = (await res.json()) as NoteRow[];
-        out.push(...rows);
-        if (rows.length < PAGE) return out;
-      }
+      return paged<NoteRow>("notes?select=path,content,commit_sha&order=path.asc");
+    },
+
+    async paths() {
+      return (await paged<{ path: string }>("notes?select=path&order=path.asc")).map((r) => r.path);
     },
 
     async apply(expectedHead, newHead, upserts, removes) {
@@ -199,8 +213,18 @@ export async function syncMirror(
   mirrorHead: string | null,
   sha: string,
   deps: SyncDeps
-): Promise<void> {
-  if (mirrorHead === sha) return;
+): Promise<string> {
+  if (mirrorHead === sha) return sha;
+
+  /**
+   * A LOST CAS MEANS THE ROWS ARE NOT OURS. The caller assembles a corpus from whatever the
+   * store holds and stamps it with a commit — and it used to stamp the sha it WANTED, not the
+   * one that won. That produced `VERIFIED — this quote is verbatim in <path> @X` for text that
+   * did not exist at X: the single claim this whole system is built to make, made falsely, and
+   * then cached under X for the rest of the instance's life. Re-read the head and tell the
+   * truth about which commit the rows came from.
+   */
+  const winner = async () => (await store.head().catch(() => null)) ?? sha;
 
   if (mirrorHead) {
     try {
@@ -217,19 +241,33 @@ export async function syncMirror(
         // bound available without a per-file history walk. A failed lookup is null, not now():
         // stamping a guessed date would make a stale note look freshly written.
         const at = await deps.commitDate(sha).catch(() => null);
-        for (const p of diff.changed) {
-          const content = await deps.fetchAt(p, sha);
+        // CONCURRENT, not serial. These fetches have no dependency on each other, and this loop
+        // sits on the boot path every client connect pays: at the PATCH_LIMIT of 25 files and a
+        // ~150-200ms round trip to api.github.com that was 3.7-5.0s of pure serialised latency
+        // added to a call already racing a 20s deadline. PATCH_LIMIT caps the fan-out, so the
+        // whole set can go at once.
+        const fetched = await Promise.all(
+          diff.changed.map(async (p) => [p, await deps.fetchAt(p, sha)] as const)
+        );
+        for (const [p, content] of fetched) {
           // Changed-then-deleted between compare and fetch: absence at `sha` is a fact, treat it
           // as the removal it is rather than crashing the sync.
           if (content === null) gone.push(p);
-          else rows.push({ path: p, content, commit_sha: sha, last_commit_at: at });
+          // storableText because Postgres cannot hold a NUL byte: ONE poisoned note would 400
+          // the whole sync_apply batch — and since that note rides in every later diff, the
+          // mirror freezes at the last clean commit until a human notices (2026-08-12, three
+          // hours, and the connections graph froze with it). Ingress now scrubs writes
+          // (lib/brain.ts), but git HISTORY the guard predates must still be syncable. The
+          // mirror row diverges from git by exactly the byte the store cannot represent.
+          else rows.push({ path: p, content: storableText(content), commit_sha: sha, last_commit_at: at });
         }
         if (!(await store.apply(mirrorHead, sha, rows, gone))) {
           // Another instance moved the head first. Its state is the truth now; ours would have
           // been a rollback. Losing this race is a non-event, not an error.
           console.error(`[mirror] patch to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
+          return await winner();
         }
-        return;
+        return sha;
       }
     } catch (e) {
       console.error(`[mirror] patch sync failed, falling back to full: ${String(e)}`);
@@ -239,14 +277,24 @@ export async function syncMirror(
   // Full sync — also the backfill, by design: reconcile-from-empty is the only import path, so
   // it cannot rot separately from the code that runs every day.
   const files = await deps.fullLoad(sha);
+  // The head commit's date, same bound the patch path uses. Without it every full-synced row
+  // carried last_commit_at NULL, note_scores coalesced that to mirrored_at, and a force-push
+  // therefore reset the authorship age of exactly those rows to "today" — re-warming them and
+  // pushing them back out of propose_deletions' 180-day window. sync_apply coalesces, so this
+  // never overwrites a real date the patch path already learned.
+  const at = await deps.commitDate(sha).catch(() => null);
   const rows: NoteRow[] = [];
-  for (const [path, content] of files) rows.push({ path, content, commit_sha: sha });
+  // Same storableText guard as the patch path, same reason: a full sync carries every note, so
+  // one unstorable byte anywhere in the corpus would otherwise refuse the whole rebuild.
+  for (const [path, content] of files) rows.push({ path, content: storableText(content), commit_sha: sha, last_commit_at: at });
   if (rows.length === 0) throw new Error("mirror: full sync produced no files — refusing to empty the mirror");
   const current = new Set(files.keys());
-  const stale = (await store.all()).map((r) => r.path).filter((p) => !current.has(p));
+  const stale = (await store.paths()).filter((p) => !current.has(p));
   if (!(await store.apply(mirrorHead, sha, rows, stale))) {
     console.error(`[mirror] full sync to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
+    return await winner();
   }
+  return sha;
 }
 
 /** A commit's author date, for write-recency scoring. Null on any failure — the scorer coalesces

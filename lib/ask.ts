@@ -16,8 +16,14 @@
  * did not catch it: the attacker's forged block quotes one real sentence from the target file,
  * the reader cites the target path, and `files.get(path)` finds that sentence — VERIFIED, on a
  * fabricated answer, attributed to a file that never said it. Now the reader returns an opaque
- * per-request tag instead of a path, and the model's own idea of the path is discarded. A note
- * cannot forge a nonce it has never seen.
+ * tag instead of a path, and the model's own idea of the path is discarded.
+ *
+ * THE NONCE IS PER COMMIT, NOT PER REQUEST. It is derived from the corpus head SHA, so the
+ * packed prefix is byte-identical across requests at the same commit — which is what lets the
+ * reader call hit the provider's prompt cache. The forgery defence survives the change: a note
+ * cannot contain a valid tag for the commit that includes it, because that SHA depends on the
+ * note's own bytes (hash self-reference), and a tag observed at one commit dies the moment it
+ * could be written down — the write itself moves the head and re-derives every tag.
  *
  * MODEL CHOICE IS LOAD-BEARING. Measured on the 185-label eval:
  *   frontier reader, full corpus   97% (185/185 on answer-correctness)
@@ -27,10 +33,11 @@
  * So the default is a Sonnet-class reader over a narrowed pack. Haiku is available but must be
  * proven on the eval before it is trusted.
  */
-import { randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { loadCorpus, type Corpus } from "./corpus";
 import { narrow } from "./narrow";
 import { checkCitation, normalise, type Citation } from "./verify";
+import { redact } from "./redact";
 
 export const DEFAULT_MODEL = "claude-sonnet-5";
 export const DEFAULT_K = 10;
@@ -81,15 +88,33 @@ export interface AskResult {
   unresolvedTag: boolean;
 }
 
+/**
+ * The reader's input, split where the provider's prompt cache needs a boundary. `stable` is
+ * the contract plus the note pack — byte-identical across requests at the same commit for the
+ * same path set, so it is the cacheable prefix. `question` is the only part that varies per
+ * call, and it comes AFTER the pack so a new question never invalidates the cached prefix.
+ */
+export interface ReaderPrompt {
+  stable: string;
+  question: string;
+}
+
 /** Injected so the whole path is testable without an API key, and so the model is a
  *  deployment decision rather than something baked into the tool. */
-export type Reader = (prompt: string, model: string) => Promise<string>;
+export type Reader = (prompt: ReaderPrompt, model: string) => Promise<string>;
 
 /** Anything that looks like an attempt to open a fake file block inside a note body. */
 const BANNER_RE = /={6,}\s*FILE\b/i;
 
 export interface Pack {
+  /** The whole prompt, `stable` + `question` — what packTokens is measured on. */
   prompt: string;
+  /** Contract + file blocks. Byte-identical per (commit, path set): the cacheable prefix. */
+  stable: string;
+  /** The question section. Varies per call; sits after the cache breakpoint. */
+  question: string;
+  /** Just the joined file blocks, for callers that want the notes without the contract. */
+  blocks: string;
   /** tag -> real path. The reader never gets to name a path directly. */
   tags: Map<string, string>;
   /** Notes that contain boundary-shaped text. Reported, never silently dropped. */
@@ -97,7 +122,12 @@ export interface Pack {
 }
 
 export function buildPrompt(corpus: Corpus, question: string, paths: string[]): Pack {
-  const nonce = randomBytes(4).toString("hex");
+  // Derived from the head SHA, NOT random per request: the pack must be byte-identical across
+  // requests at the same commit or the reader's prompt cache never hits. Unforgeable anyway —
+  // a note cannot contain the tag of the commit that includes it (the SHA depends on the
+  // note's own bytes), and any tag that leaks is invalidated by the very write that would
+  // plant it, because writing moves the head. See the file header.
+  const nonce = createHash("sha256").update(`cortex-pack:${corpus.sha}`).digest("hex").slice(0, 8);
   const tags = new Map<string, string>();
   const suspect: string[] = [];
   const blocks = paths.map((p, i) => {
@@ -111,8 +141,15 @@ export function buildPrompt(corpus: Corpus, question: string, paths: string[]): 
     // tag, so attribution survives while the reader keeps the context that earns the 97%.
     return `\n\n==================== FILE: ${p} [tag: ${tag}] ====================\n\n${body}`;
   });
+  // Question LAST, notes first. The old order (question before the pack) put the one varying
+  // string ahead of the stable bytes, which is exactly backwards for a prefix-matched cache.
+  const stable = `${ANSWER_CONTRACT}${blocks.join("")}`;
+  const q = `\n\nQUESTION: ${question}`;
   return {
-    prompt: `${ANSWER_CONTRACT}\n\nQUESTION: ${question}\n${blocks.join("")}`,
+    prompt: `${stable}${q}`,
+    stable,
+    question: q,
+    blocks: blocks.join(""),
     tags,
     suspect,
   };
@@ -212,10 +249,43 @@ function countFiles(files: Map<string, string>, quote: string): number {
  */
 export type Scope = readonly string[];
 
+/**
+ * Bytes of note text `full: true` will pack into one reader prompt.
+ *
+ * The full path had NO ceiling while its sibling brain_corpus enforced 100k, so its cost and its
+ * viability both scaled linearly with the corpus and nothing said stop. At ~324 KB that is ~85k
+ * input tokens a call; three times that exceeds the 200k context window of every model in
+ * READER_MODEL_IDS, so the tool would stop being expensive and start being a provider error —
+ * on the one call an operator reaches for precisely because they want thoroughness.
+ *
+ * 400 KB (~100k tokens) leaves room for the contract, the question and the reply inside a 200k
+ * window, and matches the 150k ceiling lib/health.ts already draws the console's gauge against.
+ */
+const FULL_BUDGET_BYTES = 400_000;
+
+/** Paths in corpus order, stopping at the budget. Always yields at least one note, so a single
+ *  oversized file degrades to "that note" rather than to an empty pack. */
+function withinBudget(files: Map<string, string>, paths: string[]): string[] {
+  const out: string[] = [];
+  let bytes = 0;
+  for (const p of paths) {
+    const len = files.get(p)?.length ?? 0;
+    if (out.length > 0 && bytes + len > FULL_BUDGET_BYTES) break;
+    out.push(p);
+    bytes += len;
+  }
+  return out;
+}
+
 function applyScope(corpus: Corpus, scope?: Scope): Corpus {
   if (!scope || scope.length === 0) return corpus;
+  // Segment-wise, not byte-wise. A bare startsWith let `projects/harbor` match
+  // projects/harbor-legal.md — a scope entry that reads like one project silently covering its
+  // siblings. Only an exact path, or a prefix that ends at a directory boundary, matches.
   const files = new Map(
-    [...corpus.files].filter(([p]) => scope.some((s) => p === s || p.startsWith(s)))
+    [...corpus.files].filter(([p]) =>
+      scope.some((s) => p === s || (s.endsWith("/") && p.startsWith(s)))
+    )
   );
   return { ...corpus, files };
 }
@@ -223,16 +293,20 @@ function applyScope(corpus: Corpus, scope?: Scope): Corpus {
 export async function ask(
   question: string,
   read: Reader,
-  opts: { k?: number; model?: string; full?: boolean; scope?: Scope } = {}
+  opts: { k?: number; model?: string; full?: boolean; scope?: Scope; corpus?: Corpus } = {}
 ): Promise<AskResult> {
   // Scoped first, and everything downstream — narrowing, the pack, verification, the
-  // appears-in-N-notes count — sees only what the caller is allowed to see.
-  const corpus = applyScope(await loadCorpus(), opts.scope);
+  // appears-in-N-notes count — sees only what the caller is allowed to see. A caller that has
+  // already loaded the corpus (the answer cache keys on its SHA) passes it in, so the key and
+  // the answer cannot disagree about which commit they describe.
+  const corpus = applyScope(opts.corpus ?? (await loadCorpus()), opts.scope);
   const model = opts.model ?? DEFAULT_MODEL;
-  const paths = opts.full ? [...corpus.files.keys()] : narrow(corpus.files, question, opts.k ?? DEFAULT_K);
-  const { prompt, tags, suspect } = buildPrompt(corpus, question, paths);
+  const paths = opts.full
+    ? withinBudget(corpus.files, [...corpus.files.keys()])
+    : narrow(corpus.files, question, opts.k ?? DEFAULT_K);
+  const { prompt, stable, question: variable, tags, suspect } = buildPrompt(corpus, question, paths);
 
-  const raw = await read(prompt, model);
+  const raw = await read({ stable, question: variable }, model);
   const { answer, tag, quote } = parseReply(raw);
 
   // The tag is resolved server-side. An unknown tag means the reader invented one (or was told
@@ -367,7 +441,9 @@ function renderFull(r: AskResult): string {
     stamp = `VERIFIED — this quote is verbatim in ${at} @${c.commit}. (Proves the text exists; not that the answer follows from it.)`;
   }
   // Show the FILE's own text, not the model's transcription of it, so what the operator reads is what
-  // was actually proven.
-  const evidence = c.evidence ?? c.quote;
+  // was actually proven — but through the same egress gate as every other note-derived string.
+  // This line is raw file bytes by construction (that is the point of it), which made it the one
+  // place a credential could ride out of an otherwise-redacted answer.
+  const evidence = redact(c.evidence ?? c.quote);
   return `${stamp}\n\n${deforge(r.answer)}\n\nsource: ${at}\nevidence: ${evidence}${tail}`;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { logDigest, isLogPath, dateFromLogPath } from "../lib/digest";
+import { logDigest, logSections, isLogPath, dateFromLogPath } from "../lib/digest";
 
 const REAL_SHAPE = `# Log 2026-08-04
 
@@ -85,5 +85,29 @@ describe("logDigest", () => {
 
   it("tolerates CRLF", () => {
     expect(logDigest("## 01:00 · cortex\r\n").tags).toEqual(["cortex"]);
+  });
+});
+
+describe("logSections", () => {
+  it("splits a day into its timestamped entries, headings included, prose H2s kept inside", () => {
+    const s = logSections(
+      "# Log 2026-08-04\n\n## 12:35 · cortex, quarry\n\nfirst body\n\n## a topic heading\n\nstill the first entry\n\n## 20:37 · console\n\nsecond body"
+    );
+    expect(s).toHaveLength(2);
+    expect(s[0]).toMatchObject({ time: "12:35", tags: "cortex, quarry" });
+    expect(s[0].text).toContain("## a topic heading");
+    expect(s[0].text).toContain("still the first entry");
+    expect(s[1]).toMatchObject({ time: "20:37", tags: "console" });
+    expect(s[1].text).toContain("second body");
+  });
+
+  it("gives an untagged entry empty tags, and returns nothing for a day with no entries", () => {
+    expect(logSections("## 09:00\n\nbody")[0]).toMatchObject({ time: "09:00", tags: "" });
+    expect(logSections("# Log 2026-08-05\njust prose")).toEqual([]);
+  });
+
+  it("keeps the title line out of every section", () => {
+    const s = logSections("# Log 2026-08-04\n\n## 10:00 · a\n\nbody");
+    expect(s[0].text).not.toContain("# Log");
   });
 });

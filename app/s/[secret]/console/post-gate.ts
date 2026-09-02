@@ -1,8 +1,9 @@
 import { safeEqualStrings } from "@/lib/auth";
+import { STAMP_COOKIE, readCookie, stampIsValid } from "@/lib/stamp";
 
 /**
- * The shared plumbing of every console write endpoint: prove the secret, refuse cross-origin,
- * demand a JSON object. It existed as a hand-copied block in the settings and proposals routes
+ * The shared plumbing of every console write endpoint: prove the secret, prove the device
+ * stamp, refuse cross-origin, demand a JSON object. It existed as a hand-copied block in the settings and proposals routes
  * — two definitions of the console's write gate is one definition too many, and the copy is
  * how they drift. The duplication gate on the customer repo caught it; extraction is the fix
  * the finding deserved, not a suppression.
@@ -22,6 +23,13 @@ export async function gateConsolePost(
   const expected = process.env.CONNECTOR_PATH_SECRET;
   if (!expected || !safeEqualStrings(secret, expected)) {
     // The same empty 404 as every other gate here: nothing lives at this path.
+    return { deny: new Response(null, { status: 404 }) };
+  }
+
+  // The device stamp, second (see lib/stamp.ts): every console write is a button on a screen
+  // only stamped devices can load, so a stampless POST is a leaked link being replayed, not a
+  // person. Same empty 404 — a write gate must not be softer than the read gate above it.
+  if (!stampIsValid(readCookie(req.headers.get("cookie"), STAMP_COOKIE))) {
     return { deny: new Response(null, { status: 404 }) };
   }
 

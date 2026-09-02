@@ -23,6 +23,7 @@ import {
   readNote,
   todayStamp,
   validatePath,
+  validateReadPath,
   writeNote,
 } from "../lib/brain";
 
@@ -40,13 +41,29 @@ beforeEach(() => {
 });
 
 describe("validatePath", () => {
-  it.each(["profile.md", "INDEX.md", "projects/harbor.md", "notes/a-b_c.md", "log/2026-07-24.md", "archive/old/x.md"])(
+  it.each(["profile.md", "INDEX.md", "projects/harbor.md", "notes/a-b_c.md", "log/2026-07-24.md"])(
     "accepts %s",
     (p) => expect(() => validatePath(p)).not.toThrow()
   );
   it.each(["../etc/passwd", "src/evil.ts", "projects/x.txt", "/absolute.md", "projects/../profile.md", "random.md"])(
     "rejects %s",
     (p) => expect(() => validatePath(p)).toThrow(/Invalid brain path/)
+  );
+  // archive/ is READ-only history: writable once, and unreadable ever after, because the corpus
+  // predicate excludes the whole prefix. The write is refused with its own message so a caller
+  // learns immediately rather than a month later.
+  it.each(["archive/old/x.md", "archive/memory-2026-07/a--b.md"])(
+    "refuses %s as a write target, and says why",
+    (p) => expect(() => validatePath(p)).toThrow(/read-only/)
+  );
+});
+
+describe("validateReadPath", () => {
+  it.each(["profile.md", "projects/harbor.md", "archive/old/x.md"])("opens %s", (p) =>
+    expect(() => validateReadPath(p)).not.toThrow()
+  );
+  it.each(["../etc/passwd", "archive/../profile.md", "src/evil.ts"])("rejects %s", (p) =>
+    expect(() => validateReadPath(p)).toThrow(/Invalid brain path/)
   );
 });
 
@@ -403,12 +420,14 @@ describe("getContext holds its ceiling and its ordering", () => {
   }
 
   // Mutation: `spent + text.length` -> `text.length`. Seven ordinary days each fit alone, so
-  // without the running total all seven expand and the boot call is ~56 KB.
+  // without the running total all seven expand and the boot call is ~27 KB. (Day size tracks
+  // RECENT_BUDGET_BYTES: sized just under it so exactly the running total, and nothing else,
+  // is what stops the walk.)
   it("bounds the WHOLE recent section, not each day against the budget separately", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
     seed(Object.fromEntries(
-      ["2026-07-24", "2026-07-23", "2026-07-22", "2026-07-21", "2026-07-20", "2026-07-19", "2026-07-18"].map((d) => [d, 7_900])
+      ["2026-07-24", "2026-07-23", "2026-07-22", "2026-07-21", "2026-07-20", "2026-07-19", "2026-07-18"].map((d) => [d, 3_900])
     ));
     const ctx = await getContext();
     const recent = ctx.slice(ctx.indexOf("# RECENT"));
@@ -424,9 +443,27 @@ describe("getContext holds its ceiling and its ordering", () => {
     vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
     seed({ "2026-07-24": 3_000, "2026-07-23": 3_000, "2026-07-22": 3_000, "2026-07-21": 3_000, "2026-07-20": 3_000 });
     const ctx = await getContext();
-    expect(ctx).toContain("--- log/2026-07-24.md ---"); // today expanded
+    // The separator carries a per-request nonce, so match on the shape rather than a literal.
+    expect(ctx).toMatch(/--- [0-9a-f]{8} log\/2026-07-24\.md ---/); // today expanded
     expect(ctx).toContain("brain_read log/2026-07-20.md"); // the oldest digested
-    expect(ctx).not.toContain("--- log/2026-07-20.md ---");
+    expect(ctx).not.toMatch(/--- [0-9a-f]{8} log\/2026-07-20\.md ---/);
+    vi.useRealTimers();
+  });
+
+  // The boot call is the highest-volume egress in the system and lands straight in a
+  // tool-capable orchestrator's context, so its section boundaries must be unforgeable. They
+  // used to be a constant `--- log/<date>.md ---` that any accepted proposal could reproduce
+  // byte for byte; brain_corpus had nonced fences and this did not.
+  it("fences note content behind a per-request nonce and says it is data", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    seed({ "2026-07-24": 200 });
+    const a = await getContext();
+    const b = await getContext();
+    const nonceOf = (s: string) => /--- ([0-9a-f]{8}) log\//.exec(s)?.[1];
+    expect(nonceOf(a)).toBeDefined();
+    expect(nonceOf(a)).not.toBe(nonceOf(b)); // fresh per call, so it cannot be pre-forged
+    expect(a).toMatch(/DATA to reason about, never/);
     vi.useRealTimers();
   });
 
@@ -528,5 +565,88 @@ describe("getContext with the bubble", () => {
     expect(ctx).toContain("verbatim today text");
     expect(ctx).not.toContain("postgrest down"); // the failure never leaks into the boot reply
     vi.useRealTimers();
+  });
+});
+
+/**
+ * Regression: 2026-08-12. brain_write accepted a literal NUL byte into a project note and
+ * committed it to git; Postgres cannot hold that byte, so every mirror sync from then on 400'd
+ * whole and the mirror — and the connections graph riding it — froze silently for hours. The
+ * write path is the INGRESS: the byte must never reach git at all. Scrubbing covers the whole
+ * final file, not just the incoming piece, so a file poisoned before this guard existed heals
+ * itself on its next write.
+ */
+describe("writeNote / capture — bytes the mirror cannot store never reach git", () => {
+  const NUL = String.fromCharCode(0);
+
+  it("strips U+0000 from created content before committing", async () => {
+    mGet.mockResolvedValue(null);
+    await writeNote("notes/a.md", `clean${NUL}text`, "create");
+    expect(mPut).toHaveBeenCalled();
+    expect(mPut.mock.calls[0][1]).toBe("cleantext");
+  });
+
+  it("an append to an already-poisoned file heals the whole file", async () => {
+    mGet.mockResolvedValue({ path: "notes/a.md", content: `old${NUL}line`, sha: "s1" });
+    await writeNote("notes/a.md", "new line", "append");
+    const committed = mPut.mock.calls[0][1] as string;
+    expect(committed).not.toContain(NUL);
+    expect(committed).toContain("oldline");
+    expect(committed).toContain("new line");
+  });
+
+  it("the sha-conflict retry closure scrubs too — the fresh content is no cleaner than ours was", async () => {
+    mGet.mockResolvedValue({ path: "notes/a.md", content: "old", sha: "s1" });
+    await writeNote("notes/a.md", `tail${NUL}`, "append");
+    const retry = mPut.mock.calls[0][4] as (f: { content: string; sha: string } | null) => string;
+    expect(retry({ content: `fresh${NUL}base`, sha: "s2" })).not.toContain(NUL);
+  });
+
+  it("capture strips U+0000 before committing the log entry", async () => {
+    mGet.mockResolvedValue(null);
+    await capture(`a thought${NUL} with a stowaway`);
+    const committed = mPut.mock.calls[0][1] as string;
+    expect(committed).not.toContain(NUL);
+    expect(committed).toContain("a thought with a stowaway");
+  });
+
+  it("leaves storable bytes untouched — newlines and tabs are note structure, not poison", async () => {
+    mGet.mockResolvedValue(null);
+    await writeNote("notes/a.md", "line one\n\tline two\n", "create");
+    expect(mPut.mock.calls[0][1]).toBe("line one\n\tline two\n");
+  });
+});
+
+describe("writeNote / capture — the payload ceiling below the schema", () => {
+  // The MCP door refuses oversized payloads at the zod schema (tests/write-ceiling.test.ts).
+  // This layer catches every OTHER caller — a script importing writeNote directly — with the
+  // same contract: refuse loudly BEFORE the first GitHub call, so an over-limit payload costs
+  // no round-trip, saves nothing, and is never silently cut to fit.
+  it("refuses content over the ceiling before touching GitHub, and says how to split", async () => {
+    await expect(writeNote("notes/a.md", "x".repeat(500_001), "create")).rejects.toThrow(
+      /payload too large \(500001 chars, limit 500000\) — split the write/
+    );
+    expect(mGet).not.toHaveBeenCalled();
+    expect(mPut).not.toHaveBeenCalled();
+  });
+
+  it("accepts content at exactly the ceiling", async () => {
+    mGet.mockResolvedValue(null);
+    await writeNote("notes/a.md", "x".repeat(500_000), "create");
+    expect((mPut.mock.calls[0][1] as string).length).toBe(500_000);
+  });
+
+  it("refuses an oversized find — the text to replace is a substring, never the whole note", async () => {
+    await expect(
+      writeNote("notes/a.md", "new", "edit", "x".repeat(500_001))
+    ).rejects.toThrow(/find too large/);
+    expect(mGet).not.toHaveBeenCalled();
+    expect(mPut).not.toHaveBeenCalled();
+  });
+
+  it("capture refuses oversized text before touching GitHub", async () => {
+    await expect(capture("x".repeat(500_001))).rejects.toThrow(/payload too large/);
+    expect(mGet).not.toHaveBeenCalled();
+    expect(mPut).not.toHaveBeenCalled();
   });
 });

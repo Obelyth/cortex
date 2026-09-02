@@ -14,6 +14,14 @@ const client = readFileSync(
   path.join(HERE, "../app/s/[secret]/console/settings/settings-client.tsx"),
   "utf8"
 );
+const learning = readFileSync(
+  path.join(HERE, "../app/s/[secret]/console/settings/learning-client.tsx"),
+  "utf8"
+);
+const endpoints = readFileSync(
+  path.join(HERE, "../app/s/[secret]/console/settings/endpoints.ts"),
+  "utf8"
+);
 const tabs = readFileSync(path.join(HERE, "../app/s/[secret]/console/tabs.tsx"), "utf8");
 
 describe("the settings screen", () => {
@@ -27,9 +35,10 @@ describe("the settings screen", () => {
         expect(u, `${v} read must be presence/length only`).toMatch(/\?\.trim\(\)|Boolean\(/);
       }
     }
-    // No secret value interpolation anywhere in either file.
+    // No secret value interpolation anywhere in any of these files.
     expect(page).not.toMatch(/\{process\.env\.(MCP_TOKEN|GUEST_PATH_SECRET|CONNECTOR_PATH_SECRET|[A-Z_]*API_KEY|KV_REST[A-Z_]*)\}/);
     expect(client).not.toContain("process.env");
+    expect(learning).not.toContain("process.env");
   });
 
   it("is gated like every sibling screen", () => {
@@ -37,11 +46,16 @@ describe("the settings screen", () => {
     expect(page).toContain('dynamic = "force-dynamic"');
   });
 
-  it("writes only through the gated save endpoint, derived from the address bar", () => {
-    expect(client).toContain("/settings/save");
-    expect(client).toContain("window.location.pathname");
+  it("writes only through the gated endpoints, derived from the address bar", () => {
+    // The derivation lives once, in endpoints.ts — settings-client and learning-client both
+    // post through it, so neither may grow its own URL opinion.
+    expect(endpoints).toContain("window.location.pathname");
+    expect(client).toContain('settingsEndpoint("save")');
+    expect(learning).toContain("settingsEndpoint(");
     // No absolute URLs, no secret in markup — the fetch target is derived, never rendered.
     expect(client).not.toMatch(/https?:\/\//);
+    expect(learning).not.toMatch(/https?:\/\//);
+    expect(endpoints).not.toMatch(/https?:\/\//);
   });
 
   it("is reachable — the tab exists", () => {
@@ -50,6 +64,14 @@ describe("the settings screen", () => {
 
   it("tells the truth about a missing store instead of rendering dead controls silently", () => {
     expect(client).toMatch(/nowhere durable to write|unreachable this render/);
+    expect(learning).toMatch(/nowhere durable to write|unreachable this render/);
     expect(page).toMatch(/not configured|unreachable/);
+  });
+
+  it("keeps retrieval a statement, not a knob — the eval gate is the only door", () => {
+    // The Learning section shows the incumbent and the verdicts; no control may write a
+    // retrieval setting, and the row says why in those words.
+    expect(learning).toContain("the eval gate is the only door");
+    expect(learning).not.toMatch(/send\(\{\s*retrieval/i);
   });
 });

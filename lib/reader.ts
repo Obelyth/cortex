@@ -15,7 +15,7 @@
  * timeout is exactly what the Anthropic SDK path below had to be defended against.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { Reader } from "./ask";
+import type { Reader, ReaderPrompt } from "./ask";
 import { DEFAULT_MODEL } from "./ask";
 import { redact } from "./redact";
 
@@ -233,6 +233,21 @@ async function postJson(
   }
 }
 
+/**
+ * One user turn, split at the prompt-cache boundary. The stable prefix (contract + note pack)
+ * carries the breakpoint; the question rides after it, so five questions at the same commit
+ * pay the pack's tokens once (+25% on the write) and read it at ~10% thereafter. An empty
+ * stable part degrades to a single uncached block — the API rejects empty text blocks, and a
+ * breakpoint on nothing would be a cache entry for nothing.
+ */
+function splitContent(prompt: ReaderPrompt): Anthropic.TextBlockParam[] {
+  if (!prompt.stable) return [{ type: "text", text: prompt.question }];
+  return [
+    { type: "text", text: prompt.stable, cache_control: { type: "ephemeral" } },
+    { type: "text", text: prompt.question },
+  ];
+}
+
 /** Fails loudly rather than degrading to a worse answer — a brain that quietly stops
  *  citing is harder to notice than one that errors. */
 export const anthropicReader: Reader = async (prompt, model) => {
@@ -252,7 +267,7 @@ export const anthropicReader: Reader = async (prompt, model) => {
     model,
     max_tokens: MAX_TOKENS,
     output_config: { format: { type: "json_schema", schema: REPLY_SCHEMA } },
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: splitContent(prompt) }],
   });
 
   const text = res.content
@@ -288,7 +303,9 @@ export const openaiReader: Reader = async (prompt, model) => {
     { authorization: `Bearer ${key}` },
     {
       model,
-      input: [{ role: "user", content: prompt }],
+      // Stable pack first, question last — OpenAI's caching is implicit and prefix-matched,
+      // so the ordering alone is what lets repeat packs cache; no explicit marker exists.
+      input: [{ role: "user", content: prompt.stable + prompt.question }],
       text: {
         format: { type: "json_schema", name: "brain_reply", strict: true, schema: REPLY_SCHEMA },
       },
@@ -344,7 +361,9 @@ export const geminiReader: Reader = async (prompt, model) => {
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     { "x-goog-api-key": key },
     {
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      // Same pack-before-question ordering as the OpenAI path: Gemini's implicit caching is
+      // prefix-matched too, and the ordering is the whole opt-in.
+      contents: [{ role: "user", parts: [{ text: prompt.stable + prompt.question }] }],
       generationConfig: {
         // mimeType is a PROTO ENUM, not a MIME string — "application/json" draws a live 400
         // INVALID_ARGUMENT from generateContent (verified against the real API 2026-08-03;

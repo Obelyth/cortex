@@ -1,6 +1,7 @@
 import { readSettings, writeSettings } from "@/lib/settings";
 import { bad, gateConsolePost } from "../../post-gate";
 import { readGuestPolicy, writeGuestPolicy, isScopeEntry } from "@/lib/guest";
+import { applyLearningPatch, readLearning, writeLearning } from "@/lib/learning";
 import { PROVIDERS, providerOf, type Provider, type ReaderModel } from "@/lib/reader";
 
 /**
@@ -56,6 +57,40 @@ export async function POST(
     disabledProviders = out;
   }
 
+  // Learning knobs ride the same endpoint, as their own patch — same isolation rule as guest
+  // below: a write to one settings family can never silently rewrite another. The screen sends
+  // only the knob the click changed; applyLearningPatch validates it against the bounds and a
+  // read-modify-write folds it into the current selection.
+  if ("learning" in b) {
+    const l = b.learning;
+    if (l === null || typeof l !== "object" || Array.isArray(l)) return bad("learning must be an object");
+    const current = await readLearning();
+    // Same guard as the guest block: a RMW must never merge onto a fallback. readLearning()
+    // degrades to an EMPTY selection when the store cannot answer, so writing now would erase
+    // every previously-set knob under an ok:true reply.
+    if (current.source !== "store") {
+      return bad(
+        "the current learning settings could not be read, so this change was not saved — " +
+          "writing now would overwrite your settings with defaults. Try again.",
+        503
+      );
+    }
+    let next;
+    try {
+      next = applyLearningPatch(current.selection, l as Record<string, unknown>);
+    } catch (e) {
+      // A field that fails validation is a bad request, not a conflict — the bounds are stated
+      // on the screen and enforced here in the same words.
+      return bad(e instanceof Error ? e.message : String(e));
+    }
+    try {
+      await writeLearning(next);
+      return Response.json({ ok: true, learning: next });
+    } catch (e) {
+      return bad(e instanceof Error ? e.message : String(e), 409);
+    }
+  }
+
   // Guest policy rides the same endpoint, as its own patch. Kept separate from the reader
   // settings above so a write to one can never silently rewrite the other — these two control
   // very different things, and only one of them decides what a stranger can see.
@@ -64,6 +99,17 @@ export async function POST(
     if (g === null || typeof g !== "object" || Array.isArray(g)) return bad("guest must be an object");
     const p = g as Record<string, unknown>;
     const current = await readGuestPolicy();
+    // A read-modify-write must never merge onto a fallback. readGuestPolicy() fails OPEN to
+    // GUEST_DEFAULTS, so without this check a 1.5s Upstash blip while the operator ticked one
+    // checkbox would persist the defaults as if he had chosen them — widening a narrowed scope
+    // back to projects/ and a budget of 5 back to 50, durably, under an ok:true reply.
+    if (current.source !== "store") {
+      return bad(
+        "the current guest policy could not be read, so this change was not saved — " +
+          "writing now would overwrite your settings with defaults. Try again.",
+        503
+      );
+    }
     const next = {
       scope: current.scope,
       citations: current.citations,

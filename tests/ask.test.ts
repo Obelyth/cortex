@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { __setCache } from "../lib/corpus";
 import { ask, buildPrompt, parseReply, render, ANSWER_CONTRACT, DEFAULT_MODEL } from "../lib/ask";
+import type { ReaderPrompt } from "../lib/ask";
 import type { Corpus } from "../lib/corpus";
 
 const corpus: Corpus = {
@@ -19,19 +20,20 @@ const corpus: Corpus = {
 };
 
 /**
- * Pull a file's per-request tag out of the prompt, the way a real reader would read it off the
- * header. Tags are random per call, so a test reader cannot hardcode one — which is the point:
- * neither can a note.
+ * Pull a file's tag out of the packed prefix, the way a real reader would read it off the
+ * header. Tags are derived from the corpus head SHA, so a test reader cannot hardcode one
+ * without also fixing the commit — and a note can never contain the tag of the commit that
+ * includes it.
  */
 function tagOf(prompt: string, path: string): string {
   const esc = path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return prompt.match(new RegExp(`FILE: ${esc} \\[tag: ([0-9a-z]+)\\]`))?.[1] ?? "";
 }
 
-/** A reader that cites `path` with `quote`, resolving the tag from the prompt it was given. */
+/** A reader that cites `path` with `quote`, resolving the tag from the pack it was given. */
 function citing(path: string, quote: string, answer = "an answer") {
-  return async (prompt: string) =>
-    JSON.stringify({ answer, tag: tagOf(prompt, path), quote });
+  return async ({ stable }: ReaderPrompt) =>
+    JSON.stringify({ answer, tag: tagOf(stable, path), quote });
 }
 
 // loadCorpus() always resolves the branch head before trusting its cache — freshness is
@@ -84,13 +86,29 @@ describe("buildPrompt", () => {
     expect(prompt).not.toContain("FILE: projects/harbor.md");
   });
 
-  it("issues a fresh unguessable tag per file per request", () => {
-    // The tag is what makes a file boundary unforgeable. If it were stable, a note could
-    // simply contain last request's tag.
-    const a = buildPrompt(corpus, "q", ["projects/beacon.md"]);
-    const b = buildPrompt(corpus, "q", ["projects/beacon.md"]);
-    expect([...a.tags.keys()][0]).not.toBe([...b.tags.keys()][0]);
+  it("keeps the pack byte-identical per commit, and re-derives every tag when the head moves", () => {
+    // The stable prefix is what the reader's prompt cache matches on: two asks at one commit
+    // must produce the same bytes or the cache never hits. The forgery defence moves to the
+    // commit boundary — a note cannot contain the tag of the commit that includes it (the SHA
+    // depends on the note's own bytes), and writing a leaked tag down moves the head.
+    const a = buildPrompt(corpus, "first question", ["projects/beacon.md"]);
+    const b = buildPrompt(corpus, "a different question", ["projects/beacon.md"]);
+    expect(a.stable).toBe(b.stable);
+    expect([...a.tags.keys()]).toEqual([...b.tags.keys()]);
     expect([...a.tags.values()]).toEqual(["projects/beacon.md"]);
+
+    const moved = buildPrompt({ ...corpus, sha: "ffff0000ffff0000" }, "first question", ["projects/beacon.md"]);
+    expect([...moved.tags.keys()][0]).not.toBe([...a.tags.keys()][0]);
+  });
+
+  it("puts the question AFTER the pack, outside the cacheable prefix", () => {
+    // Question-first would put the one varying string ahead of the stable bytes — exactly
+    // backwards for a prefix-matched cache.
+    const p = buildPrompt(corpus, "is beacon live", ["projects/beacon.md"]);
+    expect(p.prompt).toBe(`${p.stable}${p.question}`);
+    expect(p.stable).not.toContain("QUESTION:");
+    expect(p.question).toContain("QUESTION: is beacon live");
+    expect(p.prompt.indexOf("FILE: projects/beacon.md")).toBeLessThan(p.prompt.indexOf("QUESTION:"));
   });
 });
 
@@ -170,7 +188,7 @@ describe("ask", () => {
 
   it("narrows by default and can be asked for the full corpus", async () => {
     let seen = 0;
-    const reader = async (p: string) => { seen = (p.match(/={20} FILE: /g) ?? []).length; return "{}"; };
+    const reader = async (p: ReaderPrompt) => { seen = (p.stable.match(/={20} FILE: /g) ?? []).length; return "{}"; };
     await ask("plates backlog deleted database", reader, { k: 1 });
     expect(seen).toBe(1);
     await ask("plates backlog deleted database", reader, { full: true });
