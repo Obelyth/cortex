@@ -37,6 +37,11 @@ export function CorpusField({
 
   const m = hover === null ? null : marks[hover];
 
+  // Relative, so the secret comes from the address bar and never from markup.
+  const open = (i: number) => {
+    window.location.href = `corpus?note=${encodeURIComponent(marks[i].p)}`;
+  };
+
   return (
     <>
       <div
@@ -46,9 +51,16 @@ export function CorpusField({
         onMouseLeave={() => setHover(null)}
         onClick={(e) => {
           const i = idxFrom(e);
-          if (i === null) return;
-          // Relative, so the secret comes from the address bar and never from markup.
-          window.location.href = `corpus?note=${encodeURIComponent(marks[i].p)}`;
+          if (i !== null) open(i);
+        }}
+        // The pointer picks a mark by position; the keyboard opens whichever mark is lit.
+        role="button"
+        tabIndex={0}
+        aria-label="Corpus field: hover a mark, press Enter to open the note"
+        onKeyDown={(e) => {
+          if (hover === null || (e.key !== "Enter" && e.key !== " ")) return;
+          e.preventDefault();
+          open(hover);
         }}
       >
         {marks.map((mk, i) => (

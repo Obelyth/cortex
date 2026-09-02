@@ -143,7 +143,7 @@ async function main(): Promise<void> {
   for (const r of [...offline, ...coaccess]) byKind.set(r.kind, (byKind.get(r.kind) ?? 0) + 1);
   console.log(
     `graph: ${offline.length + coaccess.length} edges — ` +
-      [...byKind.entries()].sort().map(([kind, n]) => `${kind} ${n}`).join(" · ") +
+      [...byKind.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([kind, n]) => `${kind} ${n}`).join(" · ") +
       ` (coaccess ${coaccess.length ? "fetched live from prod" : "absent"})\n`
   );
   const adjacency = buildAdjacency([...offline, ...coaccess]);

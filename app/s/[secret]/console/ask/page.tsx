@@ -107,7 +107,7 @@ export default async function Ask({
   // and the trusted doors cannot see it at all.
   const trustedSet = new Set(trusted);
   const guestSet = new Set(guest);
-  const all = [...new Set([...trusted, ...guest])].sort();
+  const all = [...new Set([...trusted, ...guest])].sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="ovSheet">

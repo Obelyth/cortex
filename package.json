@@ -28,6 +28,7 @@
     "@types/node": "^26",
     "@types/pg": "^8.20.4",
     "@types/react": "^19",
+    "@vitest/coverage-v8": "^4.1.11",
     "pg": "^8.22.0",
     "typescript": "^7",
     "vitest": "^4"

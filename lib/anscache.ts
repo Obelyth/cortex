@@ -86,7 +86,7 @@ export function cacheKey(shape: AskShape, policy: AnswerPolicy): string {
     model: shape.model,
     k: shape.k,
     door: policy.door,
-    scope: [...policy.scope].sort(),
+    scope: [...policy.scope].sort((a, b) => a.localeCompare(b)),
     citations: policy.citations,
   });
   const hash = createHash("sha256").update(fingerprint).digest("hex");

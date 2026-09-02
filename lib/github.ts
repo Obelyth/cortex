@@ -23,9 +23,22 @@ export function branch(): string {
  */
 const REQUEST_TIMEOUT_MS = 15_000;
 
+/**
+ * Every caller assembles `path` from repo/branch config plus note paths that arrive over MCP.
+ * Whatever it contains, it must stay a path under the API origin: no second origin smuggled in
+ * through a leading `//`, no parent-directory hop that could re-aim the request.
+ */
+function assertApiPath(path: string): void {
+  const bare = path.split("?")[0];
+  if (!path.startsWith("/") || path.startsWith("//") || bare.split("/").includes("..")) {
+    throw new Error(`refusing GitHub API path: ${path}`);
+  }
+}
+
 export async function gh(path: string, init: RequestInit = {}): Promise<Response> {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new Error("GITHUB_TOKEN env var not set");
+  assertApiPath(path);
   return fetch(`${API}${path}`, {
     // Callers can still pass their own signal — spread last so an explicit one wins.
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

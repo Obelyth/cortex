@@ -111,7 +111,7 @@ try {
 
   // A back-dated filename would otherwise run AFTER everything newer, silently reverting a
   // later `create or replace` or dropping a view a newer file rebuilt.
-  const highestApplied = [...ledger.keys()].sort().at(-1);
+  const highestApplied = [...ledger.keys()].sort((a, b) => a.localeCompare(b)).at(-1);
   const outOfOrder = highestApplied ? pending.filter((f) => f < highestApplied) : [];
   if (outOfOrder.length && !allowOutOfOrder) {
     console.error(`\nREFUSING: ${outOfOrder.length} pending migration(s) sort before the last applied one (${highestApplied}):`);

@@ -127,7 +127,7 @@ export function tagEdges(files: Map<string, string>): EdgeRow[] {
         dst: tagged[j].path,
         kind: "tag",
         weight: shared.length,
-        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort().join(", ")}`),
+        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort((a, b) => a.localeCompare(b)).join(", ")}`),
       });
     }
   }
@@ -377,7 +377,7 @@ export function groupEdges(rows: EdgeRow[], topK = PANEL_TOP_K): Record<string, 
       if (!perKind.has(e.kind)) perKind.set(e.kind, []);
       perKind.get(e.kind)!.push(e);
     }
-    for (const kind of [...perKind.keys()].sort()) {
+    for (const kind of [...perKind.keys()].sort((a, b) => a.localeCompare(b))) {
       kept.push(
         ...perKind
           .get(kind)!
