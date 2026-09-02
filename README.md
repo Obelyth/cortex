@@ -12,13 +12,15 @@ with a read path that proves its own citations instead of asking to be trusted.
 
 *Any model may read it. Claude earned the default.*
 
-[**Inside Cortex — the illustrated tour →**](https://claude.ai/code/artifact/ee654cc7-63ed-47f0-831f-e3541e482555)
+[**Inside Cortex — the illustrated tour (PDF) →**](docs/inside-cortex.pdf)
+
+<a href="docs/inside-cortex.pdf"><img src="docs/inside-cortex.png" alt="Inside Cortex — answers with receipts. How the second brain actually works." width="720" /></a>
 
 [**Roadmap →**](ROADMAP.md)
 
 [![release](https://img.shields.io/github/v/release/Obelyth/cortex?label=release)](https://github.com/Obelyth/cortex/releases/latest)
 [![ci](https://img.shields.io/github/actions/workflow/status/Obelyth/cortex/ci.yml?branch=main&label=ci)](https://github.com/Obelyth/cortex/actions/workflows/ci.yml)
-[![quality gate](https://sonarcloud.io/api/project_badges/measure?project=Obelyth_cortex3&metric=alert_status)](https://sonarcloud.io/summary/overall?id=Obelyth_cortex3)
+[![quality gate](https://sonarcloud.io/api/project_badges/measure?project=cortex&metric=alert_status)](https://sonarcloud.io/summary/overall?id=cortex)
 [![license](https://img.shields.io/github/license/Obelyth/cortex?label=license)](LICENSE)
 
 </div>
