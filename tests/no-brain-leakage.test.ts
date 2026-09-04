@@ -275,6 +275,52 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
     expect(hits, `real brain note paths found in shipped source:\n  ${hits.join("\n  ")}`).toEqual([]);
   });
 
+  /**
+   * THE PATH TEST ABOVE MATCHES A FULL PATH, AND THAT IS HOW SIX REAL NOTE NAMES SHIPPED.
+   *
+   * It does `text.indexOf("notes/docx-authoring.md")`. Source that writes the same note as
+   * `[[notes/docx-authoring]]` (no extension), `[[retrieval-bm25-beats-fts]]` (no directory),
+   * `"name: feedback-no-lazy-use-agents"` (a frontmatter value), or `competitive-landscape.md`
+   * (no directory) matches none of them — every one of those is the note's name, and every one
+   * of them was green here on 2026-09-03 while sitting in lib/ and tests/ on main.
+   *
+   * So the STEM is policed too, and it is the stem that discloses: a directory prefix and an
+   * extension are format, and a reader who wants the note does not need either.
+   *
+   * The filters keep it from crying wolf, which is the only way a gate like this really dies.
+   * A stem must be hyphenated and longer than eight characters to count — that is what makes a
+   * name a name rather than a word ("setup.md", "map.md" and "log.md" are shapes anyone would
+   * write). Schema paths are exempt for the reason SCHEMA_PATHS gives, and STEM_ALLOW carries
+   * the names that are the product describing itself. Measured against the live brain when this
+   * was written: 138 distinctive stems, one allowed, and the six real leaks all caught.
+   */
+  const STEM_ALLOW = new Set([
+    // "Cortex second-brain map — canvas renderer." The product's own term for the product.
+    "second-brain",
+  ]);
+
+  it("no real note NAME appears in any shipped source file, path or not", () => {
+    const stems = brainPaths()
+      .filter((p) => !isSchemaPath(p))
+      .map((p) => p.split("/").pop()!.replace(/\.md$/, ""))
+      .filter((stem) => stem.includes("-") && stem.length > 8)
+      .filter((stem) => !STEM_ALLOW.has(stem));
+    const hits: string[] = [];
+
+    for (const [file, text] of repoSources()) {
+      for (const stem of new Set(stems)) {
+        const at = text.indexOf(stem);
+        if (at < 0) continue;
+        const line = text.slice(0, at).split("\n").length;
+        hits.push(`${file}:${line} names the real note "${stem}"`);
+      }
+    }
+
+    expect(hits, `real brain note names found in shipped source:\n  ${hits.join("\n  ")}`).toEqual(
+      []
+    );
+  });
+
   it("no distinctive line from any real note appears in any shipped source file", () => {
     const lines = brainLines();
     const sources = repoSources();

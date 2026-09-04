@@ -29,7 +29,7 @@ describe("supersededNotes — what counts as a retired page", () => {
   it("a description LEADING with SUPERSEDED marks the note; a mid-sentence mention does not", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      // competitive-landscape.md's live shape: prose ABOUT the stamp vocabulary, not a retired page.
+      // The shape that must NOT match: prose ABOUT the stamp vocabulary, not a retired page.
       "notes/about-stamps.md": `---\ndescription: "How answers get stamped VERIFIED or SUPERSEDED against a commit"\n---\n\nprose\n`,
       "notes/plain.md": "# No frontmatter at all\n",
     });

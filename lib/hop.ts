@@ -6,8 +6,8 @@
  * a query surface like search_notes()." This module is that machinery, built EVAL-FIRST: every
  * shape below ran the full labelled set before anything was allowed near the default path.
  *
- * THE FAILURE MODE THIS IS DESIGNED AGAINST is on the record (the brain's BM25-beats-FTS
- * decision note): the FTS hybrid "won" at k=10 and LOST at k=5, because interleaving spends scarce candidate
+ * THE FAILURE MODE THIS IS DESIGNED AGAINST is on the record (the retrieval decision note
+ * behind this module): the FTS hybrid "won" at k=10 and LOST at k=5, because interleaving spends scarce candidate
  * slots on the weaker arm. A union is not free — every slot a hop neighbour takes is a slot a
  * BM25 candidate loses. So displacement here is explicit, bounded, and k-aware: a config says
  * exactly how many bottom slots hops may claim (`tailSlots`) and below what budget they may
