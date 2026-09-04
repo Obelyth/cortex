@@ -778,7 +778,7 @@ describe("parity with brain/tools/eval/verify_citation.py", () => {
     // and so does `tools/eval/verify_citation.py` quoting its own docstring. The eval can
     // therefore score a citation to a file cortex would never have served.
     const files = new Map([["projects/beacon.md", "Production is still dark"]]);
-    expect(checkCitation(files, SHA, "archive/memory-2026-07/dir5--beacon-slop-check-poc.md", "Production is still dark").verified)
+    expect(checkCitation(files, SHA, "archive/fixtures-2026-01/dir5--beacon-drift-check-poc.md", "Production is still dark").verified)
       .toBe(false);
     expect(checkCitation(files, SHA, "./projects/beacon.md", "Production is still dark").verified).toBe(false);
     expect(checkCitation(files, SHA, "tools/eval/verify_citation.py", "deterministic proof that a cited quote").verified)

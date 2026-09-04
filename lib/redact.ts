@@ -2,8 +2,8 @@
  * redact — strip credential-shaped strings on the way OUT of the brain.
  *
  * The brain is a working memory of a real person's projects, so credentials end up in it:
- * pasted from a deploy log, quoted from a config file, written down while debugging. There
- * is one in this repo right now. Storing them is the underlying mistake, but a memory system
+ * pasted from a deploy log, quoted from a config file, written down while debugging. Assume
+ * at least one is present. Storing them is the underlying mistake, but a memory system
  * that emits them on request turns a bad habit into an exfiltration channel — an agent that
  * has been prompt-injected by a web page it was asked to summarise can call a search tool and
  * read a production password straight into someone else's context.
@@ -33,9 +33,9 @@ export const SECRETS: Array<[RegExp, string]> = [
     "<redacted-token>",
   ],
   // A prefix on the key name is allowed on purpose: ADMIN_PASSWORD, DB-SECRET, vercelToken.
-  // A plain \b(password) matches NONE of those, because underscore is a word character — and
-  // ADMIN_PASSWORD=… is the exact shape of the live credential sitting in this brain's
-  // archive. That near-miss is why this pattern is written the wide way. The optional quote
+  // A plain \b(password) matches NONE of those, because underscore is a word character, and
+  // PREFIX_PASSWORD=… is the shape a pasted deploy log actually takes. That near-miss is why
+  // this pattern is written the wide way. The optional quote
   // before the separator is JSON: in '{"token": "v"}' the char after the key name is a
   // closing quote, and provider error bodies — which now ride through here — are always JSON.
   // The prefix length is BOUNDED, not open. `[A-Za-z0-9_.-]*` is greedy and the six literal
