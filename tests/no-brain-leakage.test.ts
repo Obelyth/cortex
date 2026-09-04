@@ -53,8 +53,15 @@ if (!present && process.env.REQUIRE_EXPORT_GATE === "1") {
 }
 
 /** Directories whose contents ship. node_modules and build output are not ours to police. */
-const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template"];
-const SCAN_ROOT_FILES = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "ROADMAP.md", ".env.example"];
+const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template", ".github"];
+/**
+ * The repo root is scanned BY EXTENSION, not by allowlist. An allowlist of five names exempted
+ * every root file nobody thought to add — DESIGN.md at 23 KB, package.json, the sonar and vitest
+ * configs, instrumentation.ts, `Cortex Setup.command` — and a gate whose coverage depends on
+ * someone remembering to extend it is a gate that decays silently. Directories still need naming
+ * (walking node_modules and .git would be absurd); files do not.
+ */
+const SCAN_ROOT_SKIP = new Set(["package-lock.json"]);
 
 /** This file necessarily describes the leak it prevents, so it cannot be its own subject. */
 const SELF = "tests/no-brain-leakage.test.ts";
@@ -84,11 +91,14 @@ function walk(dir: string, base = ""): string[] {
 /** Every file this repo would publish, as (repo-relative path, text). */
 function repoSources(): Array<[string, string]> {
   const files: string[] = [];
-  for (const d of SCAN_DIRS) files.push(...walk(join(REPO, d), d));
-  for (const f of SCAN_ROOT_FILES) if (existsSync(join(REPO, f))) files.push(f);
+  for (const d of SCAN_DIRS) if (existsSync(join(REPO, d))) files.push(...walk(join(REPO, d), d));
+  for (const f of readdirSync(REPO)) {
+    if (SCAN_ROOT_SKIP.has(f)) continue;
+    if (statSync(join(REPO, f)).isFile()) files.push(f);
+  }
   return files
     .filter((f) => f !== SELF)
-    .filter((f) => /\.(ts|tsx|js|mjs|jsx|css|md|json|sql|sh|py)$/.test(f))
+    .filter((f) => /\.(ts|tsx|js|mjs|jsx|css|md|json|sql|sh|py|yml|yaml|command|txt)$/.test(f))
     .map((f) => [f, readFileSync(join(REPO, f), "utf8")] as [string, string]);
 }
 
@@ -396,7 +406,7 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
 
     const hits: string[] = [];
     for (const [file, text] of repoSources()) {
-      for (const m of text.matchAll(/(?:notes|projects|archive)\/[A-Za-z0-9._-]+\.md/g)) {
+      for (const m of text.matchAll(/(?:notes|projects|archive|history)\/[A-Za-z0-9._\/-]+\.md/g)) {
         // A schema path is the deliberately-public exception the exact check carves out; its stem
         // is the product's own name, so a "near miss" of it discloses nothing either.
         if (isSchemaPath(m[0])) continue;
