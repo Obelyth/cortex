@@ -229,7 +229,7 @@ export const COACCESS_TOP_K = 3;
  * RAW WEIGHT CANNOT TELL AFFINITY FROM POPULARITY, and here is the measurement that taught it
  * (live note_edges, 2026-08-11): sixteen unlinked pairs stood at the floor, and every single one
  * involved a hub — the main project page with 48 co-access partners after one marathon session,
- * the machine-setup note with 38, day-logs co-read in bulk by groundskeeper absorb runs, the
+ * a workstation page with 38, day-logs co-read in bulk by groundskeeper absorb runs, the
  * boot profile polluted by reconcile-trigger reads. Three mechanical filters follow, each doing
  * one job:
  *
@@ -241,7 +241,7 @@ export const COACCESS_TOP_K = 3;
  *      candidate out of a note's top-K either (bulk absorb runs co-read every day-log; letting
  *      those edges rank would re-import the popularity noise this filter exists to remove).
  *   2. A PROSE MENTION COUNTS AS NAMING. The item's premise is "no reader can follow it" — and
- *      that premise was FALSE for pairs like machine-setup ↔ the server's own page, where the
+ *      that premise was FALSE for pairs like a setup page ↔ the server's own page, where the
  *      prose names the other note without brackets. So before a pair surfaces, each side's LIVE
  *      text (check 1's machinery, reused: banner-retracted blocks dropped, `(was: …)` spans
  *      blanked) is scanned for the other's name — its slug, its filename base, or its

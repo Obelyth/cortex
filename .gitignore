@@ -22,3 +22,9 @@ PRODUCT.md
 # sort last and are obvious in a listing.
 tests/zz-*.test.ts
 .env*
+
+# Generated coverage output. It was tracked until 2026-09-03 (4 MB, 143 files, referenced
+# nowhere) and republished copies of source comments as HTML, which is how three real note
+# names stayed public after the source was scrubbed. Generated artefacts do not belong in the
+# tree, and the export gate does not scan them.
+/coverage

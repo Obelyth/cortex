@@ -54,7 +54,7 @@ export const WIKILINK = /\[\[([^\[\]\n]+)\]\]/g;
 
 /**
  * Resolve a [[ref]] against the live corpus. The house convention is loose — the brain writes
- * [[retrieval-bm25-beats-fts]] (a basename), [[notes/docx-authoring]] (a path minus .md) and
+ * [[alpha-beats-beta]] (a basename), [[notes/aurora-authoring]] (a path minus .md) and
  * could write a full path — so resolution tries exact path, then path+".md", then a unique
  * basename match, case-insensitively.
  *

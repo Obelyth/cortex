@@ -56,7 +56,7 @@ describe("untar", () => {
     // Regression: any path over 100 chars is split across a `prefix` field at offset 345.
     // Reading only `name` dropped 49 entries of the real repo silently — 7 of them live
     // notes, which the reader would then have answered "not in brain" for.
-    const deep = "memory-2026-07/dir1--project-egoyam-collection-evolution-with-a-long-name.md";
+    const deep = "fixtures-2026-01/dir1--project-aurora-lattice-evolution-with-a-very-long-name.md";
     const header = Buffer.alloc(512);
     header.write(deep.split("/").pop()!, 0, 100, "utf8");            // name field
     header.write("0".padStart(11, "0") + "\0", 124, 12, "ascii");    // size 0
@@ -65,7 +65,7 @@ describe("untar", () => {
     const tar = Buffer.concat([seal(header), Buffer.alloc(1024)]);
     const got = untar(tar);
     expect(got).toHaveLength(1);
-    expect(got[0][0]).toBe(`archive/memory-2026-07/${deep.split("/").pop()}`);
+    expect(got[0][0]).toBe(`archive/fixtures-2026-01/${deep.split("/").pop()}`);
   });
 });
 

@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseFrontmatter, routerLine, buildRouter, routerCut } from "../lib/frontmatter";
 
 describe("parseFrontmatter", () => {
-  it("reads description and tags from a real feedback-note shape", () => {
+  it("reads description and tags from a feedback-note shape", () => {
     const text = [
       "---",
-      "name: feedback-no-lazy-use-agents",
-      'description: "Don\'t stall mid-build; delegate to agent teams."',
+      "name: feedback-keep-building",
+      'description: "Keep executing an approved plan; delegate the branches."',
       "metadata:",
       "  type: feedback",
       "---",
@@ -14,7 +14,7 @@ describe("parseFrontmatter", () => {
       "When there's an approved plan, keep building.",
     ].join("\n");
     const fm = parseFrontmatter(text);
-    expect(fm.description).toBe("Don't stall mid-build; delegate to agent teams.");
+    expect(fm.description).toBe("Keep executing an approved plan; delegate the branches.");
     // Byte-faithful: everything after the closing fence is kept verbatim, blank line included.
     // Trimming would be a silent rewrite of note text, and note text is what quotes are proven
     // against.
