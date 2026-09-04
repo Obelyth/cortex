@@ -220,10 +220,15 @@ head("6 · Verify — trust the check, not the deploy log");
 const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
 const MCP_SECRET_FOR_CHECK = liveSecret;
 let healthy = true;
+// THE URL CARRIES A CREDENTIAL, SO IT DOES NOT GO ON A COMMAND LINE. Interpolated into the
+// shell string, the path secret is visible to `ps` for the life of the request and lands in
+// shell audit logs — on a shared box or a CI runner that is the whole door. `-K -` takes the
+// URL as a curl config on stdin instead; everything still on argv here is public.
 const tools = sh(
-  `curl -s --max-time 30 -X POST "${url}/api/s/${MCP_SECRET_FOR_CHECK}/mcp" ` +
+  `curl -s --max-time 30 -X POST -K - ` +
   `-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' ` +
-  `--data '${body}' | grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`
+  `--data '${body}' | grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`,
+  { input: `url = "${url}/api/s/${MCP_SECRET_FOR_CHECK}/mcp"\n` }
 );
 // The roster comes from lib/tool-roster.json — the same file the ops healthcheck asserts and
 // tests/tool-roster.test.ts pins to registerTools(). A roster string hardcoded here went stale

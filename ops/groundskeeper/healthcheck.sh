@@ -34,7 +34,11 @@ COUNT="$(node -e 'console.log(require(process.argv[1]).trusted.length)' "$ROSTER
 
 # HTTPS only, including any redirect a misconfigured deployment might answer with — the URL
 # carries a credential, and a downgrade would put it on the wire in the clear.
-TOOLS=$(curl -s --max-time 25 --proto '=https' --proto-redir '=https' -X POST "$CORTEX_BASE/api/s/$CONNECTOR_PATH_SECRET/mcp" \
+# ...and not on the command line either: interpolated here the secret is visible to `ps` and
+# to shell audit logs. printf is a builtin, so the URL never becomes another process's argv;
+# curl reads it as a config on stdin.
+TOOLS=$(printf 'url = "%s/api/s/%s/mcp"\n' "$CORTEX_BASE" "$CONNECTOR_PATH_SECRET" \
+  | curl -s --max-time 25 --proto '=https' --proto-redir '=https' -X POST -K - \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   --data '{"jsonrpc":"2.0","method":"tools/list","id":1}' \
