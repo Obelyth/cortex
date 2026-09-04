@@ -13,6 +13,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseFrontmatter, buildRouter } from "../lib/frontmatter";
 import { isLive } from "../lib/corpus";
+import { ROUTER_BUDGET_BYTES } from "../lib/brain";
 
 const BRAIN = process.env.BRAIN_DIR ?? join(process.cwd(), "..", "brain");
 const present = existsSync(BRAIN);
@@ -91,13 +92,33 @@ describe.skipIf(!present)("live brain corpus", () => {
   });
 
   it("router stays small enough to always load, and reports its own coverage", () => {
-    const router = buildRouter(files);
-    const tokens = Math.round(router.length / 4);
-    // Today's INDEX.md is ~1.3k tokens of bare paths. The router buys descriptions for a budget
-    // that must stay in always-loadable territory; 6k is the ceiling before the hot/warm split
-    // has to exist rather than merely be designed.
-    expect(tokens).toBeLessThan(6000);
+    // THE BUDGETED RENDER, because it is the only one boot can serve: getContext calls
+    // buildRouter(files, temps, ROUTER_BUDGET_BYTES) and routerCut fits the DOCUMENT to it. This
+    // test used to call buildRouter(files) unbounded and assert `tokens < 6000` — a size no code
+    // path emits, measured against a literal that had drifted from the constant beside it
+    // (28,000 B permits 7,000 tokens). On 2026-09-02 it went red at 6,202 tokens while the
+    // document was 24,807 B: 3,193 B INSIDE its own budget, 140 of 140 rows rendered, nothing
+    // dropped. The mechanism was working; the gate was failing on the corpus growing, and it
+    // blocked two PRs that never touched the router. hard-context.test.ts learned this one file
+    // over — "The constant, not a literal. Hardcoding 20,000 here meant the day the budget was
+    // re-measured the test kept asserting the old one" — and this is that lesson applied where it
+    // was missed. The bound now cannot disagree with the code, because it IS the code's number.
+    const router = buildRouter(files, new Map(), ROUTER_BUDGET_BYTES);
+    expect(router.length, "router exceeded ROUTER_BUDGET_BYTES").toBeLessThanOrEqual(
+      ROUTER_BUDGET_BYTES
+    );
     expect(router).toMatch(/_\d+ of \d+ notes carry a description\._/);
+
+    // Headroom is PRINTED, not asserted, on purpose. Dropping rows past the budget is by design
+    // and the document says how many did not fit — but a note that stops being listed stops being
+    // discoverable at boot, and that is already gated next door by hard-context's "routes every
+    // live note, so nothing became undiscoverable" (dropped rows are counted, never named, so a
+    // real loss fails there with a readable reason). What is missing is early warning, so the
+    // number a human should act on is readable in the run rather than inferred from a red tick.
+    const headroom = ROUTER_BUDGET_BYTES - router.length;
+    console.log(
+      `      router: ${router.length} B of ${ROUTER_BUDGET_BYTES} B — ${headroom} B headroom (~${Math.round(headroom / 200)} more notes)`
+    );
   });
 
   it("is deterministic on the real corpus", () => {
