@@ -278,11 +278,16 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
   /**
    * THE PATH TEST ABOVE MATCHES A FULL PATH, AND THAT IS HOW SIX REAL NOTE NAMES SHIPPED.
    *
-   * It does `text.indexOf("notes/docx-authoring.md")`. Source that writes the same note as
-   * `[[notes/docx-authoring]]` (no extension), `[[retrieval-bm25-beats-fts]]` (no directory),
-   * `"name: feedback-no-lazy-use-agents"` (a frontmatter value), or `competitive-landscape.md`
-   * (no directory) matches none of them — every one of those is the note's name, and every one
-   * of them was green here on 2026-09-03 while sitting in lib/ and tests/ on main.
+   * It does `text.indexOf("notes/aurora-authoring.md")`. Source that writes the same note as
+   * `[[notes/aurora-authoring]]` (no extension), `[[alpha-beats-beta]]` (no directory),
+   * `"name: feedback-keep-building"` (a frontmatter value), or `about-stamps.md` (no directory)
+   * matches none of them — every one of those is the note's name, and six real ones were green
+   * here on 2026-09-03 while sitting in lib/ and tests/ on main.
+   *
+   * The shapes above are this repo's own fixtures, deliberately. The first draft of this comment
+   * illustrated them with the six REAL names it had just removed, and the SELF exclusion two
+   * screens up meant this was the one file where that could not be caught — a gate cannot be its
+   * own subject. An example is not worth a disclosure.
    *
    * So the STEM is policed too, and it is the stem that discloses: a directory prefix and an
    * extension are format, and a reader who wants the note does not need either.
