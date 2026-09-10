@@ -120,7 +120,7 @@ describe("mirrorPulse", () => {
 describe("exactCount request shape", () => {
   // Deleting the Prefer header once left all tests green while every count silently became
   // null in production shape — the request contract is part of the contract.
-  it("sends Prefer: count=exact on HEAD, and excludes sidecars from the notes count", async () => {
+  it("sends Prefer: count=exact on HEAD, and excludes the retired map row from the notes count", async () => {
     mGh.mockResolvedValue(jsonRes({ sha: "abc" }));
     const inits: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {

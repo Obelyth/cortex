@@ -1,4 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+/** A PostgREST-shaped page: the reader walks note_edges by Range, so a stub that ignored the
+ *  header answered the same rows on every page. Real PostgREST never does. */
+const rangeSlice = <T,>(rows: T[], init?: RequestInit): T[] => {
+  const range = new Headers(init?.headers).get("range");
+  if (!range) return rows;
+  const [from, to] = range.split("-").map(Number);
+  return rows.slice(from, to + 1);
+};
 
 vi.mock("../lib/github", () => ({
   getFile: vi.fn(),
@@ -184,7 +192,6 @@ describe("previewHandoff", () => {
     }
     __setCache({
       files: new Map(Object.entries(f)),
-      sidecar: new Map(),
       sha: "deadbeefcafe0000",
       bytes: 0,
       fetchedAt: Date.now(),
@@ -196,9 +203,9 @@ describe("previewHandoff", () => {
     const edges = seedCorpus();
     vi.stubEnv("SUPABASE_URL", "https://x.supabase.co");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "k");
-    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const u = String(url);
-      if (u.includes("note_edges")) return new Response(JSON.stringify(edges), { status: 200 });
+      if (u.includes("note_edges")) return new Response(JSON.stringify(rangeSlice(edges, init)), { status: 200 });
       return new Response(JSON.stringify([]), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);

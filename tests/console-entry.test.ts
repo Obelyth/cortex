@@ -114,7 +114,7 @@ describe("GET /s/<secret>/console", () => {
   it("forwards a stamped device straight to the overview, renewing the stamp", async () => {
     const res = await get({ cookie: `${STAMP_COOKIE}=${stampValue()}` });
     expect(res.status).toBe(307);
-    expect(res.headers.get("location")).toBe(`/s/${SECRET}/console/overview`);
+    expect(res.headers.get("location")).toBe(`/s/${SECRET}/console/ops`);
     const cookie = res.headers.get("set-cookie")!;
     expect(cookie).toContain(`${STAMP_COOKIE}=${stampValue()}`);
     for (const attr of ["HttpOnly", "Secure", "SameSite=Lax", "Path=/", "Max-Age=31536000"]) {
@@ -143,7 +143,7 @@ describe("POST /s/<secret>/console", () => {
   it("mints the stamp on the right passcode — the derived value, not either credential", async () => {
     const res = await post(CODE);
     expect(res.status).toBe(303);
-    expect(res.headers.get("location")).toBe(`/s/${SECRET}/console/overview`);
+    expect(res.headers.get("location")).toBe(`/s/${SECRET}/console/ops`);
     const cookie = res.headers.get("set-cookie")!;
     expect(cookie).toContain(`${STAMP_COOKIE}=${stampValue()}`);
     expect(cookie).not.toContain(`=${SECRET}`);

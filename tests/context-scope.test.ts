@@ -16,7 +16,6 @@ import type { BubbleItem } from "../lib/bubble";
 function corpusOf(files: Record<string, string>) {
   __setCache({
     files: new Map(Object.entries(files)),
-    sidecar: new Map(),
     sha: "deadbeefcafe0000",
     bytes: 0,
     fetchedAt: Date.now(),

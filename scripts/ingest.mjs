@@ -11,7 +11,7 @@
  *   npm run ingest -- --from ~/notes --commit           # do it
  *   npm run ingest -- --from ~/docs --into projects --commit
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, extname, basename } from "node:path";
 
@@ -37,8 +37,8 @@ if (!["notes", "projects"].includes(INTO)) {
   console.error(`--into must be notes or projects, got: ${INTO}`);
   process.exit(1);
 }
-if (!BRAIN) {
-  console.error("set BRAIN_REPO=owner/brain (env) or pass --repo owner/brain");
+if (typeof BRAIN !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(BRAIN)) {
+  console.error("set BRAIN_REPO to a valid owner/repository name (env) or pass --repo owner/brain");
   process.exit(1);
 }
 
@@ -101,8 +101,8 @@ for (const f of planned) {
   const b64 = Buffer.from(body, "utf8").toString("base64");
   const payload = JSON.stringify({ message: `brain: ingest ${f.dest}`, content: b64 });
   try {
-    execSync(
-      `gh api -X PUT repos/${BRAIN}/contents/${f.dest} --input -`,
+    execFileSync(
+      "gh", ["api", "-X", "PUT", `repos/${BRAIN}/contents/${f.dest}`, "--input", "-"],
       { input: payload, stdio: ["pipe", "ignore", "pipe"] }
     );
     console.log(`  ok    ${f.dest}`);

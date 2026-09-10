@@ -24,7 +24,7 @@ const corpus: Corpus = {
     ["projects/beacon.md", BEACON],
     ["notes/harbor-plates.md", HARBOR],
     ["notes/quiet.md", "Nothing here about widgets at all."],
-  ]), sidecar: new Map(),
+  ]),
 };
 
 let restore: typeof globalThis.fetch;
@@ -99,9 +99,12 @@ describe("parseReply / hostile payloads", () => {
 
   it("OK: answer:null can no longer render a VERIFIED stamp over a blank answer", async () => {
     const r = await ask("is beacon live", citing("projects/beacon.md", "Staging is still dark", null));
-    expect(r.notInBrain).toBe(true);
+    expect(r.protocol).toBe("error");
+    expect(r.notInBrain).toBe(false);
     expect(r.citation).toBeNull();
     expect(r.answer).not.toBe("");
+    expect(render(r)).toMatch(/^UNVERIFIED.*reader protocol error/);
+    expect(render(r)).not.toMatch(/^NOT IN BRAIN|^VERIFIED/m);
   });
 });
 
@@ -238,9 +241,11 @@ describe("ask / what VERIFIED actually proves", () => {
     expect(r.candidates).toEqual(["notes/harbor-plates.md"]);
     expect(r.citation).toBeNull();
     expect(r.unresolvedTag).toBe(true); // a quote it cannot attribute, reported as such
+    expect(r.protocol).toBe("error");
+    expect(r.notInBrain).toBe(false);
 
     // And directly: a citation to a file outside the pack never reads as VERIFIED.
-    const outside = { ...r, notInBrain: false, unresolvedTag: false, citedOutsidePack: true, quoteFileCount: 1,
+    const outside = { ...r, protocol: "answer" as const, notInBrain: false, unresolvedTag: false, citedOutsidePack: true, quoteFileCount: 1,
       citation: { path: "projects/beacon.md", quote: "Staging is still dark",
                   verified: true, reason: "exact", commit: "eaf0a03e4849" } };
     expect(render(outside)).toMatch(/^UNVERIFIED/);
@@ -287,12 +292,15 @@ describe("ask / what VERIFIED actually proves", () => {
 });
 
 describe("ask / reader contract and cost reporting", () => {
-  it("BUG: an empty or whitespace reader reply is indistinguishable from a genuine miss", async () => {
+  it("OK: an empty or whitespace reader reply is a protocol error, never a genuine miss", async () => {
     for (const raw of ["", "   \n\t ", " "]) {
       const r = await ask("is beacon live", async () => raw);
-      expect(r.notInBrain).toBe(true);
-      expect(r.answer.trim()).toBe(r.answer.trim() === " " ? " " : "");
-      expect(render(r)).toMatch(/^NOT IN BRAIN/); // reader returned nothing; user is told the brain has nothing
+      expect(r.protocol).toBe("error");
+      expect(r.notInBrain).toBe(false);
+      expect(r.citation).toBeNull();
+      expect(r.answer.trim()).toBe("");
+      expect(render(r)).toMatch(/^UNVERIFIED.*reader protocol error/);
+      expect(render(r)).not.toMatch(/^NOT IN BRAIN|^VERIFIED/m);
     }
   });
 
@@ -305,8 +313,12 @@ describe("ask / reader contract and cost reporting", () => {
     // The contract (184 tokens), the "QUESTION:" line and the 60-char FILE banner per note
     // are all billed but not reported. Measured on the real brain: k=10 under-reports the
     // prompt by 4.6%, k=40 by 8.2%, full corpus by 6.9% (74,358 reported vs 79,837 actual).
-    const r = await ask("beacon staging dark", async () => "{}", { k: 2 });
-    const promptChars = buildPrompt(corpus, "beacon staging dark", r.candidates).prompt.length;
+    let promptChars = 0;
+    const r = await ask("beacon staging dark", async (sent) => {
+      promptChars = sent.stable.length + sent.question.length;
+      expect(sent.stable).toContain("SEARCH COVERAGE:");
+      return "{}";
+    }, { k: 2 });
     // Now measured on the prompt actually sent, so the reported figure tracks the bill to
     // within rounding rather than under-reporting it by 5-8%.
     expect(Math.abs(r.packTokens - promptChars / 4)).toBeLessThan(2);

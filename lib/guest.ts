@@ -2,6 +2,8 @@ import { kv, kvEnv } from "./kv";
 import { DEFAULT_MODEL } from "./ask";
 import { providerOf, type ReaderModel } from "./reader";
 import type { SettingsState } from "./settings";
+import {GUEST_POLICY_SCRIPT} from "./guest-policy-atomic";
+import {createHash} from "node:crypto";
 
 /**
  * What a guest may do, and how much of it.
@@ -35,6 +37,7 @@ export const GUEST_DEFAULTS: GuestPolicy = {
 };
 
 export interface GuestState extends GuestPolicy {
+  revision?:string|null;
   source: "store" | "unconfigured" | "unreachable";
   /** Asks already spent today, or null when the counter could not be read. */
   usedToday: number | null;
@@ -45,6 +48,20 @@ const key = () => `cortex:guest:${kvEnv()}`;
 /** UTC, deliberately: a day boundary that moves with a timezone is a budget that can be gamed. */
 const dayKey = (now: number) =>
   `cortex:guest:${kvEnv()}:asks:${new Date(now).toISOString().slice(0, 10)}`;
+
+export type GuestSnapshot=GuestPolicy&{revision:string};
+export class GuestPolicyConflict extends Error {readonly code="conflict";constructor(readonly current:GuestSnapshot){super("Guest policy changed in another tab. Current policy loaded; review it before another edit.");}}
+const MISSING_REVISION = createHash("sha1").update("cortex:guest:missing:v1").digest("hex");
+function snapshot(raw:unknown):{outcome:string;current:GuestSnapshot}{
+  if(!Array.isArray(raw)||raw.length!==3||typeof raw[0]!=="string"||typeof raw[2]!=="string"||!/^[a-f0-9]{40}$/.test(raw[2]))throw new Error("guest policy unavailable");
+  // Upstash recursively JSON-decodes EVAL members. Never parse a second time: a stored JSON
+  // string containing "{}" is not a policy. Lua's revision identifies the original bytes,
+  // including whitespace; do not reconstruct it by serializing the decoded object.
+  const missing=raw[1]===""&&raw[2]===MISSING_REVISION;
+  if(!missing&&(!raw[1]||typeof raw[1]!=="object"||Array.isArray(raw[1])))throw new Error("guest policy unavailable");
+  if(!["read","saved","conflict"].includes(raw[0])||(missing&&raw[0]==="saved"))throw new Error("guest policy unavailable");
+  return{outcome:raw[0],current:{...parse(missing?null:raw[1]),revision:raw[2]}};
+}
 
 /**
  * A scope entry is either an exact note path or a directory prefix ENDING IN `/`.
@@ -58,7 +75,7 @@ const dayKey = (now: number) =>
  * `archive/` is gone: corpus.ts excludes the whole prefix from the reader corpus, so an archive
  * scope could never match a file and a guest ticking it got NOT IN BRAIN on every question.
  */
-const SCOPE_RE = /^(profile\.md|(projects|notes|log)\/([A-Za-z0-9._-]+\.md|[A-Za-z0-9._/-]*\/)?)$/;
+const SCOPE_RE = /^(profile\.md|(projects|notes|log|history)\/([A-Za-z0-9._-]+\.md|[A-Za-z0-9._/-]*\/)?)$/;
 
 export function isScopeEntry(v: unknown): v is string {
   return typeof v === "string" && v.length > 0 && !v.includes("..") && SCOPE_RE.test(v);
@@ -98,29 +115,31 @@ function parse(raw: unknown): GuestPolicy {
 
 export async function readGuestPolicy(now = Date.now()): Promise<GuestState> {
   const r = kv();
-  if (!r) return { ...GUEST_DEFAULTS, source: "unconfigured", usedToday: null };
+  if (!r) return { ...GUEST_DEFAULTS, revision:null, source: "unconfigured", usedToday: null };
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => reject(new Error("kv read timeout")), READ_TIMEOUT_MS);
     });
     const [raw, used] = await Promise.race([
-      Promise.all([r.get<unknown>(key()), r.get<number>(dayKey(now))]),
+      Promise.all([r.eval(GUEST_POLICY_SCRIPT,[key()],["read"]), r.get<number>(dayKey(now))]),
       timeout,
     ]);
+    const result=snapshot(raw);
+    if(result.outcome!=="read")throw new Error("guest policy unavailable");
     return {
-      ...parse(raw),
+      ...result.current,
       source: "store",
       usedToday: typeof used === "number" ? used : Number(used) || 0,
     };
   } catch {
-    return { ...GUEST_DEFAULTS, source: "unreachable", usedToday: null };
+    return { ...GUEST_DEFAULTS, revision:null, source: "unreachable", usedToday: null };
   } finally {
     clearTimeout(timer);
   }
 }
 
-export async function writeGuestPolicy(next: GuestPolicy): Promise<void> {
+export async function writeGuestPolicy(next: GuestPolicy,expectedRevision?:string): Promise<GuestSnapshot> {
   for (const s of next.scope) {
     if (!isScopeEntry(s)) throw new Error(`"${s}" is not a valid scope path`);
   }
@@ -131,7 +150,13 @@ export async function writeGuestPolicy(next: GuestPolicy): Promise<void> {
   }
   const r = kv();
   if (!r) throw new Error("no KV store is configured, so guest policy has nowhere to live");
-  await r.set(key(), JSON.stringify(next));
+  if(!expectedRevision||!/^[a-f0-9]{40}$/.test(expectedRevision))throw new Error("guest revision required");
+  const value=JSON.stringify({scope:next.scope,citations:next.citations,dailyAsks:next.dailyAsks,maxK:next.maxK});
+  if(Buffer.byteLength(value)>65536)throw new Error("guest policy too large");
+  const result=snapshot(await r.eval(GUEST_POLICY_SCRIPT,[key()],["write",expectedRevision,value]));
+  if(result.outcome==="conflict")throw new GuestPolicyConflict(result.current);
+  if(result.outcome!=="saved")throw new Error("guest policy unavailable");
+  return result.current;
 }
 
 /**

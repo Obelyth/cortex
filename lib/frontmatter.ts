@@ -20,7 +20,9 @@
  * "no description", never to "no note".
  */
 
-import { isLogPath, logDigest, dateFromLogPath } from "./digest";
+import { isLogPath, logDigest, dateFromLogPath, monthKey } from "./digest";
+import { utf8Bytes } from "./utf8";
+import { redact } from "./redact";
 
 /**
  * The one string comparator this module sorts with.
@@ -43,7 +45,7 @@ export interface Frontmatter {
   description: string;
   /**
    * The note's declared name, when it carries one — the feedback notes write
-   * `name: team-review-checklist` at the top level. Nothing routes on it; it exists so the
+   * `name: example-workflow-rule` at the top level. Nothing routes on it; it exists so the
    * inbox's mention scan (lib/inbox.ts) can recognise a note by the name its own frontmatter
    * declares, not only by its path. Absent means absent — no fallback to the filename here,
    * because a parser that invented a name would make "the note declares X" unfalsifiable.
@@ -54,8 +56,8 @@ export interface Frontmatter {
   /**
    * Whether this note's facts can go stale. `false` opts it out of the verification-stamp check.
    *
-   * The check treats every stamped note alike, and the notes are not alike. "The old sync client
-   * was removed on 2026-07-26" cannot stop being true; "backups run nightly and here is the recovery path"
+   * The check treats every stamped note alike, and the notes are not alike. "MEGAsync was removed
+   * on 2026-07-26" cannot stop being true; "backups run nightly and here is the recovery path"
    * decays the moment the machine changes. Nagging about the first teaches you to skim past the
    * second, which is the one that matters.
    *
@@ -272,6 +274,17 @@ export interface RouterEntry {
   updated: string;
   /** The note moved after its description was written, so the description is unproven. */
   stale: boolean;
+  /**
+   * This row is not a note. Cortex composed it — today that means the month rows day logs
+   * collapse into — so its `path` names a group rather than a file, and its description is
+   * assembled here from integers this module counted rather than lifted out of note bytes.
+   *
+   * Two things follow, and nothing else does. The description may carry the `·` field separator,
+   * because there is no untrusted text in it to forge a field WITH (see safeText). And the byte
+   * budget never drops the row: a month row is the only thing standing between its days and
+   * being undiscoverable, and it costs one line to keep thirty findable.
+   */
+  composed?: boolean;
 }
 
 /**
@@ -332,13 +345,35 @@ export function storableText(s: string): string {
 }
 
 export function safeText(s: string, max: number): string {
+  // Credential recognition must see the complete value. Cutting first can turn a token into an
+  // unrecognisable prefix which then escapes the redactor. The surface cut happens afterwards.
+  return oneLine(redact(s).replace(/·/g, "-"), max);
+}
+
+/**
+ * safeText WITHOUT the separator rule: control characters flattened, whitespace collapsed, the
+ * length bound applied, `·` left standing.
+ *
+ * Private, and it stays private. Neutralising the separator is the whole reason safeText exists
+ * at a boundary where foreign text meets a delimited row, and the only strings entitled to skip
+ * it are the ones this module composed out of its own integers — the router's month rows, which
+ * contain no note bytes to forge a field with. Everything a note wrote goes through safeText.
+ */
+function oneLine(s: string, max: number): string {
   const clean = s
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u001F\u007F\u2028\u2029]/g, " ")
-    .replace(/·/g, "-")
     .replace(/\s+/g, " ")
     .trim();
-  return clean.length <= max ? clean : `${clean.slice(0, max - 1)}…`;
+  if (max <= 0) return "";
+  let prefix = "";
+  let count = 0;
+  for (const point of clean) {
+    if (count === max) return `${prefix}…`;
+    if (count < max - 1) prefix += point;
+    count++;
+  }
+  return clean;
 }
 
 /** Warm rows carry a shortened description and drop their tags — presence at a fraction of the
@@ -347,7 +382,11 @@ const WARM_DESCRIPTION = 90;
 
 export function routerLine(e: RouterEntry): string {
   const warm = e.temperature === "warm";
-  const description = safeText(e.description, warm ? WARM_DESCRIPTION : MAX_DESCRIPTION);
+  const max = warm ? WARM_DESCRIPTION : MAX_DESCRIPTION;
+  // A composed row's description is this module's own arithmetic — "24 day logs · 87 entries" —
+  // so it keeps the separator that makes those read as the two counts they are. Note text never
+  // takes this branch; see `composed` on RouterEntry and `oneLine` above.
+  const description = e.composed ? oneLine(e.description, max) : safeText(e.description, max);
   if (!description) return `- ${e.path} · (no description yet)`;
   const parts = [e.path, description];
   if (!warm && e.tags.length) {
@@ -360,8 +399,21 @@ export function routerLine(e: RouterEntry): string {
   return e.stale ? `${line} · STALE` : line;
 }
 
-/** Directory order, matching the listing INDEX.md has always used. */
-const ORDER = ["Root", "projects", "notes", "log", "archive"];
+/**
+ * Directory order, shared by the router and by INDEX.md's generator (`regenerateBareIndex` in
+ * lib/brain.ts).
+ *
+ * ONE constant, because there were two. The comment here said "matching the listing INDEX.md has
+ * always used" while brain.ts kept its own copy of the same array — and since that generator
+ * silently omits any directory not in its list, a prefix added here and forgotten there would be
+ * routed and retrievable but missing from the human catalogue, with nothing to notice it. That is
+ * the two-definitions-of-the-same-thing shape this codebase keeps deleting; the comment is now
+ * true because it is the same array.
+ *
+ * `history` sits after `log` because that is what it is: the days' older siblings, dated the same
+ * way and read the same way, written a month at a time instead of a day at a time.
+ */
+export const ORDER = ["Root", "projects", "notes", "log", "history", "archive"];
 
 /**
  * A router row for one file.
@@ -378,6 +430,52 @@ export function entryFor(path: string, text: string, updated = "", stale = false
   }
   const fm = parseFrontmatter(text);
   return { path, description: fm.description, tags: fm.tags, updated, stale };
+}
+
+/** What one month of day logs adds up to, accumulated across its days. */
+interface MonthTally {
+  days: number;
+  entries: number;
+  /** Entries carrying each tag, summed over the month; first-seen order across the month. */
+  tags: Map<string, number>;
+}
+
+/**
+ * Three tags on a month row, against MAX_ROW_TAGS's six on a note.
+ *
+ * A note's tags describe that note. A month's tags describe thirty days at once, so the tail is
+ * long and mostly noise — the point of the row is "August was mostly cortex and mocap", which the
+ * first few carry and the rest dilute. Overflow is not announced here either: on a note the
+ * hidden tags are that note's own, and worth counting; on a month they are a distribution's tail,
+ * and `+19 more` says nothing a reader can act on.
+ */
+const MONTH_ROW_TAGS = 3;
+
+/**
+ * One month of day logs as a single router row.
+ *
+ * Composed, not derived from any one file: the path is a month key rather than a note, and the
+ * description is counts this module summed. Both counts are stated because they answer different
+ * questions — how many days were written in, and how much was written — and a month with 3 days
+ * and 60 entries is a different month from one with 25 days and 30.
+ */
+function monthRow(path: string, t: MonthTally): RouterEntry {
+  const days = `${t.days} day log${t.days === 1 ? "" : "s"}`;
+  const entries = `${t.entries} entr${t.entries === 1 ? "y" : "ies"}`;
+  // Loudest first, ties broken by first appearance — Array.sort is stable, so the Map's
+  // insertion order carries through and two renders of one corpus cannot disagree.
+  const tags = [...t.tags]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, MONTH_ROW_TAGS)
+    .map(([tag]) => tag);
+  return {
+    path,
+    description: `${days} · ${entries}`,
+    tags,
+    updated: "",
+    stale: false,
+    composed: true,
+  };
 }
 
 /**
@@ -410,13 +508,35 @@ export function routerCut(
 ): RouterCut {
   const kept: RouterEntry[] = [];
   const cold: RouterEntry[] = [];
+  const months = new Map<string, MonthTally>();
   let described = 0;
 
   for (const [path, text] of files) {
     const m = meta.get(path);
     const entry = entryFor(path, text, m?.updated ?? "", m?.stale ?? false);
     entry.temperature = m?.temperature;
+    // Day logs still count toward coverage. Their description is derived rather than authored,
+    // but it exists and it is real — the collapse below changes how the router SPENDS its bytes,
+    // never what the coverage line claims about the corpus.
     if (entry.description) described++;
+
+    // ONE ROW PER MONTH, not one per day. The corpus grows by a day log every day forever, and
+    // each of those rows bought a derived digest of a date nobody routes to by name — the single
+    // largest and fastest-growing claim on a budget that is loaded on every call. Their month
+    // row carries the counts and the loudest tags, and the days themselves stay one brain_read
+    // or one search away. Temperature does not apply: a month row stands for days that may be
+    // any temperature at all, and the row is how they are reached.
+    if (isLogPath(path)) {
+      const key = monthKey(path)!;
+      let tally = months.get(key);
+      if (!tally) months.set(key, (tally = { days: 0, entries: 0, tags: new Map() }));
+      const d = logDigest(text);
+      tally.days++;
+      tally.entries += d.entries;
+      for (const [tag, n] of d.tagEntries) tally.tags.set(tag, (tally.tags.get(tag) ?? 0) + n);
+      continue;
+    }
+
     // COLD IS NOT GONE — it is not RENDERED. Every live note keeps a router row; the
     // always-loaded slice is hot + warm, and cold is reachable by search, tag, prefix or exact
     // path. Rendering everything is what fails at a thousand notes.
@@ -427,28 +547,37 @@ export function routerCut(
     kept.push(entry);
   }
 
+  // Month rows lead the budget walk because they are the discovery hints for day logs. They are
+  // still subject to the same hard bound: a long-lived corpus may accumulate hundreds of months,
+  // and "pinned" cannot mean "unbounded".
+  const pinned = [...months]
+    .map(([path, t]) => monthRow(path, t))
+    .sort((a, b) => byName(a.path, b.path));
+
   // Hot before warm before unscored, and byName inside each band so two calls on one corpus
   // still produce byte-identical output. The walk CONTINUES past an oversized row rather than
   // breaking, so one enormous description cannot hide every shorter row behind it.
   const rank = (t?: Temperature) => (t === "hot" ? 0 : t === "warm" ? 1 : 2);
-  const sorted = kept
+  const sorted = [...pinned, ...kept
     .slice()
-    .sort((a, b) => rank(a.temperature) - rank(b.temperature) || byName(a.path, b.path));
+    .sort((a, b) => rank(a.temperature) - rank(b.temperature) || byName(a.path, b.path))];
 
   const walk = (rowBudget: number) => {
     const rendered: RouterEntry[] = [];
     const dropped: RouterEntry[] = [];
     let bytes = 0;
+    let droppable = 0;
     for (const entry of sorted) {
-      const len = routerLine(entry).length + 1;
-      if (bytes > 0 && bytes + len > rowBudget) {
+      const len = utf8Bytes(routerLine(entry) + "\n");
+      if (bytes + len > rowBudget) {
         dropped.push(entry);
         continue;
       }
       bytes += len;
       rendered.push(entry);
+      droppable++;
     }
-    return { rendered, dropped, bytes };
+    return { rendered, dropped, bytes, droppable };
   };
 
   let rowBudget = budgetBytes;
@@ -468,25 +597,27 @@ export function routerCut(
     // count bounds the iterations and the loop cannot spin.
     for (let i = 0; i <= sorted.length; i++) {
       const doc = renderRouterDoc({ ...cut, cold, described, total: files.size });
-      if (doc.length <= budgetBytes) break;
-      rowBudget -= doc.length - budgetBytes;
+      const docBytes = utf8Bytes(doc);
+      if (docBytes <= budgetBytes) break;
+      rowBudget -= docBytes - budgetBytes;
       let next = walk(rowBudget);
       if (next.rendered.length === cut.rendered.length) {
-        // Tightening by the overshoot did not force a drop — the overshoot was smaller than the
-        // next row, so the same rows still fit the tighter row budget and the document is still
-        // over. Force progress by cutting below what the current rows cost, unless we are already
-        // at the floor: when even ONE row plus the wrapper exceeds the budget, that row renders
-        // anyway — an empty router hides everything — and the overshoot is the sanctioned kind.
-        if (cut.rendered.length <= 1) break;
+        // Tightening by the overshoot did not force a drop, so cut below the current row total.
+        if (cut.droppable === 0) {
+          throw new RangeError(`router budget ${budgetBytes} bytes is too small for its minimum truthful envelope`);
+        }
         rowBudget = cut.bytes - 1;
         next = walk(rowBudget);
-        if (next.rendered.length === cut.rendered.length) break;
       }
       cut = next;
     }
+    if (utf8Bytes(renderRouterDoc({ ...cut, cold, described, total: files.size })) > budgetBytes) {
+      throw new RangeError(`router budget ${budgetBytes} bytes is too small for its minimum truthful envelope`);
+    }
   }
 
-  return { ...cut, cold, described, total: files.size };
+  // `droppable` is the walk's own bookkeeping and stops here; RouterCut is what callers read.
+  return { rendered: cut.rendered, dropped: cut.dropped, bytes: cut.bytes, cold, described, total: files.size };
 }
 
 /**

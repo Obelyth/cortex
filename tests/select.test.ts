@@ -31,17 +31,114 @@ describe("selectNotes — by path", () => {
     expect(s.dropped).toBe(2);
     expect(s.cursor).toBe("a.md");
   });
+
+  it("deduplicates explicit paths before paging, preserving first occurrence", () => {
+    const first = selectNotes(files, { ...OPTS, budgetBytes: 10, paths: ["notes/a.md", "notes/a.md", "notes/b.md"] });
+    expect(first.paths).toEqual(["notes/a.md"]);
+    expect(first.cursor).toBe("notes/a.md");
+    const second = selectNotes(files, {
+      ...OPTS,
+      budgetBytes: 10,
+      paths: ["notes/a.md", "notes/a.md", "notes/b.md"],
+      after: first.cursor!,
+    });
+    expect(second.paths).toEqual(["notes/b.md"]);
+    expect(second.cursor).toBeNull();
+  });
+
+  it("counts UTF-8 bytes and skips permanently oversized notes without hiding later fits", () => {
+    const multibyte = new Map([
+      ["notes/huge.md", "界".repeat(40)], // 120 bytes, despite 40 JS code units
+      ["notes/fit.md", "😀e\u0301"], // 7 bytes: astral emoji + combining sequence
+    ]);
+    const s = selectNotes(multibyte, { ...OPTS, paths: ["notes/huge.md", "notes/fit.md"], budgetBytes: 7 });
+    expect(s.paths).toEqual(["notes/fit.md"]);
+    expect(s.bytes).toBe(7);
+    expect(s.oversized).toEqual(["notes/huge.md"]);
+    expect(s.cursor).toBeNull();
+  });
+
+  it("stops before a resumable note when accumulated exact metadata leaves no room", () => {
+    const long = `notes/${"a".repeat(180)}.md`;
+    const files = new Map([[long, "oversized"], ["notes/fit.md", "fits-alone"]]);
+    const s = selectNotes(files, {
+      ...OPTS,
+      paths: [long, "notes/fit.md"],
+      maxExamined: 40,
+      fits: (draft) => !draft.paths.includes(long) && draft.oversized.join("").length + draft.paths.join("").length < 200,
+      measureBytes: (path) => path === long ? 500 : 10,
+    });
+    expect(s.oversized).toEqual([long]);
+    expect(s.paths).toEqual([]);
+    expect(s.cursor).toBe(long);
+    const resumed = selectNotes(files, {
+      ...OPTS,
+      paths: [long, "notes/fit.md"],
+      after: s.cursor!,
+      maxExamined: 40,
+      fits: (draft) => !draft.paths.includes(long) && draft.oversized.join("").length + draft.paths.join("").length < 200,
+      measureBytes: (path) => path === long ? 500 : 10,
+    });
+    expect(resumed.paths).toEqual(["notes/fit.md"]);
+    expect(resumed.cursor).toBeNull();
+  });
+
+  it("makes bounded progress when the first note fits alone but not with its required cursor", () => {
+    const near = "notes/near-ceiling.md";
+    const later = "notes/later.md";
+    const files = new Map([[near, "near"], [later, "later"]]);
+    const s = selectNotes(files, {
+      ...OPTS,
+      paths: [near, later],
+      fits: (draft) => {
+        if (draft.paths.includes(near) && draft.cursor === near) return false;
+        return draft.recoverable.join("").length < 100;
+      },
+    });
+    expect(s.paths).toEqual([later]);
+    expect(s.recoverable).toEqual([near]);
+    expect(s.dropped).toBe(0);
+    expect(s.cursor).toBeNull();
+  });
+
+  it("refuses, rather than silently dead-ending, when even one omission receipt cannot fit", () => {
+    // Before this pin the first candidate's receipt failing to fit broke out with nothing
+    // examined: dropped === 2, cursor === null, and lib/tools.ts prints the continuation only
+    // when there is a cursor — a page that withheld everything and said nothing about how to go on.
+    const files = new Map([["notes/a.md", "aaaa"], ["notes/b.md", "b"]]);
+    expect(() =>
+      selectNotes(files, { ...OPTS, paths: ["notes/a.md", "notes/b.md"], fits: () => false })
+    ).toThrow(RangeError);
+  });
+
+  it("never reports dropped notes without a cursor to reach them", () => {
+    const files = new Map(Array.from({ length: 6 }, (_, i) => [`notes/${i}.md`, "x".repeat(10 + i * 7)]));
+    for (const ceiling of [12, 20, 30, 45, 60, 80, 120]) {
+      let after: string | undefined;
+      for (let page = 0; page < 20; page++) {
+        const s = selectNotes(files, {
+          ...OPTS,
+          after,
+          maxExamined: 3,
+          fits: (d) => d.paths.join("").length + d.oversized.join("").length + (d.cursor ?? "").length <= ceiling,
+        });
+        if (s.dropped > 0) expect(s.cursor).not.toBeNull();
+        if (!s.cursor) break;
+        after = s.cursor;
+      }
+    }
+  });
 });
 
 describe("selectNotes — by question", () => {
   it("ranks and caps at k", () => {
     const files = new Map([
-      ["notes/quarry.md", "quarry ledger query"],
-      ["notes/beacon.md", "beacon radio handshake"],
+      ["notes/cedar.md", "cedar warehouse query"],
+      ["notes/camera.md", "camera ble control"],
       ["notes/other.md", "unrelated words"],
     ]);
-    const s = selectNotes(files, { ...OPTS, question: "quarry", k: 1 });
-    expect(s.paths).toEqual(["notes/quarry.md"]);
+    const s = selectNotes(files, { ...OPTS, question: "cedar", k: 1 });
+    expect(s.paths).toEqual(["notes/cedar.md"]);
   });
 });
 
@@ -69,13 +166,12 @@ describe("selectNotes — listing and the cursor", () => {
     expect(s.cursor).toBeNull();
   });
 
-  // Otherwise paging jams: the oversized note never fits, nothing is returned, the cursor never
-  // advances past it, and every retry gets the same empty answer.
-  it("always yields at least one note, even one larger than the whole budget", () => {
+  it("omits a note larger than the whole budget and still reaches the next note", () => {
     const s = selectNotes(corpus({ "huge.md": 5000, "next.md": 10 }), OPTS);
-    expect(s.paths).toEqual(["huge.md"]);
-    expect(s.dropped).toBe(1);
-    expect(selectNotes(corpus({ "huge.md": 5000, "next.md": 10 }), { ...OPTS, after: "huge.md" }).paths).toEqual(["next.md"]);
+    expect(s.paths).toEqual(["next.md"]);
+    expect(s.oversized).toEqual(["huge.md"]);
+    expect(s.dropped).toBe(0);
+    expect(s.cursor).toBeNull();
   });
 
   it("never loses a note across a full paged walk of a real-sized corpus", () => {
@@ -128,7 +224,7 @@ describe("selectNotes — the cursor advances in the sort's own order", () => {
   // The exact case that looped forever: case-insensitive collation reorders these two, and
   // everything after them was unreachable.
   it("walks a corpus whose collation order differs from its codepoint order", () => {
-    const names = ["notes/README.md", "notes/readme-draft.md", "notes/release.md", "notes/setup.md"];
+    const names = ["notes/README.md", "notes/readme-draft.md", "notes/reader.md", "notes/setup.md"];
     const seen = fullWalk(names, 900);
     expect(new Set(seen)).toEqual(new Set(names));
     expect(seen.length).toBe(names.length); // no repeats

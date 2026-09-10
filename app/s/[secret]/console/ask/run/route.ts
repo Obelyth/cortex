@@ -1,8 +1,10 @@
 import { ask, render } from "@/lib/ask";
 import { stampOf } from "@/lib/calls";
 import { modelReader } from "@/lib/reader";
+import { redact } from "@/lib/redact";
 import { readSettings, safeActiveReader } from "@/lib/settings";
 import { bad, gateConsolePost } from "../../post-gate";
+import { PROCESS_CEILING, spendOne, spentThisInstance } from "../ceiling";
 
 /**
  * The console's second write endpoint — and the only place in this product where the console
@@ -18,14 +20,16 @@ import { bad, gateConsolePost } from "../../post-gate";
  * screen this one costs money per interaction and the trusted doors have never had a budget.
  * The guest door meters in KV precisely so two concurrent callers cannot both take the last
  * slot; this is a single-operator surface, so a per-process ceiling is honest about what it is
- * rather than pretending to a distributed guarantee it does not have.
+ * rather than pretending to a distributed guarantee it does not have. The counter lives in
+ * ../ceiling.ts so the screen can print it before the first ask.
+ *
+ * WHAT IT READ (v2, 2026-09-05): the reply carries the narrowing's working — the shortlist with
+ * scores and matched terms, every candidate a cap refused and why, the zero count, the caps by
+ * name — plus the wall time and the ceiling. All of it is AskResult's own record; nothing here
+ * re-derives a decision the library made. The call log and the MCP tool are untouched.
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-/** Per-instance, resets on cold start. Named so nobody mistakes it for the KV budget. */
-const PROCESS_CEILING = 60;
-let spentThisInstance = 0;
 
 export async function POST(
   req: Request,
@@ -38,7 +42,7 @@ export async function POST(
   if (!question) return bad("ask something first");
   if (question.length > 500) return bad("questions are capped at 500 characters");
 
-  if (spentThisInstance >= PROCESS_CEILING) {
+  if (spentThisInstance() >= PROCESS_CEILING) {
     return bad(
       `this instance has answered ${PROCESS_CEILING} asks since it started — the ceiling exists so a stuck tab cannot bill the key in a loop`,
       429
@@ -49,7 +53,8 @@ export async function POST(
   const { active, error } = await safeActiveReader(settings);
   if (!active) return bad(error ?? "no reader model is available", 503);
 
-  spentThisInstance += 1;
+  const spent = spendOne();
+  const t0 = Date.now();
   try {
     const r = await ask(question, modelReader, { model: active.model });
     // The stamp is taken from the SAME render() the MCP tool serves, then read back with the
@@ -60,31 +65,51 @@ export async function POST(
     const rendered = render(r, { citations: true });
     return Response.json({
       stamp: stampOf(rendered),
-      answer: r.answer,
+      // The verdict's own sentence — what the terminal would print on line one.
+      stampLine: rendered.split("\n", 1)[0],
+      answer: redact(r.answer),
       model: r.model,
       commit: r.commit,
       packTokens: r.packTokens,
       corpusTokens: r.corpusTokens,
-      candidates: r.candidates,
+      candidates: r.candidates.map(redact),
+      notInBrain: r.notInBrain,
+      protocol: r.protocol,
+      coverage: r.coverage,
+      citedOutsidePack: r.citedOutsidePack,
+      unresolvedTag: r.unresolvedTag,
       citation: r.citation
         ? {
-            path: r.citation.path,
+            path: redact(r.citation.path),
             // The FILE's text for the block, not what the model typed — what is displayed has
             // to be what was actually proven.
-            evidence: r.citation.evidence ?? r.citation.quote,
+            evidence: redact(r.citation.evidence ?? r.citation.quote),
             verified: r.citation.verified,
-            reason: r.citation.reason,
+            reason: redact(r.citation.reason),
             commit: r.citation.commit,
             line: r.citation.line ?? null,
-            heading: r.citation.heading ?? null,
+            heading: r.citation.heading == null ? null : redact(r.citation.heading),
             superseded: Boolean(r.citation.superseded),
           }
         : null,
+      shortlist: r.shortlist.map(note => ({ ...note, path: redact(note.path), terms: note.terms.map(redact) })),
+      cut: r.cut.map(note => ({ ...note, path: redact(note.path) })),
+      zeroCount: r.zeroCount,
+      narrowing: r.narrowing,
+      ms: Date.now() - t0,
+      spent,
+      ceiling: PROCESS_CEILING,
     });
   } catch (e) {
     // A reader that refused, timed out or returned nothing is a loud failure by contract —
     // reporting it as an empty answer would make "the model would not answer" and "the brain
     // does not know" the same result, the one confusion this system exists to prevent.
-    return bad(e instanceof Error ? e.message : "the reader failed", 502);
+    // The slot was spent above, before the reader was called, so the failure cost one. Report it
+    // or the screen's counter falls back to the number it was server-rendered with and the
+    // ceiling appears to refund a failed ask.
+    return Response.json(
+      { error: e instanceof Error ? redact(e.message) : "the reader failed", spent, ceiling: PROCESS_CEILING },
+      { status: 502 }
+    );
   }
 }

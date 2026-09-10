@@ -16,8 +16,8 @@ import { __setStore, type AccessRow, type MirrorStore } from "../lib/mirror";
 function recorder() {
   const rows: AccessRow[][] = [];
   const store = {
+    snapshot: async () => ({ head: null, rows: [] }),
     head: async () => null,
-    all: async () => [],
     paths: async () => [],
     apply: async () => true,
     access: async (r: AccessRow[]) => {
@@ -70,8 +70,8 @@ describe("logNoteAccess", () => {
     // reading. A rejected access write must reach the server log and go no further.
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     __setStore({
+      snapshot: async () => ({ head: null, rows: [] }),
       head: async () => null,
-      all: async () => [],
       paths: async () => [],
       apply: async () => true,
       access: async () => {

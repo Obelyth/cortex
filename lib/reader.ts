@@ -15,31 +15,33 @@
  * timeout is exactly what the Anthropic SDK path below had to be defended against.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { Reader, ReaderPrompt } from "./ask";
+import type { Reader, ReaderOptions, ReaderPrompt } from "./ask";
 import { DEFAULT_MODEL } from "./ask";
 import { redact } from "./redact";
+import { abortAfter, budgetFor, DeadlineExceeded, READER_TIMEOUT_MS } from "./deadline";
 
-/** Must stay comfortably under the platform function ceiling (60s on Vercel). */
-export const READER_TIMEOUT_MS = 45_000;
+/**
+ * The reader's own cap, 45 s. It lives in deadline.ts with the rest of the request arithmetic
+ * and is re-exported here because this is where callers have always found it. It is a CAP, not
+ * a budget: the budget is whatever the request has left, and ask() hands that down per call.
+ */
+export { READER_TIMEOUT_MS };
+
+/** The ceiling one reader call actually gets: the cap, or what the caller had left. */
+function budgetOf(opts?: ReaderOptions): number {
+  return budgetFor(READER_TIMEOUT_MS, opts?.timeoutMs ?? READER_TIMEOUT_MS);
+}
 
 export type Provider = "anthropic" | "openai" | "google";
 
 /**
- * Reader models this server will call, and who serves each. An open string let a caller
- * pick any model on the operator's key — a 3.3x price swing per call, chosen by whoever holds the
- * connector URL — so this registry is an allowlist first and a router second. IDs verified
- * against each provider's live model list 2026-08-03; gemini-3.1-pro-preview is the one
- * non-GA entry (Google ships no GA Gemini-3 Pro) and is listed as such.
+ * Reader models this server will call, and who serves each. An open string would let a caller
+ * choose any model billed to the operator, so this registry is an allowlist first and a router
+ * second. Preview models are named as such.
  *
- * Claude readers carry the measured result (Sonnet/Opus 97% on the 185-label eval; Haiku
- * 47-98% across runs and not recommended). The OpenAI and Gemini readers are held to the
- * same contract but have NOT been run on the eval — the tool description says so. The
- * honest-data rule applies to model-quality claims exactly as it does to dashboard panels.
- *
- * The spread inside the allowlist is ~1.7x (sonnet -> opus on the measured pack), and one
- * leaked connector URL can now burn spend on up to three provider keys instead of one.
- * Accepted deliberately: the ceiling is the priciest allowlisted model, never attacker-
- * chosen, and the original 3.3x open-string hole stays closed.
+ * Benchmark status is deliberately explicit: results from the maintainer's benchmark are not
+ * accuracy claims for a new installation's corpus, and models not run there stay unmeasured.
+ * The allowlist bounds the available spend even when a connector credential is disclosed.
  */
 export const READER_MODEL_IDS = [
   "claude-sonnet-5",
@@ -93,25 +95,20 @@ export function modelsOf(p: Provider): ReaderModel[] {
 }
 
 /**
- * What has actually been MEASURED, per model, on the 185-label eval — and, just as loudly,
- * what has not. The honest-data rule governs model-quality claims exactly as it governs
- * dashboard panels: an unmeasured reader must never borrow the credibility of a measured one
- * just by sitting in the same list. Three surfaces quote this (the tool description, the
- * README, the console), so it lives in one place; three copies of a measurement is three
- * chances to keep quoting a number after it stops being true.
- *
- * "unstable" is its own state rather than a footnote on "measured": Haiku's 47-98% spread
- * across runs is not a low score, it is an unreliable one, and those fail differently.
+ * Maintainer-benchmark status, per model, with no claim about a user's corpus. An unmeasured
+ * reader must never borrow the credibility of a measured one merely by sharing the list.
+ * "unstable" remains distinct from "measured" because variability and low quality fail
+ * differently. Users should validate every reader against their own material.
  */
 export type EvalState = "measured" | "unstable" | "unmeasured";
 export const EVAL: Record<ReaderModel, { state: EvalState; note: string }> = {
-  "claude-sonnet-5": { state: "measured", note: "97% on 185 labels" },
-  "claude-opus-5": { state: "measured", note: "97% on 185 labels" },
-  "claude-haiku-4-5": { state: "unstable", note: "47-98% across runs — not recommended" },
-  "gpt-5.6-sol": { state: "unmeasured", note: "wired, never run on the eval" },
-  "gpt-5.6-terra": { state: "unmeasured", note: "wired, never run on the eval" },
-  "gemini-3.6-flash": { state: "unmeasured", note: "wired, never run on the eval" },
-  "gemini-3.1-pro-preview": { state: "unmeasured", note: "preview model; never run on the eval" },
+  "claude-sonnet-5": { state: "measured", note: "measured on the maintainer benchmark; validate on your corpus" },
+  "claude-opus-5": { state: "measured", note: "measured on the maintainer benchmark; validate on your corpus" },
+  "claude-haiku-4-5": { state: "unstable", note: "variable on the maintainer benchmark; validate before use" },
+  "gpt-5.6-sol": { state: "unmeasured", note: "wired; not benchmarked in this release" },
+  "gpt-5.6-terra": { state: "unmeasured", note: "wired; not benchmarked in this release" },
+  "gemini-3.6-flash": { state: "unmeasured", note: "wired; not benchmarked in this release" },
+  "gemini-3.1-pro-preview": { state: "unmeasured", note: "preview model; not benchmarked in this release" },
 };
 
 /**
@@ -191,46 +188,59 @@ function snip(s: string): string {
 }
 
 /**
- * One POST against the reader's deadline, returning parsed JSON or throwing an error that
- * names the model and provider. AbortSignal.timeout is the whole retry policy: zero retries,
- * one budget, same 45s the Anthropic client is pinned to.
+ * One POST against the reader's budget, returning parsed JSON or throwing an error that names
+ * the model and provider. The abort signal is the whole retry policy: zero retries, one budget,
+ * the same number the Anthropic client is pinned to for the same call. A cut-off throws
+ * DeadlineExceeded so ask() can answer honestly instead of erroring.
  */
 async function postJson(
   model: string,
   provider: string,
   url: string,
   headers: Record<string, string>,
-  body: unknown
+  body: unknown,
+  timeoutMs: number
 ): Promise<unknown> {
   let res: Response;
+  const { signal, clear } = abortAfter(timeoutMs);
+  // The signal rides the body read as well as the request, so the cut-off can land in three
+  // places — before the headers, while an error body is read, while the JSON body is read —
+  // and every one of them is the same verdict: the reader ran out of time. Only the first
+  // throws an AbortError of its own; the other two surface as a stream error inside a read that
+  // this function otherwise reshapes, so `signal.aborted` is asked before any reshaping.
+  const cutOff = (what: string) =>
+    new DeadlineExceeded("reader", timeoutMs, true, `reader ${model}: ${provider} ${what} within ${Math.round(timeoutMs / 1000)}s`);
   try {
     res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(READER_TIMEOUT_MS),
+      signal,
     });
   } catch (e) {
-    const why =
-      e instanceof Error && e.name === "TimeoutError"
-        ? `no response within ${READER_TIMEOUT_MS / 1000}s`
-        : e instanceof Error
-          ? e.message
-          : String(e);
+    if (signal.aborted || (e instanceof Error && e.name === "TimeoutError")) throw cutOff("request failed — no response");
+    const why = e instanceof Error ? e.message : String(e);
     throw new Error(`reader ${model}: ${provider} request failed — ${why}`);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
+    if (signal.aborted) throw cutOff(`returned ${res.status} and its body did not arrive`);
     throw new Error(`reader ${model}: ${provider} returned ${res.status}${snip(text)}`);
   }
   // A 200 with a non-JSON body (proxy interstitial, CDN error page) makes res.json() throw
   // V8's SyntaxError, which since Node 20 EMBEDS a raw slice of the body in its message —
-  // an unredacted, unlabelled channel straight to the caller. Shape it here instead.
+  // an unredacted, unlabelled channel straight to the caller. Shape it here instead — but a
+  // body that stalled past the budget is not unparseable, it is late, and saying "unparseable"
+  // turned an honest timed-out reply into an ERROR row.
+  let json: unknown;
   try {
-    return await res.json();
+    json = await res.json();
   } catch {
+    if (signal.aborted) throw cutOff("response stalled — body not read");
     throw new Error(`reader ${model}: ${provider} returned unparseable JSON`);
   }
+  clear();
+  return json;
 }
 
 /**
@@ -250,25 +260,45 @@ function splitContent(prompt: ReaderPrompt): Anthropic.TextBlockParam[] {
 
 /** Fails loudly rather than degrading to a worse answer — a brain that quietly stops
  *  citing is harder to notice than one that errors. */
-export const anthropicReader: Reader = async (prompt, model) => {
+export const anthropicReader: Reader = async (prompt, model, opts) => {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY not set — brain_ask needs a reader model");
   // The SDK default timeout is 600s and timeouts are RETRIED, so an unbounded client can sit
   // for 20 minutes behind a function that Vercel kills at 60. The caller would get a gateway
   // timeout page instead of JSON-RPC — a protocol error with no explanation, and no way to
-  // tell whether Anthropic was billed. Budget inside the wall instead: corpus fetch is ~1.5s
-  // cold, so 45s leaves headroom to return a real error. maxRetries is ZERO because the
-  // timeout is per ATTEMPT — one retry stacks 45s twice behind the same 60s wall, which is
-  // the exact failure the budget exists to prevent. Same policy the raw-fetch backends get
-  // from AbortSignal: one call, one budget.
-  const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: READER_TIMEOUT_MS });
+  // tell whether Anthropic was billed. maxRetries is ZERO because the timeout is per ATTEMPT —
+  // one retry stacks the budget twice behind the same 60s wall, which is the exact failure the
+  // budget exists to prevent. The budget itself is no longer a constant: it is what the request
+  // has left, handed down by ask(), and it rides an abort signal of our own so the cut-off is
+  // ours to recognise. The SDK's timeout sits one second behind it as a backstop, never first.
+  const timeoutMs = budgetOf(opts);
+  const client = new Anthropic({ apiKey: key, maxRetries: 0, timeout: timeoutMs + 1_000 });
+  const { signal, clear } = abortAfter(timeoutMs);
 
-  const res = await client.messages.create({
-    model,
-    max_tokens: MAX_TOKENS,
-    output_config: { format: { type: "json_schema", schema: REPLY_SCHEMA } },
-    messages: [{ role: "user", content: splitContent(prompt) }],
-  });
+  let res: Anthropic.Message;
+  try {
+    res = await client.messages.create(
+      {
+        model,
+        max_tokens: MAX_TOKENS,
+        output_config: { format: { type: "json_schema", schema: REPLY_SCHEMA } },
+        messages: [{ role: "user", content: splitContent(prompt) }],
+      },
+      { signal }
+    );
+  } catch (e) {
+    if (signal.aborted || isSdkTimeout(e)) {
+      throw new DeadlineExceeded(
+        "reader",
+        timeoutMs,
+        true,
+        `reader ${model}: Anthropic request failed — no response within ${Math.round(timeoutMs / 1000)}s`
+      );
+    }
+    throw e;
+  } finally {
+    clear();
+  }
 
   const text = res.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -288,12 +318,18 @@ export const anthropicReader: Reader = async (prompt, model) => {
   return text;
 };
 
+/** The SDK's own timeout class, when the SDK is the real one — a test double may not carry it. */
+function isSdkTimeout(e: unknown): boolean {
+  const cls = (Anthropic as unknown as { APIConnectionTimeoutError?: unknown }).APIConnectionTimeoutError;
+  return typeof cls === "function" && e instanceof cls;
+}
+
 /**
  * OpenAI backend, on /v1/responses — the endpoint OpenAI recommends for new integrations
  * (chat/completions survives, but its interactions with reasoning are the documented rough
  * edge). Same schema, enforced as a strict json_schema text format.
  */
-export const openaiReader: Reader = async (prompt, model) => {
+export const openaiReader: Reader = async (prompt, model, opts) => {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error(`OPENAI_API_KEY not set — reader model ${model} needs it`);
   const data = (await postJson(
@@ -311,7 +347,8 @@ export const openaiReader: Reader = async (prompt, model) => {
       },
       reasoning: { effort: "low" },
       max_output_tokens: OPENAI_MAX_OUTPUT_TOKENS,
-    }
+    },
+    budgetOf(opts)
   )) as {
     status?: string;
     incomplete_details?: { reason?: string };
@@ -352,7 +389,7 @@ export const openaiReader: Reader = async (prompt, model) => {
  * The key travels in the x-goog-api-key header — never the query string, where it would land
  * in access logs.
  */
-export const geminiReader: Reader = async (prompt, model) => {
+export const geminiReader: Reader = async (prompt, model, opts) => {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error(`GEMINI_API_KEY not set — reader model ${model} needs it`);
   const data = (await postJson(
@@ -372,7 +409,8 @@ export const geminiReader: Reader = async (prompt, model) => {
         thinkingConfig: { thinkingLevel: "low" },
         maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       },
-    }
+    },
+    budgetOf(opts)
   )) as {
     promptFeedback?: { blockReason?: string };
     candidates?: Array<{
@@ -403,14 +441,14 @@ export const geminiReader: Reader = async (prompt, model) => {
  * The pluggable reader: one contract, routed by model ID. ask() stays reader-agnostic and
  * the registry above is the only place a new provider is ever added.
  */
-export const modelReader: Reader = async (prompt, model) => {
+export const modelReader: Reader = async (prompt, model, opts) => {
   switch (providerOf(model)) {
     case "anthropic":
-      return anthropicReader(prompt, model);
+      return anthropicReader(prompt, model, opts);
     case "openai":
-      return openaiReader(prompt, model);
+      return openaiReader(prompt, model, opts);
     case "google":
-      return geminiReader(prompt, model);
+      return geminiReader(prompt, model, opts);
     default:
       throw new Error(
         `unknown reader model "${model}" — allowed: ${READER_MODEL_IDS.join(", ")}`

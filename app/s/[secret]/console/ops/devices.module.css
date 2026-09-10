@@ -1,0 +1,16 @@
+/* Devices — the fifth panel on Ops, drawn on the same band and well as Commands beside it. The
+   head, the tag, the error line and the empty line are the shared ops* rules; this module holds
+   only the form and the rows. Tokens only; radii from --r (panel, inputs) and --r-chip (buttons). */
+.panel { position: relative; min-width: 0; padding: 18px 20px 12px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-radius: var(--r); box-shadow: var(--well); }
+.header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding-top: 12px; }
+.note { margin: 12px 0 0; font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--muted); overflow-wrap: anywhere; }
+.form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px; }
+.form label { display: grid; gap: 6px; flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.form input, .form select { min-width: 0; width: 100%; box-sizing: border-box; padding: 10px; min-height: 44px; border: 1px solid var(--line); border-radius: var(--r); background: var(--sunk); color: var(--ink); box-shadow: var(--well); font-family: var(--mono); font-size: 12px; }
+.panel button { min-height: 44px; max-width: 100%; padding: 9px 12px; margin: 4px 0; border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent; color: var(--ink); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; cursor: pointer; }
+/* Inert says so in the inert ink and a hairline, never in opacity. */
+.panel button:disabled { color: var(--disabled); border-color: var(--hair); background: transparent; cursor: default; }
+.panel .primary { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.row { border-top: 1px solid var(--hair); padding: 16px 0; overflow-wrap: anywhere; }
+.row strong { color: var(--bright); font-weight: 500; }
+.current { display: inline-block; margin-left: 10px; padding: 3px 6px; border-radius: var(--r-chip); background: var(--accent); color: var(--accent-on); font-family: var(--mono); font-size: 11px; }

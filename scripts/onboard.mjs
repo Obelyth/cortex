@@ -1,308 +1,172 @@
 #!/usr/bin/env node
-/**
- * CORTEX onboarding — from clone to a working brain on every device.
- *
- * Interactive and honest: it does each step it safely can, prints the exact
- * command for each step it cannot (creating a fine-grained PAT needs a browser),
- * and verifies the result at the end instead of assuming it.
- *
- * Safe to re-run: every step checks before it acts.
- */
-import { execFileSync, execSync } from "node:child_process";
-import { randomBytes, randomInt } from "node:crypto";
+/** Optional interactive setup. Provider changes require explicit confirmation. */
+import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { mkdtempSync, cpSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 import readline from "node:readline/promises";
+import { brainRepository, checkDeployment, deploymentLookupPath, requireGitCommitIdentity } from "./onboard-helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-
-// Interactive by design: every consequential step is confirmed at a prompt, so a pipe or a CI
-// runner has no way to answer honestly. Fail before touching anything rather than hang.
 if (!process.stdin.isTTY) {
-  console.error("onboard is interactive — run it from a terminal. Nothing was changed.");
+  console.error("onboard is interactive. Run it from a terminal. Nothing was changed.");
   process.exit(1);
 }
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-
 const say = (s) => console.log(s);
-const head = (s) => console.log(`\n\x1b[1m${s}\x1b[0m`);
-const ok = (s) => console.log(`  \x1b[36m✓\x1b[0m ${s}`);
-const act = (s) => console.log(`  \x1b[33m→\x1b[0m ${s}`);
-const sh = (cmd, opts = {}) => (execSync(cmd, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], ...opts }) ?? "").trim();
-const have = (cmd) => { try { sh(`command -v ${cmd}`); return true; } catch { return false; } };
+const head = (s) => say(`\n\x1b[1m${s}\x1b[0m`);
+const ok = (s) => say(`  ✓ ${s}`);
+const act = (s) => say(`  → ${s}`);
+const run = (command, args, options = {}) => (execFileSync(command, args, {
+  cwd: ROOT, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], ...options,
+}) ?? "").trim();
+const confirm = async (prompt) => (await rl.question(`  ${prompt} [y/N] `)).trim().toLowerCase() === "y";
+const readRepo = (repo) => JSON.parse(run("gh", ["api", `repos/${repo}`]));
 
-say(`
-  CORTEX by OBELYTH — onboarding
-  One memory, every surface. This sets up yours.
-`);
+try {
+  say("\n  CORTEX by OBELYTH\n  Optional setup for a private brain and protected dashboard.");
+  head("1 · Prerequisites");
+  for (const command of ["git", "gh", "vercel"]) {
+    try { run(command, ["--version"]); }
+    catch { throw new Error(`Install ${command} before running setup. See README.md. Nothing was changed.`); }
+  }
+  // api was introduced in CLI 50.5.1. Stop before creating a repo if it is unavailable.
+  try { run("vercel", ["api", "--help"]); }
+  catch { throw new Error("Update Vercel CLI (50.5.1 or newer) before running setup. Nothing was changed."); }
+  const ghUser = run("gh", ["api", "user", "--jq", ".login"]);
+  run("vercel", ["whoami"]);
+  ok(`GitHub authenticated as ${ghUser}; Vercel authenticated.`);
+  say("  First-time provider accounts, access grants, and database setup need your approval.");
+  say("  This wizard does not create a database, apply migrations, or test paid models or email.");
 
-// ---------------------------------------------------------------- prereqs ---
-head("1 · Prerequisites");
-const missing = [];
-for (const [cmd, hint] of [
-  ["gh", "https://cli.github.com — then: gh auth login"],
-  ["vercel", "npm i -g vercel — then: vercel login"],
-  ["git", "https://git-scm.com"],
-]) {
-  if (have(cmd)) ok(`${cmd} installed`);
-  else { act(`install ${cmd}: ${hint}`); missing.push(cmd); }
-}
-if (missing.length) {
-  say("\nInstall the missing tools, then run this again. Nothing was changed.");
-  process.exit(1);
-}
-let ghUser;
-try { ghUser = sh("gh api user --jq .login"); ok(`gh authenticated as ${ghUser}`); }
-catch { act("gh is not authenticated — run: gh auth login"); process.exit(1); }
-try { ok(`vercel authenticated as ${sh("vercel whoami")}`); }
-catch { act("vercel is not authenticated — run: vercel login"); process.exit(1); }
+  head("2 · Private brain repository");
+  const requestedRepo = (await rl.question(`  Brain repo to create or use [${ghUser}/brain]: `)).trim() || `${ghUser}/brain`;
+  if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(requestedRepo)) {
+    throw new Error("Use a GitHub owner/repo name. Nothing was changed.");
+  }
+  let metadata;
+  try { metadata = readRepo(requestedRepo); }
+  catch (error) {
+    if (!/HTTP 404/.test(String(error.stderr))) {
+      throw new Error("Could not verify the brain repository. Check GitHub authentication and access, then rerun. Nothing was changed.");
+    }
+    say("  GitHub could not find an accessible repository at that name. Existing private repositories may require another account or grant.");
+    if (!await confirm(`Create a new PRIVATE ${requestedRepo} with a blank profile and index?`)) process.exit(0);
+    const directory = mkdtempSync(join(tmpdir(), "cortex-blank-brain-"));
+    try {
+      cpSync(join(ROOT, "brain-template"), directory, { recursive: true });
+      run("git", ["init", "-q", "-b", "main"], { cwd: directory });
+      requireGitCommitIdentity((args) => run("git", args, { cwd: directory }));
+      run("git", ["add", "-A"], { cwd: directory });
+      run("git", ["commit", "-q", "-m", "brain: blank initial structure"], { cwd: directory });
+      run("gh", ["repo", "create", requestedRepo, "--private", "--source", directory, "--push"]);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+    metadata = readRepo(requestedRepo);
+  }
+  const brain = brainRepository(metadata, requestedRepo);
+  // A default-branch name on an empty repository is not proof that a commit exists.
+  run("gh", ["api", `repos/${brain.repo}/commits/${encodeURIComponent(brain.branch)}`, "--jq", ".sha"]);
+  ok(`Verified private brain: ${brain.repo}; branch: ${brain.branch}. Existing notes are kept.`);
 
-// ------------------------------------------------------------- brain repo ---
-head("2 · The brain — a private repo of markdown notes");
-const defaultBrain = `${ghUser}/brain`;
-const brainRepo =
-  (await rl.question(`  Brain repo to create or use [${defaultBrain}]: `)).trim() || defaultBrain;
-// The answer lands in child-process arguments and the deployment env: hold it to the one
-// shape GitHub accepts before it goes anywhere. Also the wizard's earliest typo-catch.
-if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(brainRepo)) {
-  say(`  "${brainRepo}" is not an owner/repo name. Nothing was changed.`);
-  process.exit(1);
-}
-
-let brainExists = false;
-try { sh(`gh repo view ${brainRepo} --json name`); brainExists = true; ok(`${brainRepo} already exists — will use it as-is`); }
-catch { /* will create */ }
-
-if (!brainExists) {
-  const yes = (await rl.question(`  Create PRIVATE repo ${brainRepo} from the starter template? [Y/n] `)).trim().toLowerCase();
-  if (yes === "n") { say("  Stopped at your request. Nothing was changed."); process.exit(0); }
-  const tmp = mkdtempSync(join(tmpdir(), "brain-"));
-  cpSync(join(ROOT, "brain-template"), tmp, { recursive: true });
-  sh(`git -C ${tmp} init -q -b main && git -C ${tmp} add -A && git -C ${tmp} commit -q -m "brain: initial structure"`);
-  sh(`gh repo create ${brainRepo} --private --source ${tmp} --push`);
-  rmSync(tmp, { recursive: true, force: true });
-  ok(`created ${brainRepo} (private) with the starter structure`);
-}
-
-// ------------------------------------------------------------------ fill ---
-// The fork every new brain faces: start from the template's clean structure, or bring an
-// existing folder of notes in. The ingest path previews first and asks again before writing —
-// the same dry-run-by-default contract scripts/ingest.mjs keeps on its own.
-head("3 · Fill it — start fresh, or bring what you already have");
-say("  Fresh is a fine answer: the template ships a profile, conventions and an example project.");
-const fromDir = (await rl.question("  Folder of existing notes to index (Enter to start fresh): ")).trim();
-if (fromDir) {
-  // The folder never touches a shell, an argv, or this process's filesystem calls: it rides
-  // the child's environment, and scripts/ingest.mjs validates it on arrival exactly as it
-  // does when run by hand — same dry-run preview, same collision and size rails.
-  const ingest = (commit) =>
-    execFileSync(process.execPath, [join(ROOT, "scripts", "ingest.mjs"), ...(commit ? ["--commit"] : [])], {
-      cwd: ROOT,
-      stdio: "inherit",
-      env: { ...process.env, INGEST_FROM: fromDir, BRAIN_REPO: brainRepo },
+  head("3 · Start blank or import notes");
+  say("  A new brain contains only an empty profile and index. No sample memories or projects.");
+  const fromDir = (await rl.question("  Folder to import (Enter to leave the brain unchanged): ")).trim();
+  if (fromDir) {
+    const ingest = (commit) => run(process.execPath, [join(ROOT, "scripts/ingest.mjs"), ...(commit ? ["--commit"] : [])], {
+      stdio: "inherit", env: { ...process.env, INGEST_FROM: fromDir, BRAIN_REPO: brain.repo, BRAIN_BRANCH: brain.branch },
     });
-  let previewed = false;
-  try { ingest(false); previewed = true; }
-  catch { act("preview did not pass — fix what it printed above, then: npm run ingest -- --from <folder> --repo " + brainRepo); }
-  if (previewed) {
-    const file = (await rl.question("  File these into the brain now, one revertable commit per note? [y/N] ")).trim().toLowerCase();
-    if (file === "y") {
-      try { ingest(true); ok("ingested — each note carries a provenance line and its own commit"); }
-      catch { act("some files failed above — what succeeded is in; fix and re-run ingest for the rest"); }
-    } else {
-      say(`  Skipped. Any time: npm run ingest -- --from ${fromDir} --repo ${brainRepo} --commit`);
-    }
+    ingest(false);
+    if (await confirm("Commit the previewed notes to this private brain?")) ingest(true);
   }
-} else {
-  ok("starting fresh — the template structure is already in place");
-}
 
-// ---------------------------------------------------------------- secrets ---
-head("4 · Secrets — generated locally, shown once");
-say("  Pasted tokens are VISIBLE on screen and in terminal scrollback — clear it after.");
-const MCP_TOKEN = randomBytes(32).toString("hex");
-const CONNECTOR_PATH_SECRET = randomBytes(32).toString("hex");
-ok("MCP_TOKEN and CONNECTOR_PATH_SECRET generated (64 hex chars each)");
-say("");
-// The console's second factor (lib/stamp.ts): a device's first visit answers a passcode
-// prompt, and only the right answer stamps it — unset means the console fails CLOSED.
-// A human types this on every new device, so it is short and unambiguous rather than
-// 64 hex chars; the prompt takes your own instead if you prefer. The value is set
-// verbatim (trimmed), and the MCP doors never read it.
-const ABC = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/O/1/l/i — nothing to misread later
-const group = () => Array.from({ length: 4 }, () => ABC[randomInt(ABC.length)]).join("");
-const suggested = `${group()}-${group()}-${group()}`;
-const CONSOLE_PASSCODE =
-  (await rl.question(`  Console passcode — typed once per new device at the console door [${suggested}]: `))
-    .trim() || suggested;
-ok(`CONSOLE_PASSCODE ${CONSOLE_PASSCODE === suggested ? "generated" : "set"} — unlocks the web console; MCP doors never read it`);
-say("");
-act("One step needs your browser — a fine-grained GitHub PAT, scoped to ONLY the brain repo:");
-say(`      https://github.com/settings/personal-access-tokens/new`);
-say(`      Repository access: Only select repositories → ${brainRepo}`);
-say(`      Permissions → Repository → Contents: Read and write. Nothing else.`);
-const GITHUB_TOKEN = (await rl.question("  Paste the PAT (input is used for Vercel env only): ")).trim();
-if (!GITHUB_TOKEN) { say("  No token — stopping before any deploy. Re-run when ready."); process.exit(1); }
+  head("4 · Access credentials");
+  say("  Pasted values are visible in this terminal. Store credentials in a password manager; clear scrollback afterwards.");
+  act("Create a fine-grained GitHub token at https://github.com/settings/personal-access-tokens/new");
+  say(`  Select ONLY ${brain.repo}, with Repository Contents: Read and write.`);
+  const githubToken = (await rl.question("  GITHUB_TOKEN: ")).trim();
+  if (!githubToken) throw new Error("No token supplied. Stopped before changing any deployment settings.");
+  const passcode = (await rl.question("  CONSOLE_PASSCODE (Enter to generate one): ")).trim() || randomBytes(12).toString("base64url");
+  const generated = {
+    MCP_TOKEN: randomBytes(32).toString("hex"),
+    CONNECTOR_PATH_SECRET: randomBytes(32).toString("hex"),
+    CONSOLE_PASSCODE: passcode,
+  };
+  say("  A paid model is optional. Browsing notes, context previews, and basic setup need no model key.");
+  const anthropicKey = (await rl.question("  Optional ANTHROPIC_API_KEY (Enter to skip or keep the existing value): ")).trim();
 
-say("");
-act("The reader model needs an Anthropic API key (console.anthropic.com → API keys):");
-const ANTHROPIC_API_KEY = (await rl.question("  Paste ANTHROPIC_API_KEY (or Enter to skip — brain_ask will be disabled until set): ")).trim();
-
-// ----------------------------------------------------------------- deploy ---
-head("5 · Deploy to Vercel");
-const proceed = (await rl.question("  Link this directory to a Vercel project and deploy to production? [Y/n] ")).trim().toLowerCase();
-if (proceed === "n") { say("  Stopped before deploy. Your secrets were not sent anywhere."); process.exit(0); }
-
-execSync("vercel link --yes", { cwd: ROOT, stdio: "inherit" });
-// Re-run safety: if this project already carries a token, a silent regeneration would break
-// every wired surface. Keeping the existing secrets is the default.
-let keepExisting = false;
-let hasPasscode = false;
-try {
-  const existing = sh("vercel env ls production", { cwd: ROOT });
-  hasPasscode = existing.includes("CONSOLE_PASSCODE");
-  if (existing.includes("MCP_TOKEN")) {
-    const kr = (await rl.question("  This project already has secrets. Keep them (re-wiring stays valid)? [Y/n] ")).trim().toLowerCase();
-    keepExisting = kr !== "n";
-    if (!keepExisting) {
-      act("rotating — every wired device and the claude.ai connector must be re-wired after this");
-      act("   (stamped browsers are cheaper: the console just re-prompts for the new passcode)");
-    }
+  head("5 · Choose the deployment");
+  if (!await confirm("Link this source checkout to a Vercel project?")) process.exit(0);
+  run("vercel", ["link"], { stdio: "inherit" });
+  const linked = JSON.parse(readFileSync(join(ROOT, ".vercel/project.json"), "utf8"));
+  if (!linked.projectId || !linked.orgId ||
+      (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_PROJECT_ID !== linked.projectId) ||
+      (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== linked.orgId)) {
+    throw new Error("The linked project and shell overrides do not agree. Clear the overrides and relink before sending credentials.");
   }
-} catch { /* not linked before — fresh setup */ }
-
-const envs = {
-  BRAIN_REPO: brainRepo,
-  BRAIN_BRANCH: "main",
-  GITHUB_TOKEN,
-  MCP_TOKEN,
-  CONNECTOR_PATH_SECRET,
-  CONSOLE_PASSCODE,
-  ...(ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY } : {}),
-};
-for (const [k, v] of Object.entries(envs)) {
-  // The passcode is kept like the other secrets on a keep re-run — but a project from before
-  // the console door had a passcode gets one anyway, or the wizard would hand out a console
-  // URL that renders CONSOLE LOCKED.
-  if (keepExisting && (k === "MCP_TOKEN" || k === "CONNECTOR_PATH_SECRET" || (k === "CONSOLE_PASSCODE" && hasPasscode))) { ok(`env ${k} kept`); continue; }
-  try { execSync(`vercel env rm ${k} production --yes`, { cwd: ROOT, stdio: "ignore" }); } catch {}
-  execSync(`vercel env add ${k} production`, { cwd: ROOT, input: v, stdio: ["pipe", "ignore", "inherit"] });
-  ok(`env ${k} set (production)`);
-}
-// When keeping, the real secret values are needed for verification and wiring output.
-let liveToken = MCP_TOKEN, liveSecret = CONNECTOR_PATH_SECRET, livePasscode = CONSOLE_PASSCODE;
-if (keepExisting) {
-  const tmpEnv = join(ROOT, ".vercel", ".onboard-env.tmp");
-  execSync(`vercel env pull --environment production ${tmpEnv} --yes`, { cwd: ROOT, stdio: "ignore" });
-  const pulled = readFileSync(tmpEnv, "utf8");
-  rmSync(tmpEnv, { force: true });
-  liveToken = (pulled.match(/^MCP_TOKEN="?([^"\n]+)/m) || [])[1] ?? MCP_TOKEN;
-  liveSecret = (pulled.match(/^CONNECTOR_PATH_SECRET="?([^"\n]+)/m) || [])[1] ?? CONNECTOR_PATH_SECRET;
-  livePasscode = (pulled.match(/^CONSOLE_PASSCODE="?([^"\n]+)/m) || [])[1] ?? CONSOLE_PASSCODE;
-}
-// The most common first-deploy failure, said BEFORE the deploy rather than after the check
-// fails: team-default Deployment Protection puts an SSO page in front of the doors.
-act("if your Vercel team enables Deployment Protection by default, disable it for PRODUCTION");
-act("   on this project (Settings → Deployment Protection) — the doors carry their own auth.");
-act("deploying… (a few minutes; the build streams below)");
-execSync(`vercel deploy --prod --yes`, { cwd: ROOT, stdio: "inherit" });
-// The deploy prints an immutable per-deployment URL; wiring must use the STABLE production
-// alias, or every future deploy would strand the wired surfaces on an old build.
-const projectName = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8")).projectName
-  ?? JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8")).name;
-const url = `https://${projectName}.vercel.app`;
-ok(`deployed — production alias: ${url}`);
-
-// ----------------------------------------------------------------- verify ---
-head("6 · Verify — trust the check, not the deploy log");
-const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
-const MCP_SECRET_FOR_CHECK = liveSecret;
-let healthy = true;
-// THE URL CARRIES A CREDENTIAL, SO IT DOES NOT GO ON A COMMAND LINE. Interpolated into the
-// shell string, the path secret is visible to `ps` for the life of the request and lands in
-// shell audit logs — on a shared box or a CI runner that is the whole door. `-K -` takes the
-// URL as a curl config on stdin instead; everything still on argv here is public.
-const tools = sh(
-  `curl -s --max-time 30 -X POST -K - ` +
-  `-H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' ` +
-  `--data '${body}' | grep -o 'brain_[a-z]*' | sort -u | tr '\\n' ' '`,
-  { input: `url = "${url}/api/s/${MCP_SECRET_FOR_CHECK}/mcp"\n` }
-);
-// The roster comes from lib/tool-roster.json — the same file the ops healthcheck asserts and
-// tests/tool-roster.test.ts pins to registerTools(). A roster string hardcoded here went stale
-// once and failed every healthy first deploy at the finish line, hiding the wiring
-// instructions behind a false UNHEALTHY. Never inline it again.
-const roster = JSON.parse(readFileSync(join(ROOT, "lib", "tool-roster.json"), "utf8"));
-const expected = roster.trusted.join(" ");
-if (tools.trim() === expected) {
-  ok(`secret-URL path healthy — ${roster.trusted.length} tools: ${tools.trim()}`);
-} else {
-  act(`UNHEALTHY — got: ${tools.trim() || "<none>"} (expected: ${expected})`);
-  act("if you see an auth/SSO page instead of tools: disable Vercel Deployment Protection for");
-  act("   PRODUCTION only (Settings → Deployment Protection) — the doors carry their own auth,");
-  act("   and preview protection can stay on. Then re-run; secrets are kept on re-run.");
-  act("secrets are recoverable any time with:");
-  act("   vercel env pull --environment production .env.production.local   (gitignored)");
-  act("");
-  act("The deploy itself succeeded — the wiring commands below are printed anyway; fix the");
-  act("check before trusting the doors.");
-  healthy = false;
-}
-
-// ------------------------------------------------------------------ wire ---
-head("7 · Wire your surfaces");
-say(`  Claude Code (any machine — run once, user scope):
-      claude mcp add --transport http cortex ${url}/api/mcp \\
-        --header "Authorization: Bearer ${liveToken}"
-
-  claude.ai (web → syncs to iOS and desktop on its own):
-      Settings → Connectors → Add custom connector
-      URL: ${url}/api/s/${liveSecret}/mcp
-
-  The secret-gated pages (do not share these URLs):
-      console         ${url}/s/${liveSecret}/console
-      passcode        ${livePasscode}
-      live map        ${url}/s/${liveSecret}/map
-  A device's first console visit asks for the passcode, and the right answer stamps
-  the device — from then on the link opens like a plain bookmark.
-`);
-say(`  Store MCP_TOKEN, CONNECTOR_PATH_SECRET and CONSOLE_PASSCODE in your password
-  manager now — this is the only time they are shown together.\n`);
-say(`  Optional tiers, when you want them (each documented in .env.example):
-      guest door       GUEST_PATH_SECRET (a second, different secret) + the Upstash KV
-                       integration on the Vercel Marketplace — it injects KV_REST_API_* itself
-      Supabase mirror  SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, then apply the schema:
-                       npx tsx scripts/migrate.ts --apply   (dry-run without --apply)
-`);
-
-// --------------------------------------------------------- staying current ---
-head("8 · Staying current");
-// Updates ship from main (SECURITY.md). A copy made with GitHub's "Use this
-// template" has no fork relationship, so without a remote pointing home a
-// git pull would never see a release — wire it now, while we are here, so
-// npm run update works on every acquisition path from day one.
-try {
-  let originUrl = "";
-  try { originUrl = sh("git remote get-url origin", { cwd: ROOT }); } catch { /* no origin */ }
-  if (/github\.com[/:]obelyth\/cortex(\.git)?$/i.test(originUrl)) {
-    ok("origin points at Obelyth/cortex — this copy updates over it directly");
-  } else if (sh("git remote", { cwd: ROOT }).split("\n").includes("upstream")) {
-    ok("upstream remote already wired — updates come from there");
-  } else {
-    sh("git remote add upstream https://github.com/Obelyth/cortex.git", { cwd: ROOT });
-    ok("added upstream remote (github.com/Obelyth/cortex) — where updates come from");
+  say(`  Target project: ${linked.projectName ?? linked.projectId} (${linked.projectId}).`);
+  const envDirectory = mkdtempSync(join(tmpdir(), "cortex-onboard-env-"));
+  let existing;
+  try {
+    const envPath = join(envDirectory, "production.env");
+    run("vercel", ["env", "pull", envPath, "--environment", "production", "--yes"]);
+    existing = parseEnv(readFileSync(envPath, "utf8"));
+  } finally { rmSync(envDirectory, { recursive: true, force: true }); }
+  const hasSecrets = Object.keys(generated).some((key) => existing[key]);
+  const rotate = hasSecrets && await confirm("Rotate the existing access credentials? This disconnects existing clients");
+  if (rotate) say("  Existing clients will need the new credentials, and browsers will need to unlock again.");
+  const live = Object.fromEntries(Object.entries(generated).map(([key, value]) => [key, !rotate && existing[key] ? existing[key] : value]));
+  const values = {
+    BRAIN_REPO: brain.repo, BRAIN_BRANCH: brain.branch, GITHUB_TOKEN: githubToken,
+    ...live, ...(anthropicKey ? { ANTHROPIC_API_KEY: anthropicKey } : {}),
+  };
+  const changes = Object.entries(values).filter(([key, value]) => existing[key] !== value);
+  say(`  Production settings to save: ${changes.map(([key]) => key).join(", ") || "none"}.`);
+  if (!await confirm("Save these settings to this project and deploy production?")) process.exit(0);
+  for (const [key, value] of changes) {
+    if (Object.hasOwn(existing, key)) run("vercel", ["env", "rm", key, "production", "--yes"]);
+    run("vercel", ["env", "add", key, "production"], { input: value });
+    ok(`Saved ${key}.`);
   }
-} catch {
-  act("not a git checkout — npm run update will offer to fix that on its first run");
-}
-say(`  Update any time — one command pulls what shipped, redeploys, and re-verifies:
-      npm run update
-  Hear about releases: github.com/Obelyth/cortex → Watch → Custom → Releases.
-  The console footer also shows a "vX.Y.Z available" link when one is out.
-`);
-ok(`done. More to bring in later? npm run ingest -- --from <folder> --repo ${brainRepo}`);
-rl.close();
+  say("  Client connections need a reachable production endpoint. If Vercel Deployment Protection blocks them, review its production setting in Vercel; keep preview protection enabled.");
+  act("Deploying. The build output follows.");
+  // Vercel documents stdout as the immutable deployment URL. Never guess a project alias.
+  const deployedUrl = run("vercel", ["deploy", "--prod", "--yes"], { stdio: ["inherit", "pipe", "inherit"] });
 
-process.exit(healthy ? 0 : 1);
+  head("6 · Verify the deployment and MCP door");
+  const readDeployment = async (host) => JSON.parse(run("vercel", ["api", deploymentLookupPath(host, linked.orgId)]));
+  let checked;
+  try {
+    checked = await checkDeployment({
+      deploymentUrl: deployedUrl, projectId: linked.projectId,
+      secret: live.CONNECTOR_PATH_SECRET, readDeployment,
+    });
+    const roster = JSON.parse(readFileSync(join(ROOT, "lib/tool-roster.json"), "utf8"));
+    if (JSON.stringify(checked.tools) !== JSON.stringify([...roster.trusted].sort())) throw new Error("Tool roster mismatch");
+  } catch {
+    // Network errors may contain the credential-bearing URL. Do not echo them or print a guessed link.
+    throw new Error("Deployment verification did not pass. No wiring link is being printed. Check the linked project's production domain, ready status, protection, and logs in Vercel, then rerun. Settings already saved remain saved; existing secrets are kept by default.");
+  }
+  ok(`Verified production host: ${checked.origin}; trusted tool roster matches.`);
+  say("  This checked the MCP door, not repository access, database health, email delivery, or model answers. Open Settings and Ops for those services' readiness.");
+
+  head("7 · Open the protected dashboard");
+  say(`  Console: ${checked.origin}/s/${live.CONNECTOR_PATH_SECRET}/console`);
+  say(`  Passcode: ${live.CONSOLE_PASSCODE}`);
+  say("  Overview is the working-context home. Settings has the exact client wiring and service setup.");
+  say(`\n  Header-capable MCP client URL: ${checked.origin}/api/mcp`);
+  say(`  Authorization: Bearer ${live.MCP_TOKEN}`);
+  say(`  Trusted URL-only client: ${checked.origin}/api/s/${live.CONNECTOR_PATH_SECRET}/mcp`);
+  say("  Both trusted connections can write notes. Do not share their credentials or URLs.");
+  say("  Save these credentials in your password manager now. They can also be recovered from Vercel's production environment.");
+  say("\n  Optional database: follow docs/database-bootstrap.md for a new, empty database.");
+  say("  Do not use the historical migration runner to initialize a new database.");
+  say("  Optional providers, alerts, guest access, and Ops grants are documented in .env.example and README.md.");
+  say("\n  For updates, read the release's Action required steps before deploying new source.");
+} catch (error) {
+  // Child-process failures can include provider output. Only our own actionable errors are shown.
+  console.error(`\n  Setup stopped: ${error?.status !== undefined ? "A provider command failed. Check CLI authentication and the selected project, then rerun. Earlier confirmed changes may already have completed." : error.message}`);
+  process.exitCode = 1;
+} finally { rl.close(); }

@@ -229,5 +229,20 @@ h2 .count {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* Near-zero, not none. `transition: none` stops transitionend from ever firing, so any control
+     that waits on it to advance state hangs for exactly the users who asked for less motion — a
+     functional break rather than a styling preference. A 0.01ms duration removes the perceptible
+     motion and keeps the events.
+     The delay resets are not optional here. Twenty-seven of this console's animations use
+     `backwards` fill behind a stagger — the map's bloom runs out past a second, the Ops chips to
+     440ms — and `backwards` shows the FROM state for the whole delay. Zero the duration but keep
+     the delay and those elements sit invisible at opacity 0 or scale 0 for over a second, which is
+     worse than the motion it replaced. */
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
 }

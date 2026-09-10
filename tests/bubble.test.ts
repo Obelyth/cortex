@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bubbleStore,
   renderBubble,
+  bubbleView,
   renderBubbleList,
   BUBBLE_BUDGET_BYTES,
   __setBubbleStore,
@@ -52,6 +53,21 @@ describe("bubbleStore — configuration is a mode", () => {
     expect(read).toEqual({ total: 3, swept: 1, items: [] });
   });
 
+  it("uses the scoped RPC with normalized scope before the database limit", async () => {
+    vi.stubEnv("SUPABASE_URL", "https://x.supabase.co");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "k");
+    let request: { url: string; body: unknown } | undefined;
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      request = { url: String(url), body: JSON.parse(String(init?.body)) };
+      return { ok: true, json: async () => ({ total: 1, swept: 0, items: [] }) } as unknown as Response;
+    }));
+    await bubbleStore()!.open({ project: " Projects/Harbor.MD ", includeGeneral: true });
+    expect(request).toEqual({
+      url: "https://x.supabase.co/rest/v1/rpc/bubble_open_scoped",
+      body: { max_age_days: 14, max_items: 200, project_name: "harbor", include_general: true },
+    });
+  });
+
   it("throws status-only errors — a PostgREST body never reaches a caller's context", async () => {
     vi.stubEnv("SUPABASE_URL", "https://x.supabase.co");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "k");
@@ -88,6 +104,37 @@ describe("renderBubble — the boot section", () => {
     expect(renderBubble({ items: [], total: 0, swept: 0 })).toBe("");
   });
 
+  it("counts only open rows genuinely rendered as usable working memory", () => {
+    const touched = new Date().toISOString();
+    const view = bubbleView({
+      total: 1,
+      swept: 4,
+      items: [{ id: 1, kind: "decision", body: "ship the correction", project: "harbor", status: "open", filed_into: "", surface: "test", created_at: touched, touched_at: touched }],
+    }, "harbor");
+    expect(view.usableItems).toBe(1);
+    expect(view.renderedItems).toBe(1);
+    expect(view.text).toContain("ship the correction");
+  });
+
+  it("redacts item bodies before the display cut and keeps astral boundaries intact", () => {
+    const out = renderBubble({
+      total: 2,
+      swept: 0,
+      items: [
+        item({ id: 1, body: `${"x".repeat(280)} sk-abcdefghijklmnopZZ suffix` }),
+        item({ id: 2, body: `${"y".repeat(298)}😀tail` }),
+      ],
+    });
+    expect(out).toContain("<redacted-token>");
+    expect(out).not.toContain("sk-abcdefgh");
+    expect(out).not.toContain("�");
+  });
+
+  it("uses the scoped total when rows beyond the database page are not shown", () => {
+    const out = renderBubble({ items: [item({ project: "harbor" })], total: 201, swept: 0 }, "harbor");
+    expect(out).toContain("200 more harbor/general items not shown");
+  });
+
   it("shows id, kind, project and age — the handles a session needs to act on an item", () => {
     const out = renderBubble({ items: [item({ id: 42, kind: "question", body: "does the pooler need separate creds?" })], total: 1, swept: 0 });
     expect(out).toContain("#42");
@@ -119,6 +166,12 @@ describe("renderBubble — the boot section", () => {
   it("discloses what the sweep just aged — the reaper is reported, never silent", () => {
     const out = renderBubble({ items: [item()], total: 1, swept: 3 });
     expect(out).toContain("3 items just aged out");
+  });
+
+  it("reports usable items separately from an expiry-only notice", () => {
+    const view = bubbleView({ items: [], total: 0, swept: 3 });
+    expect(view.text).toContain("3 items just aged out");
+    expect(view.usableItems).toBe(0);
   });
 
   it("keeps every line renderable — an item body with a newline cannot forge a second row", () => {

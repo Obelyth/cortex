@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { parseFrontmatter, routerLine, buildRouter, routerCut } from "../lib/frontmatter";
+import { parseFrontmatter, routerLine, buildRouter, routerCut, safeText } from "../lib/frontmatter";
+import { monthKey } from "../lib/digest";
 
 describe("parseFrontmatter", () => {
-  it("reads description and tags from a feedback-note shape", () => {
+  it("reads description and tags from a real feedback-note shape", () => {
     const text = [
       "---",
-      "name: feedback-keep-building",
-      'description: "Keep executing an approved plan; delegate the branches."',
+      "name: example-parallel-work-rule",
+      'description: "Don\'t stall mid-build; delegate to agent teams."',
       "metadata:",
       "  type: feedback",
       "---",
@@ -14,7 +15,7 @@ describe("parseFrontmatter", () => {
       "When there's an approved plan, keep building.",
     ].join("\n");
     const fm = parseFrontmatter(text);
-    expect(fm.description).toBe("Keep executing an approved plan; delegate the branches.");
+    expect(fm.description).toBe("Don't stall mid-build; delegate to agent teams.");
     // Byte-faithful: everything after the closing fence is kept verbatim, blank line included.
     // Trimming would be a silent rewrite of note text, and note text is what quotes are proven
     // against.
@@ -68,6 +69,15 @@ describe("parseFrontmatter", () => {
 });
 
 describe("routerLine", () => {
+  it("redacts before truncating and never cuts an astral code point", () => {
+    expect(safeText("prefix sk-abcdefghijklmnopZZ suffix", 24)).not.toContain("sk-");
+    expect(safeText("prefix sk-abcdefghijklmnopZZ suffix", 24)).toContain("<redacted-token>");
+    const cut = safeText("abcd😀tail", 6);
+    expect(cut).toBe("abcd😀…");
+    expect(new TextEncoder().encode(cut).toString()).not.toContain("65533");
+    expect(cut).not.toContain("�");
+  });
+
   it("renders path, description, tags and date", () => {
     const line = routerLine({
       path: "projects/quarry.md",
@@ -125,7 +135,10 @@ describe("buildRouter", () => {
       expect(at).toBeGreaterThan(last);
       last = at;
     }
-    for (const p of files.keys()) expect(out).toContain(p);
+    // Every live path, or its month: day logs collapse to one row per month, so `log/2026-08-04.md`
+    // is routed by `log/2026-08` rather than by a row of its own. That is the coverage guarantee
+    // in its post-collapse form — no path is unreachable, some are reached through their month.
+    for (const p of files.keys()) expect(out, p).toContain(monthKey(p) ?? p);
   });
 
   it("carries descriptions where they exist and marks where they do not", () => {
@@ -140,9 +153,12 @@ describe("buildRouter", () => {
     expect(buildRouter(files)).toMatch(/3 of 4 notes/);
   });
 
-  it("derives a day-log's line instead of asking for a description", () => {
+  it("derives a month's line instead of asking for a description", () => {
     const out = buildRouter(files);
-    expect(out).toContain("- log/2026-08-04.md · 1 entry: cortex · 2026-08-04");
+    // Derived from the day's own entry headings, then summed onto the month it belongs to.
+    // Nobody authored any of it, and nobody has to.
+    expect(out).toContain("- log/2026-08 · 1 day log · 1 entry · cortex");
+    expect(out).not.toContain("log/2026-08-04.md");
   });
 
   it("is deterministic — same input, byte-identical output", () => {
@@ -168,19 +184,23 @@ describe("buildRouter — the budget is the document's, wrapper included", () =>
     const uncapped = buildRouter(many).length;
     for (const budget of [800, 1200, 2000, 3000, uncapped - 1, uncapped, uncapped + 500]) {
       const out = buildRouter(many, new Map(), budget);
-      if (out.length > budget) {
-        // The one sanctioned overshoot: even a single row plus the wrapper cannot fit. Then the
-        // first row renders anyway (an empty router hides everything), and nothing else does.
-        expect(out.match(/^- notes\//gm)?.length ?? 0).toBe(1);
-      }
-      expect(out.length, `budget ${budget}`).toBeLessThanOrEqual(Math.max(budget, out.length));
+      expect(new TextEncoder().encode(out).byteLength, `budget ${budget}`).toBeLessThanOrEqual(budget);
     }
-    // And at the realistic budgets, the contract is strict.
-    for (const budget of [2000, 3000, uncapped, uncapped + 500]) {
-      expect(buildRouter(many, new Map(), budget).length, `budget ${budget}`).toBeLessThanOrEqual(
-        budget
-      );
+  });
+
+  it("keeps a bounded discovery route when hundreds of log-month hints cannot fit", () => {
+    const months = new Map<string, string>();
+    for (let i = 0; i < 400; i++) {
+      const year = 1900 + Math.floor(i / 12);
+      const month = String((i % 12) + 1).padStart(2, "0");
+      months.set(`log/${year}-${month}-01.md`, `# Log\n\n## 09:00 · harbor\n\nmonth ${i}`);
     }
+    const out = buildRouter(months, new Map(), 2_000);
+    const cut = routerCut(months, new Map(), 2_000);
+    expect(new TextEncoder().encode(out).byteLength).toBeLessThanOrEqual(2_000);
+    expect(cut.dropped.length).toBeGreaterThan(0);
+    expect(out).toContain("did not fit this router's budget");
+    expect(out).toContain("brain_corpus");
   });
 
   it("what the budget refuses is said out loud, and nothing is lost from the cut", () => {
@@ -195,6 +215,24 @@ describe("buildRouter — the budget is the document's, wrapper included", () =>
   it("a capped render is still deterministic — same input, byte-identical output", () => {
     expect(buildRouter(many, new Map(), 2000)).toBe(
       buildRouter(new Map([...many].reverse()), new Map(), 2000)
+    );
+  });
+
+  it("enforces the document ceiling in UTF-8 bytes for multibyte rows", () => {
+    const unicode = new Map(
+      Array.from({ length: 30 }, (_, i) => [
+        `notes/unicode-${i}.md`,
+        `---\ndescription: "${"界😀e\u0301".repeat(16)}"\n---\nbody`,
+      ])
+    );
+    const out = buildRouter(unicode, new Map(), 2_000);
+    expect(new TextEncoder().encode(out).byteLength).toBeLessThanOrEqual(2_000);
+    expect(out).not.toContain("�");
+  });
+
+  it("rejects a budget too small for the minimum truthful router envelope", () => {
+    expect(() => buildRouter(new Map([["notes/a.md", "body"]]), new Map(), 10)).toThrow(
+      /router budget .*too small/i
     );
   });
 

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { record, readCalls, stampOf, withSurface, currentSurface } from "../lib/calls";
+import { createHash } from "node:crypto";
+import { record, readCalls, stampOf, withSurface, currentSurface, startCall, questionDigest, collapseCalls } from "../lib/calls";
+import { CUT_STAMP, PLATFORM_WALL_MS } from "../lib/deadline";
 
 /**
  * The call log is the console's only non-corpus source, so what matters is that it never
@@ -81,6 +83,48 @@ describe("call log", () => {
     expect(partial).toBe(true);
     // Everything surviving started within the last hour, so that is all it can claim.
     expect(covers).toBeLessThanOrEqual(3_600_000 + 60_000);
+  });
+
+  it("holds a started row from before the body and lets the final row replace it in place", async () => {
+    // Issue #180: a call the platform kills at the wall never reaches record() a second time.
+    // The started row is the only trace it leaves, so it is written first; a call that does
+    // finish replaces it, and the ring never shows one call twice.
+    const now = Date.now();
+    const opened = startCall({ ts: now - 1_000, surface: "connector", tool: "brain_ask", digest: "abcd1234" });
+    expect(opened).toMatchObject({ stamp: "STARTED", state: "started", ms: 0, digest: "abcd1234" });
+    expect(opened.id).toMatch(/^[0-9a-f]{12}$/);
+    // Younger than the wall: still running, so the reader leaves it out rather than guessing.
+    expect((await readCalls(86_400_000, now)).rows.filter((r) => r.id === opened.id)).toEqual([]);
+    record({ ...opened, stamp: "VERIFIED", ms: 900, state: undefined, model: "claude-sonnet-5" });
+    const { rows } = await readCalls(86_400_000, now);
+    expect(rows.filter((r) => r.id === opened.id)).toEqual([
+      { ts: now - 1_000, surface: "connector", tool: "brain_ask", digest: "abcd1234", id: opened.id, stamp: "VERIFIED", ms: 900, state: undefined, model: "claude-sonnet-5" },
+    ]);
+  });
+
+  it("reports a started row with no final row past the wall as CUT OFF, with the wall as its duration", async () => {
+    const now = Date.now();
+    const killed = startCall({ ts: now - PLATFORM_WALL_MS - 5_000, surface: "connector", tool: "brain_ask" });
+    const running = startCall({ ts: now - PLATFORM_WALL_MS + 1_000, surface: "connector", tool: "brain_ask" });
+    const { rows } = await readCalls(86_400_000, now);
+    expect(rows.find((r) => r.id === killed.id)).toMatchObject({ stamp: CUT_STAMP, state: "cut", ms: PLATFORM_WALL_MS });
+    expect(rows.find((r) => r.id === running.id)).toBeUndefined();
+  });
+
+  it("fingerprints a question with a keyed hash, and with no key writes none", () => {
+    // The log sits in the shared store. An unkeyed sha256 of a short question lets anyone who
+    // reads it confirm a guessed question was asked; keyed with the connector secret it tells
+    // repeats apart and nothing else. No key, no digest — a row without one is still a row.
+    const d = questionDigest("is beacon live", "secret-a");
+    expect(d).toMatch(/^[0-9a-f]{8}$/);
+    expect(d).toBe(questionDigest("is beacon live", "secret-a"));
+    expect(d).not.toBe(questionDigest("is harbor live", "secret-a"));
+    expect(d).not.toBe(questionDigest("is beacon live", "secret-b"));
+    expect(d).not.toBe(createHash("sha256").update("is beacon live").digest("hex").slice(0, 8));
+    vi.stubEnv("CONNECTOR_PATH_SECRET", "");
+    expect(questionDigest("is beacon live")).toBeUndefined();
+    vi.stubEnv("CONNECTOR_PATH_SECRET", "secret-a");
+    expect(questionDigest("is beacon live")).toBe(d);
   });
 
   it("returns rows oldest first even when a slow call finishes last", async () => {
@@ -176,6 +220,50 @@ describe("durable store path", () => {
     ]);
     vi.unstubAllEnvs();
     vi.doUnmock("@upstash/redis");
+  });
+
+  it("collapses started/final pairs from the store and judges orphans by their age", async () => {
+    // The store holds both rows of every call (LPUSH cannot replace); the reader collapses
+    // them. A "cut" state is never trusted from storage — it is re-judged from the row's age.
+    vi.resetModules();
+    const now = Date.now();
+    const started = (ts: number, id: string) => JSON.stringify({ ts, surface: "connector", tool: "brain_ask", stamp: "STARTED", ms: 0, id, state: "started", digest: "abcd1234" });
+    vi.doMock("@upstash/redis", () => ({
+      Redis: class {
+        lrange() {
+          return Promise.resolve([
+            JSON.stringify({ ts: now - 1_000, surface: "connector", tool: "brain_ask", stamp: "VERIFIED", ms: 900, id: "aaaaaaaaaaaa", model: "claude-sonnet-5" }),
+            started(now - 1_000, "aaaaaaaaaaaa"),
+            started(now - 30_000, "bbbbbbbbbbbb"), // still running
+            JSON.stringify({ ts: now - 90_000, surface: "connector", tool: "brain_ask", stamp: "STARTED", ms: 0, id: "cccccccccccc", state: "cut" }), // junk state from storage: re-judged by age
+            started(now - 120_000, "dddddddddddd"), // killed
+            JSON.stringify({ ts: now - 200_000, surface: "terminal", tool: "brain_read", stamp: "READ", ms: 5 }), // pre-field row
+          ]);
+        }
+        get() { return Promise.resolve(String(now - 7_200_000)); }
+        pipeline() { return { lpush() {}, ltrim() {}, setnx() {}, exec: () => Promise.resolve([]) }; }
+      },
+    }));
+    vi.stubEnv(URL_KEY, "https://example.upstash.io");
+    vi.stubEnv(TOK_KEY, "test-token");
+    const { readCalls: read } = await import("../lib/calls");
+    const { rows, source } = await read(86_400_000, now);
+    expect(source).toBe("store");
+    expect(rows.map((r) => [r.id ?? "-", r.stamp, r.ms, r.state ?? "-"])).toEqual([
+      ["-", "READ", 5, "-"],
+      ["dddddddddddd", CUT_STAMP, PLATFORM_WALL_MS, "cut"],
+      ["cccccccccccc", CUT_STAMP, PLATFORM_WALL_MS, "cut"],
+      ["aaaaaaaaaaaa", "VERIFIED", 900, "-"],
+    ]);
+    expect(rows[1].digest).toBe("abcd1234");
+    expect(rows[3].digest).toBeUndefined();
+    vi.unstubAllEnvs();
+    vi.doUnmock("@upstash/redis");
+  });
+
+  it("collapseCalls is pure over rows with no ids at all", () => {
+    const rows = [{ ts: 1, surface: "terminal" as const, tool: "brain_read", stamp: "READ", ms: 5 }];
+    expect(collapseCalls(rows, 100_000)).toEqual(rows);
   });
 
   it("carries the cached marker through, dropping junk values, and keeps cached rows out of the model record", async () => {

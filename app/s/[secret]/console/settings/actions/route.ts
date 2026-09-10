@@ -48,6 +48,11 @@ export async function POST(
       // question ("did the head move"), not the operator's ("rebuild it").
       const corpus = await loadCorpus();
       const r = await rebuildEdges(corpus.files, corpus.sha, { force: true });
+      // Every refusal the rebuild can return is named here, with its state in the body so the
+      // client can act on it. The switch is exhaustive over RebuildResult on purpose: a state
+      // this handler did not know about used to fall through to `unknown action` — a 400 that
+      // blamed the click for a verdict the store had actually delivered.
+      const refused = (state: string, why: string) => Response.json({ error: why, state }, { status: 409 });
       switch (r.state) {
         case "rebuilt":
           return Response.json({ ok: true, state: "rebuilt", head: r.head, derived: r.derived });
@@ -55,15 +60,28 @@ export async function POST(
           // Unreachable under force, but the type demands an honest answer for it.
           return Response.json({ ok: true, state: "current", head: r.head });
         case "stale-head":
-          return bad(
+          return refused(
+            r.state,
             "the mirror advanced while the rebuild ran, so it was refused whole rather than " +
-              "describing a corpus nobody is serving — the next reconcile rebuilds at the current head",
-            409
+              "describing a corpus nobody is serving — the next reconcile rebuilds at the current head"
           );
+        case "busy":
+          return refused(r.state, "another rebuild holds the graph's lock right now — wait for it to finish, then rebuild again");
+        case "capacity":
+          return refused(r.state, "the corpus or its access history is larger than one rebuild will take (notes, bytes, edges or payload over the cap), so the graph was left as it was");
+        case "budget":
+          return refused(r.state, "deriving the edges ran past the rebuild's time budget before anything was sent, so the graph was left as it was");
+        case "stale-input":
+          return refused(r.state, "the usage identity or the structure version moved while the rebuild ran, so it was refused whole — the next reconcile rebuilds against the current inputs");
         case "missing":
-          return bad("note_edges is not migrated yet — run scripts/migrate.ts --apply first", 409);
+          return refused(r.state, "note_edges is not migrated yet — run scripts/migrate.ts --apply first");
         case "off":
-          return bad("no graph store is configured (SUPABASE_URL unset) — there is no graph to rebuild", 409);
+          return refused(r.state, "no graph store is configured (SUPABASE_URL unset) — there is no graph to rebuild");
+        default: {
+          // A new RebuildResult member is a type error here, never a runtime fall-through.
+          const unhandled: never = r;
+          return bad(`unhandled rebuild state ${JSON.stringify(unhandled)}`, 500);
+        }
       }
     } catch (e) {
       return bad(e instanceof Error ? e.message : String(e), 502);

@@ -3,27 +3,112 @@ on:
   push:
     branches: [main, dev]
   pull_request:
-# One run per ref: a superseded push cancels the queued one instead of starving behind it —
-# stacked runs otherwise each wait on a runner that may never come. And a job that cannot
-# acquire a runner dies at 10 minutes, not at GitHub's leisure.
+  workflow_call:
+permissions:
+  contents: read
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
-    # Routed by a repo VARIABLE so an outage never needs a workflow commit: the default runner
-    # by default, and flipping CI_RUNNER re-homes the same job at another machine.
-    # runs-on cannot be bypassed; it can be re-homed.
-    runs-on: ${{ vars.CI_RUNNER || 'blacksmith-2vcpu-ubuntu-2404' }}
+    # Optional runner override. A fresh fork uses GitHub-hosted Linux.
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22.23.2'
           cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+
+  native:
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: cortex_test
+          POSTGRES_PASSWORD: cortex_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        volumes:
+          - /tmp/cortex-pg-${{ github.run_id }}-${{ github.run_attempt }}:/var/run/postgresql
+        options: >-
+          --health-cmd "pg_isready -U cortex_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CORTEX_NATIVE_PG: '1'
+      CORTEX_NATIVE_PG_SOCKET: /tmp/cortex-pg-${{ github.run_id }}-${{ github.run_attempt }}
+      CORTEX_QUEUE_TEST_SOCKET: /tmp/cortex-valkey-${{ github.run_id }}-${{ github.run_attempt }}/valkey.sock
+      VALKEY_CONTAINER: cortex-valkey-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '22.23.2'
+          cache: npm
+      - run: npm ci
+      - name: Create synthetic database roles
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$POSTGRES_CONTAINER" psql -U cortex_test -d postgres -v ON_ERROR_STOP=1 \
+            -c "create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;"
+      - name: Start isolated Valkey with TCP disabled
+        run: |
+          socket_dir=$(dirname "$CORTEX_QUEUE_TEST_SOCKET")
+          mkdir -p "$socket_dir"
+          chmod 777 "$socket_dir"
+          docker run -d --name "$VALKEY_CONTAINER" -v "$socket_dir:/sock" valkey/valkey:8 \
+            valkey-server --unixsocket /sock/valkey.sock --unixsocketperm 777 --port 0 --save ""
+          for i in $(seq 1 30); do
+            [ -S "$CORTEX_QUEUE_TEST_SOCKET" ] && break
+            sleep 1
+          done
+          [ -S "$CORTEX_QUEUE_TEST_SOCKET" ] || { docker logs "$VALKEY_CONTAINER"; exit 1; }
+      - name: Run every native PostgreSQL and Valkey suite
+        run: |
+          shopt -s nullglob
+          files=(tests/*.pg.test.ts tests/*.integration.test.ts)
+          if [ "${#files[@]}" -lt 10 ]; then
+            echo "::error title=Native coverage collapsed::Fewer than 10 native suites matched."
+            exit 1
+          fi
+          printf 'Native suite: %s\n' "${files[@]}"
+          echo "NATIVE_EXPECTED_FILES=${#files[@]}" >> "$GITHUB_ENV"
+          npm exec -- vitest run "${files[@]}" --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/cortex-native-report.json"
+      - name: Require complete native coverage with zero skipped tests
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const report = JSON.parse(fs.readFileSync(path.join(process.env.RUNNER_TEMP, 'cortex-native-report.json'), 'utf8'));
+          const total = report.numTotalTests;
+          const skipped = report.numPendingTests + (report.numTodoTests || 0);
+          const files = report.testResults;
+          const expectedFiles = Number(process.env.NATIVE_EXPECTED_FILES);
+          console.log(`Native tests: ${total} total, ${report.numPassedTests} passed, ${skipped} skipped, ${report.numFailedTests} failed`);
+          if (!report.success || !Number.isInteger(total) || total <= 0 || skipped !== 0 || report.numFailedTests !== 0 || report.numPassedTests !== total
+            || !Array.isArray(files) || files.length !== expectedFiles
+            || files.some(file => file.status !== 'passed' || file.assertionResults.length === 0 || file.assertionResults.some(test => test.status !== 'passed'))) {
+            console.error('::error title=Native suites did not all run::Every discovered native suite and test must pass without skips.');
+            process.exit(1);
+          }
+          NODE
+      - name: Stop isolated Valkey
+        if: always()
+        run: docker rm -f "$VALKEY_CONTAINER" >/dev/null 2>&1 || true

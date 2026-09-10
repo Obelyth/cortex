@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { createHmac, randomBytes } from "node:crypto";
 import { after } from "next/server";
 import { kv, kvEnv, resetKvForTests } from "./kv";
+import { CUT_STAMP, PLATFORM_WALL_MS, STARTED_STAMP } from "./deadline";
 
 /**
  * The call log — the one source the console's live panels need and the corpus cannot provide.
@@ -48,9 +50,28 @@ export interface CallRow {
    *  row is excluded from that model's verdict record (see modelRecordRows): replaying an
    *  answer is not evidence about the model, and repeats must not inflate its record. */
   cached?: true;
+  /**
+   * Ties a call's started row to its final row. A call writes a row BEFORE its body runs
+   * (stamp STARTED, ms 0) and a second, complete row after it with the same id; the reader
+   * collapses the pair to the final one. A started row with no partner past the platform wall
+   * is a call the platform killed — the only trace such a call leaves, and the reason the
+   * started row exists (issue #180: 72 kills a day, invisible). Absent on rows written before
+   * this shipped.
+   */
+  id?: string;
+  /** "started" on the row written before the body; "cut" on a started row the reader has
+   *  judged killed. Absent on a finished row. */
+  state?: "started" | "cut";
+  /** brain_ask only: a short keyed hash of the question, so the console can tell repeats of one
+   *  question apart from many questions without the question text ever being logged. Absent
+   *  when the deployment has no key to sign it with. */
+  digest?: string;
 }
 
-/** Two days of headroom at a heavy cadence; the console never reads more than 24h of it. */
+/** Two days of headroom at a heavy cadence; the console never reads more than 24h of it.
+ *  Since the started row shipped every call costs TWO entries in the store, so this now holds
+ *  about 2,500 calls — still days at the observed cadence, and kept rather than doubled because
+ *  every console render LRANGEs the whole list. */
 const CAP = 5000;
 /** A console render must never hang on the store; past this it falls back to memory. */
 const READ_TIMEOUT_MS = 1500;
@@ -100,8 +121,38 @@ export function currentSurface(): Surface {
 export const SCOPE_NOTE =
   "one instance's view — the server runs several, and each keeps its own log";
 
+/**
+ * The row a call writes BEFORE its body runs. Returned so the caller can finalise it — the
+ * final row carries the same id and replaces this one in memory; in the store both rows sit
+ * in the list and readCalls() collapses them. The write is dispatched here and now, not after
+ * the tool: a call the platform kills at the wall never reaches record() again, and this row
+ * is the only evidence it ran.
+ */
+export function startCall(row: Omit<CallRow, "stamp" | "ms" | "id" | "state">): CallRow {
+  const started: CallRow = { ...row, id: randomBytes(6).toString("hex"), stamp: STARTED_STAMP, ms: 0, state: "started" };
+  record(started);
+  return started;
+}
+
+/**
+ * A short, one-way fingerprint of a question for the started row. Eight hex chars: enough to
+ * tell repeats apart on a console, far too little to reconstruct the question from. Keyed with
+ * the deployment's connector secret, because an unkeyed hash of a short question is one
+ * dictionary check away from confirming that a guessed question was asked — the log sits in
+ * the shared store, and it must not be usable as an oracle. Domain-separated from every other
+ * use of the secret. With no secret configured there is no digest: a row without one is a row.
+ */
+export function questionDigest(question: string, key = process.env.CONNECTOR_PATH_SECRET): string | undefined {
+  if (!key) return undefined;
+  return createHmac("sha256", key).update(`cortex-question-digest-v1:${question}`).digest("hex").slice(0, 8);
+}
+
 export function record(row: CallRow): void {
-  log.push(row);
+  // A final row replaces its own started row in place, so the memory ring never shows a call
+  // twice; a row with no partner (or no id at all) appends as before.
+  const at = row.id && row.state !== "started" ? log.findIndex((r) => r.id === row.id) : -1;
+  if (at >= 0) log[at] = row;
+  else log.push(row);
   if (log.length > CAP) log.splice(0, log.length - CAP);
 
   // Durable write, fire-and-forget: newest-first list, trimmed to CAP, plus a set-once marker
@@ -139,11 +190,39 @@ export interface CallWindow {
   source: "store" | "unconfigured" | "unreachable";
 }
 
+/**
+ * One row per call. A started row whose final row is present is dropped in favour of it. A
+ * started row with no partner is either still running — younger than the platform wall, and
+ * left out until it finishes — or was killed by the platform, in which case it is returned as
+ * CUT OFF with the wall as its duration: the honest figure, since the function ran until the
+ * platform stopped it and nothing after that instant could be recorded.
+ *
+ * Known limit: the two rows are independent writes, and record() swallows a failed one. A
+ * call that finished but whose final row the store lost is indistinguishable here from a kill,
+ * and reads as CUT OFF. The console's cut-off figures say so beside the number (CUT_OFF_CAVEAT
+ * in lib/trends.ts) rather than promising a verdict the log cannot back.
+ */
+export function collapseCalls(rows: CallRow[], now: number): CallRow[] {
+  const finished = new Set<string>();
+  for (const r of rows) if (r.id && r.state !== "started") finished.add(r.id);
+  const out: CallRow[] = [];
+  for (const r of rows) {
+    if (r.state !== "started") {
+      out.push(r);
+      continue;
+    }
+    if (r.id && finished.has(r.id)) continue;
+    if (now - r.ts < PLATFORM_WALL_MS) continue;
+    out.push({ ...r, state: "cut", stamp: CUT_STAMP, ms: PLATFORM_WALL_MS });
+  }
+  return out;
+}
+
 function fromMemory(windowMs: number, now: number): CallWindow {
   const from = now - windowMs;
   // Chronological, not append order: rows are stamped when a call STARTS and appended when it
   // finishes, so a slow call lands after faster ones that began later.
-  const rows = log.filter((r) => r.ts >= from).sort((a, b) => a.ts - b.ts);
+  const rows = collapseCalls(log.filter((r) => r.ts >= from), now).sort((a, b) => a.ts - b.ts);
   // Coverage follows the data too: once the ring evicts, the log no longer holds the window
   // its start time implies, and a chart drawn over evicted hours reads as silence.
   const start = Math.max(since, log[0]?.ts ?? since);
@@ -184,6 +263,12 @@ function parseRow(raw: unknown): CallRow | null {
     // Only literal true counts. Coercing a truthy junk value would mark a real model call as
     // cached and silently drop it from the model's record — the failure direction that matters.
     ...(r.cached === true ? { cached: true as const } : {}),
+    ...(typeof r.id === "string" && r.id ? { id: r.id } : {}),
+    // A STARTED stamp IS a started row, whatever the state field says: "cut" is a READER's
+    // judgement and is never stored, so a stored row claiming it — or carrying no state at
+    // all — is re-judged from its age like any other started row.
+    ...(r.state === "started" || r.stamp === STARTED_STAMP ? { state: "started" as const } : {}),
+    ...(typeof r.digest === "string" && r.digest ? { digest: r.digest } : {}),
   };
 }
 
@@ -228,7 +313,7 @@ export async function readCalls(windowMs = 86_400_000, now = Date.now()): Promis
       }
     }
     all.sort((a, b) => a.ts - b.ts);
-    const rows = all.filter((row) => row.ts >= from);
+    const rows = collapseCalls(all, now).filter((row) => row.ts >= from);
     const storedSince = Number(sinceRaw);
     // Same eviction honesty as memory: once LTRIM has dropped rows, the record starts at the
     // oldest surviving row, whatever the set-once marker says. Judged on the RAW list — a

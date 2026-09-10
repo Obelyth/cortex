@@ -12,17 +12,24 @@
  * would add its own retry, caching and version churn between this repo and the public port for
  * five REST calls. The seam for tests is the `MirrorStore` interface, same as `Reader`.
  */
-import { gh, repo } from "./github";
+import { branch, gh, repo } from "./github";
 import type { CompareResult } from "./github";
 import { storableText } from "./frontmatter";
+
+/** Rows written by the retired Map before its removal. Reads and counts exclude them, while
+ * reconciliation deliberately leaves them in customer-owned storage. */
+export const LEGACY_NON_NOTE_PATHS = ["tools/atlas-snapshot.json"] as const;
+const LEGACY_NON_NOTE_SET = new Set<string>(LEGACY_NON_NOTE_PATHS);
 
 export interface NoteRow {
   path: string;
   content: string;
   commit_sha: string;
-  /** When git last changed this file. Known on the patch path (the head commit's date IS when
-   *  those files changed); null on a full sync, which carries no per-file dates — sync_apply
-   *  coalesces so a rebuild never erases dates the patch path already learned. */
+  /** When git last changed this file. The patch path sends the head commit's date, which IS
+   *  when those files changed; a full sync sends null, because it does not know. The store's
+   *  rule (sync_apply, migration 20260905100000) is that CONTENT decides: a row whose content
+   *  did not change keeps the date it has whatever the caller sent, a row whose content changed
+   *  takes the caller's value, and a null is learned later by dateUndatedNotes. */
   last_commit_at?: string | null;
 }
 
@@ -40,12 +47,19 @@ export interface AccessRow {
   mode: string;
 }
 
+export interface MirrorSnapshot {
+  /** Empty string is the seeded cold-start sentinel; null is retained for pre-seed stores. */
+  head: string | null;
+  rows: NoteRow[];
+}
+
 export interface MirrorStore {
-  /** The head the mirror believes it reflects, or null for a store never synced. */
+  /** Head and rows observed by one database statement under one MVCC snapshot. */
+  snapshot(): Promise<MirrorSnapshot>;
+  /** Administrative status only. Corpus assembly must use snapshot(), never this scalar read. */
   head(): Promise<string | null>;
-  all(): Promise<NoteRow[]>;
-  /** Just the paths. The stale-row computation needs nothing else, and all() ships every note's
-   *  full content — half a megabyte downloaded and thrown away to derive a list of strings. */
+  /** Just the paths. The stale-row computation needs nothing else, and snapshot() ships every
+   * note's full content — half a megabyte downloaded and thrown away to derive this list. */
   paths(): Promise<string[]>;
   /**
    * The ONLY write path for rows, and it is atomic: upserts, removes and the head advance apply
@@ -67,7 +81,13 @@ export interface MirrorStore {
 }
 
 /** Per-request ceiling. Same policy as the reader backends: one call, one budget, loud failure. */
-const REQUEST_TIMEOUT_MS = 10_000;
+/** Every mirror request's ceiling — one PostgREST or GitHub round trip. Exported so callers that
+ *  schedule mirror work inside their own deadline (app/api/ops/sweep) reserve the real number. */
+export const REQUEST_TIMEOUT_MS = 10_000;
+
+/** The archive path refuses more than 64 MiB after decompression. The mirror's scalar JSON
+ * response gets the same transport ceiling, so switching backends cannot raise the memory cap. */
+const MAX_SNAPSHOT_TRANSPORT_BYTES = 64 * 1024 * 1024;
 
 /** Above this many changed+removed paths, per-file patching costs more requests than one tarball
  *  — and a diff that big usually means history rewrote anyway. */
@@ -114,33 +134,124 @@ function pgrstStore(base: string, key: string): MirrorStore {
     return res;
   }
 
-  /**
-   * Paged, because PostgREST caps a response at its own max-rows regardless of what we ask.
-   * Trusting a single response would silently serve a partial brain the day the corpus outgrows
-   * the cap — the exact silent-loss failure this system forbids.
-   */
-  async function paged<T>(query: string): Promise<T[]> {
-    const out: T[] = [];
-    const PAGE = 1000;
-    for (let from = 0; ; from += PAGE) {
-      const res = await call(query, {
-        headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
-      });
-      const rows = (await res.json()) as T[];
-      out.push(...rows);
-      if (rows.length < PAGE) return out;
+  async function boundedJson(res: Response, label: string): Promise<unknown> {
+    const declared = res.headers.get("content-length");
+    if (declared !== null) {
+      const bytes = Number(declared);
+      if (Number.isFinite(bytes) && bytes > MAX_SNAPSHOT_TRANSPORT_BYTES) {
+        throw new Error(`mirror: ${label} response too large`);
+      }
+    }
+
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    if (res.body) {
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_SNAPSHOT_TRANSPORT_BYTES) {
+          await reader.cancel().catch(() => undefined);
+          throw new Error(`mirror: ${label} response too large`);
+        }
+        chunks.push(value);
+      }
+    } else {
+      const value = new Uint8Array(await res.arrayBuffer());
+      bytes = value.byteLength;
+      if (bytes > MAX_SNAPSHOT_TRANSPORT_BYTES) throw new Error(`mirror: ${label} response too large`);
+      chunks.push(value);
+    }
+
+    try {
+      return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), bytes).toString("utf8"));
+    } catch {
+      throw new Error(`mirror: ${label} returned malformed JSON`);
     }
   }
 
+  function snapshot(value: unknown): MirrorSnapshot {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("mirror: snapshot envelope must be an object");
+    }
+    const envelope = value as Record<string, unknown>;
+    if (!Object.hasOwn(envelope, "head") || !Array.isArray(envelope.rows)) {
+      throw new Error("mirror: snapshot envelope is missing head or rows");
+    }
+    const head = envelope.head;
+    if (head !== null && typeof head !== "string") throw new Error("mirror: snapshot head has the wrong type");
+    if (typeof head === "string" && head !== "" && !/^[0-9a-f]{40}$/i.test(head)) {
+      throw new Error("mirror: snapshot head is not a commit SHA");
+    }
+    if ((head === null || head === "") && envelope.rows.length !== 0) {
+      throw new Error("mirror: snapshot has rows without an initialized head");
+    }
+
+    const rows: NoteRow[] = [];
+    const paths = new Set<string>();
+    for (const value of envelope.rows) {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("mirror: snapshot row must be an object");
+      }
+      const row = value as Record<string, unknown>;
+      if (typeof row.path !== "string" || row.path.length === 0 ||
+          typeof row.content !== "string" || typeof row.commit_sha !== "string") {
+        throw new Error("mirror: snapshot row has the wrong type");
+      }
+      if (paths.has(row.path)) throw new Error(`mirror: snapshot contains duplicate path ${row.path}`);
+      paths.add(row.path);
+      rows.push({ path: row.path, content: row.content, commit_sha: row.commit_sha });
+    }
+    return { head, rows };
+  }
+
+  /** PostgREST may cap every response below the requested range. Advance from the last returned
+   * path and stop only on an empty page; a short page is not evidence that the list is complete. */
+  async function paged<T extends { path: string }>(query: string): Promise<T[]> {
+    const out: T[] = [];
+    const seen = new Set<string>();
+    const PAGE = 1000;
+    let cursor: string | null = null;
+    for (;;) {
+      const filter = cursor === null ? "" : `&path=gt.${encodeFilter(cursor)}`;
+      const res = await call(`${query}${filter}`, {
+        headers: { Range: `0-${PAGE - 1}`, "Range-Unit": "items" },
+      });
+      const value = await res.json() as unknown;
+      if (!Array.isArray(value)) throw new Error("mirror: paged response was not an array");
+      const rows = value as T[];
+      if (rows.length === 0) return out;
+      for (const row of rows) {
+        if (!row || typeof row !== "object" || typeof row.path !== "string") {
+          throw new Error("mirror: paged row has no path");
+        }
+        // Postgres collation order is not JavaScript UTF-16 order. The database owns ordering;
+        // identity is the portable progress check and also catches duplicates across pages.
+        if (seen.has(row.path)) throw new Error("mirror: pagination made no progress");
+        seen.add(row.path);
+        cursor = row.path;
+      }
+      out.push(...rows);
+    }
+  }
+
+  function encodeFilter(value: string): string {
+    return encodeURIComponent(value).replace(/[!'()*]/g, (char) =>
+      `%${char.charCodeAt(0).toString(16).toUpperCase()}`
+    );
+  }
+
   return {
+    async snapshot() {
+      const res = await call("rpc/corpus_snapshot", { method: "POST", body: "{}" });
+      return snapshot(await boundedJson(res, "snapshot"));
+    },
+
     async head() {
       const res = await call("sync_state?select=head_sha&id=is.true");
       const rows = (await res.json()) as Array<{ head_sha: string }>;
       return rows[0]?.head_sha ?? null;
-    },
-
-    async all() {
-      return paged<NoteRow>("notes?select=path,content,commit_sha&order=path.asc");
     },
 
     async paths() {
@@ -173,8 +284,7 @@ function pgrstStore(base: string, key: string): MirrorStore {
 
     async scores() {
       try {
-        const res = await call("note_scores?select=path,temperature,score,reads");
-        return (await res.json()) as ScoreRow[];
+        return await paged<ScoreRow>("note_scores?select=path,temperature,score,reads&order=path.asc");
       } catch (e) {
         // Never fatal: a router that cannot score is a router that renders everything, which is
         // how it behaved before this phase and is strictly safer than hiding rows by accident.
@@ -213,18 +323,8 @@ export async function syncMirror(
   mirrorHead: string | null,
   sha: string,
   deps: SyncDeps
-): Promise<string> {
-  if (mirrorHead === sha) return sha;
-
-  /**
-   * A LOST CAS MEANS THE ROWS ARE NOT OURS. The caller assembles a corpus from whatever the
-   * store holds and stamps it with a commit — and it used to stamp the sha it WANTED, not the
-   * one that won. That produced `VERIFIED — this quote is verbatim in <path> @X` for text that
-   * did not exist at X: the single claim this whole system is built to make, made falsely, and
-   * then cached under X for the rest of the instance's life. Re-read the head and tell the
-   * truth about which commit the rows came from.
-   */
-  const winner = async () => (await store.head().catch(() => null)) ?? sha;
+): Promise<void> {
+  if (mirrorHead === sha) return;
 
   if (mirrorHead) {
     try {
@@ -255,8 +355,7 @@ export async function syncMirror(
           if (content === null) gone.push(p);
           // storableText because Postgres cannot hold a NUL byte: ONE poisoned note would 400
           // the whole sync_apply batch — and since that note rides in every later diff, the
-          // mirror freezes at the last clean commit until a human notices (2026-08-12, three
-          // hours, and the connections graph froze with it). Ingress now scrubs writes
+          // mirror freezes at the last clean commit until a human notices. Ingress now scrubs writes
           // (lib/brain.ts), but git HISTORY the guard predates must still be syncable. The
           // mirror row diverges from git by exactly the byte the store cannot represent.
           else rows.push({ path: p, content: storableText(content), commit_sha: sha, last_commit_at: at });
@@ -265,9 +364,9 @@ export async function syncMirror(
           // Another instance moved the head first. Its state is the truth now; ours would have
           // been a rollback. Losing this race is a non-event, not an error.
           console.error(`[mirror] patch to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
-          return await winner();
+          return;
         }
-        return sha;
+        return;
       }
     } catch (e) {
       console.error(`[mirror] patch sync failed, falling back to full: ${String(e)}`);
@@ -277,24 +376,126 @@ export async function syncMirror(
   // Full sync — also the backfill, by design: reconcile-from-empty is the only import path, so
   // it cannot rot separately from the code that runs every day.
   const files = await deps.fullLoad(sha);
-  // The head commit's date, same bound the patch path uses. Without it every full-synced row
-  // carried last_commit_at NULL, note_scores coalesced that to mirrored_at, and a force-push
-  // therefore reset the authorship age of exactly those rows to "today" — re-warming them and
-  // pushing them back out of propose_deletions' 180-day window. sync_apply coalesces, so this
-  // never overwrites a real date the patch path already learned.
-  const at = await deps.commitDate(sha).catch(() => null);
   const rows: NoteRow[] = [];
+  // NO DATE ON A FULL SYNC. This used to stamp every row with the head commit's date, and the
+  // store's coalesce let that non-null value overwrite every date the patch path had learned —
+  // so a rebuild, a force-push or a >PATCH_LIMIT commit re-warmed the whole corpus. The version before that sent nothing
+  // and the store coalesced NULL to mirrored_at, which reset age the same way through a
+  // different column. Both guessed. Now the caller says exactly what it knows about each row:
+  // nothing. sync_apply keeps the existing date for a row whose content did not change and sets
+  // NULL for a row that did, and dateUndatedNotes — the clock's second job — learns the true
+  // date from git within a tick.
   // Same storableText guard as the patch path, same reason: a full sync carries every note, so
   // one unstorable byte anywhere in the corpus would otherwise refuse the whole rebuild.
-  for (const [path, content] of files) rows.push({ path, content: storableText(content), commit_sha: sha, last_commit_at: at });
+  for (const [path, content] of files) rows.push({ path, content: storableText(content), commit_sha: sha, last_commit_at: null });
   if (rows.length === 0) throw new Error("mirror: full sync produced no files — refusing to empty the mirror");
   const current = new Set(files.keys());
-  const stale = (await store.paths()).filter((p) => !current.has(p));
+  // Every row the fresh tree does not carry is stale — including rows for paths the live policy
+  // has since excluded. Git is the source of truth and a full sync re-imports anything the policy
+  // readmits, so removing them loses nothing; keeping them would grow every corpus_snapshot()
+  // payload against its 64 MiB ceiling for as long as the mirror lives, for rows nothing serves.
+  // The one exception is the explicit legacy allowlist above.
+  const stale = (await store.paths()).filter((p) => !current.has(p) && !LEGACY_NON_NOTE_SET.has(p));
   if (!(await store.apply(mirrorHead, sha, rows, stale))) {
     console.error(`[mirror] full sync to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
-    return await winner();
+    return;
   }
-  return sha;
+}
+
+/**
+ * THE DATER — the clock's second job (app/api/ops/sweep). A full sync inserts every new path with
+ * last_commit_at NULL and sync_apply nulls the date of any row a full sync changed, because the
+ * tarball carries no history. note_scores reads NULL as mirrored_at, which is honest for minutes
+ * and a lie for months, so the cron asks git for the newest commit touching each undated path
+ * and writes it in — a bounded number per tick so no tick races the function wall.
+ *
+ * One call per path is the only per-file history GitHub offers over REST. That is why this runs
+ * on the clock and not on the boot path.
+ */
+export interface NoteDater {
+  /** Paths with no known commit date, oldest-mirrored first, at most `limit`. */
+  undated(limit: number): Promise<string[]>;
+  /** Record the date. Filtered on NULL server-side, so a row another writer dated first is
+   *  left alone rather than overwritten by this slower, coarser source. */
+  setCommitDate(path: string, at: string): Promise<void>;
+}
+
+/** The real dater, from env; null when the mirror is unconfigured (the public product's mode). */
+export function noteDater(): NoteDater | null {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  const base = url.replace(/\/$/, "");
+  const headers = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
+  return {
+    async undated(limit) {
+      const res = await fetch(
+        `${base}/rest/v1/notes?select=path&last_commit_at=is.null&order=mirrored_at.asc,path.asc&limit=${limit}`,
+        { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
+      );
+      if (!res.ok) throw new Error(`mirror: GET notes(undated) ${res.status}`);
+      return ((await res.json()) as Array<{ path: string }>).map((r) => r.path);
+    },
+    async setCommitDate(path, at) {
+      const res = await fetch(`${base}/rest/v1/notes?path=eq.${encodeURIComponent(path)}&last_commit_at=is.null`, {
+        method: "PATCH",
+        headers: { ...headers, Prefer: "return=minimal" },
+        body: JSON.stringify({ last_commit_at: at }),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`mirror: PATCH notes ${res.status}`);
+    },
+  };
+}
+
+/** The newest commit touching one path on the brain branch, from the commits API. Null when git
+ *  has no history for it — a path the mirror should not have, reported and never guessed. */
+export async function lastCommitDateOf(path: string): Promise<string | null> {
+  const res = await gh(`/repos/${repo()}/commits?path=${encodeURIComponent(path)}&sha=${branch()}&per_page=1`);
+  if (!res.ok) throw new Error(`mirror: commits?path ${res.status}`);
+  const data = (await res.json()) as Array<{ commit?: { author?: { date?: string }; committer?: { date?: string } } }>;
+  return data[0]?.commit?.author?.date ?? data[0]?.commit?.committer?.date ?? null;
+}
+
+export interface DatingResult {
+  /** How many undated rows the tick found, before any were dated. */
+  undated: number;
+  dated: number;
+  /** Paths git has no history for. Left NULL and reported; the next full sync removes a path
+   *  that is gone from the tree, which is the honest fix and not this job's. */
+  unknown: string[];
+  failed: string[];
+}
+
+/**
+ * Date up to `limit` undated rows. Each path is its own try: one GitHub hiccup costs one path one
+ * tick, never the batch, and `deadline` lets the caller stop well inside its own wall — a tick
+ * that cannot finish its batch leaves the rest for the next one rather than being killed mid-write.
+ */
+export async function dateUndatedNotes(
+  dater: NoteDater,
+  lookup: (path: string) => Promise<string | null>,
+  limit = 20,
+  deadline: () => boolean = () => false
+): Promise<DatingResult> {
+  const paths = await dater.undated(limit);
+  const out: DatingResult = { undated: paths.length, dated: 0, unknown: [], failed: [] };
+  for (const path of paths) {
+    if (deadline()) break;
+    try {
+      const at = await lookup(path);
+      if (!at) {
+        out.unknown.push(path);
+        continue;
+      }
+      await dater.setCommitDate(path, at);
+      out.dated++;
+    } catch (e) {
+      console.error(`[mirror] dating ${path} failed: ${String(e)}`);
+      out.failed.push(path);
+    }
+  }
+  return out;
 }
 
 /** A commit's author date, for write-recency scoring. Null on any failure — the scorer coalesces

@@ -16,7 +16,6 @@ const corpus: Corpus = {
   sha: "abc123abc123abcd",
   bytes: 400,
   fetchedAt: Date.now(),
-  sidecar: new Map(),
   files: new Map([
     ["projects/beacon.md", "Beacon production is dark; both URLs return 404 as of 2026-07-25."],
     ["profile.md", "the operator's home address is 12 Made Up Lane and his bank is Fictional Credit Union."],
@@ -34,7 +33,7 @@ function tagOf(prompt: ReaderPrompt, path: string): string {
 // so these tests exercise the real ask() pipeline without reaching the network.
 let restore: typeof globalThis.fetch;
 beforeEach(() => {
-  process.env.BRAIN_REPO = "acme/brain";
+  process.env.BRAIN_REPO = "example-owner/brain";
   process.env.GITHUB_TOKEN = "test";
   restore = globalThis.fetch;
   globalThis.fetch = (async (url: string) => {
@@ -179,6 +178,7 @@ describe("the policy fails closed", () => {
     vi.resetModules();
     vi.doMock("@upstash/redis", () => ({
       Redis: class {
+        eval() { return Promise.resolve(["read", { scope: ["../../etc", "", 42, "nope/"], citations: true }, "a".repeat(40)]); }
         get(k: string) {
           return Promise.resolve(
             k.includes("asks")
@@ -192,6 +192,8 @@ describe("the policy fails closed", () => {
     vi.stubEnv(TOK_KEY, "t");
     const p = await policy();
     expect(p.scope).toEqual(["projects/"]);
+    expect(p.source).toBe("store");
+    expect(p.revision).toBe("a".repeat(40));
   });
 
   it("refuses to store an empty scope", async () => {

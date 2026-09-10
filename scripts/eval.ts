@@ -7,8 +7,8 @@
  * the server does not run — and a wrong measurement is worse than none, because it arrives with
  * a decimal point and gets quoted.
  *
- * This file has been through an adversarial audit (33 confirmed defects) after its first draft
- * produced numbers that looked plausible and were not. The comments below record what each guard
+ * This harness has been adversarially audited after an early draft produced plausible but
+ * incorrect results. The comments below record what each guard
  * is for, because every one of them exists because the number was wrong without it.
  *
  * WHAT IS MEASURED
@@ -37,8 +37,7 @@
  * labels are all counted in the summary. A percentage over a shrunken denominator that does not
  * say it shrank is the single easiest way for this file to lie.
  *
- * None of these numbers is comparable to the legacy "97% on 185 labels" figure: that harness was
- * deleted with the retired index path (brain 082f02c) and the label set has grown to 204.
+ * Results are comparable only when they use the same harness, label set, and pinned corpus tree.
  *
  *   npx tsx scripts/eval.ts --model claude-sonnet-5
  *   npx tsx scripts/eval.ts --model gpt-5.6-terra --runs 3
@@ -47,8 +46,9 @@
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { ask, render } from "../lib/ask";
+import { ask, render, type Reader } from "../lib/ask";
 import {
   modelReader,
   READER_MODEL_IDS,
@@ -58,8 +58,10 @@ import {
   type Provider,
 } from "../lib/reader";
 import { normalise } from "../lib/verify";
+import { loadCorpus, type Corpus } from "../lib/corpus";
 
-interface Label {
+export interface Label {
+  id?: string;
   q: string;
   expected: string;
   why: string;
@@ -67,7 +69,9 @@ interface Label {
   expect_contains?: string;
 }
 
-interface Row {
+export interface Row {
+  labelId: string;
+  corpusCommit: string;
   q: string;
   expected: string;
   difficulty: string;
@@ -240,6 +244,116 @@ async function judgeOnce(
   }
 }
 
+export async function evaluateRows(options: {
+  all: Label[]; labels: Label[]; runs: number; concurrency: number; model: string; k?: number;
+  reader: Reader; panel: { model: string; provider: Provider }[];
+  load?: () => Promise<Corpus>; ask?: typeof ask; judge?: typeof judgeOnce;
+}): Promise<{ rows: Row[]; corpusCommit: string; stale: {id: string; path: string; reason: string}[] }> {
+  const {all, labels, runs, concurrency, model, k, reader, panel} = options;
+  if (!Number.isInteger(runs) || runs < 1 || !Number.isInteger(concurrency) || concurrency < 1) throw new Error("invalid evaluation work bounds");
+  const corpus = await (options.load ?? loadCorpus)();
+  const runAsk = options.ask ?? ask;
+  const judge = options.judge ?? judgeOnce;
+  const ids = new Map(all.map((l,i) => [l, l.id ?? `label-${i}`]));
+  if (new Set(ids.values()).size !== all.length || labels.some(l => !ids.has(l))) throw new Error("labels require unique identities from the full label set");
+  const stale: {id: string; path: string; reason: string}[] = [];
+  for (const l of all) {
+    if (l.expected === "NONE") continue;
+    const text = corpus.files.get(l.expected);
+    if (text === undefined || (l.expect_contains && !normalise(text).includes(normalise(l.expect_contains)))) {
+      stale.push({id: ids.get(l)!, path: l.expected, reason: text === undefined ? "missing" : "changed"});
+    }
+  }
+  const staleIds = new Set(stale.map(s => s.id));
+  const work = labels.flatMap((l) => Array.from({ length: runs }, (_, run) => ({ l, run })));
+  let done = 0;
+
+  const rows = await pool(work, concurrency, async ({ l, run }): Promise<Row> => {
+    const started = Date.now();
+    const isNone = l.expected === "NONE";
+    const scorable = Boolean(l.expect_contains) && !isNone && !staleIds.has(ids.get(l)!);
+    const base = { labelId: ids.get(l)!, corpusCommit: corpus.sha, q: l.q, expected: l.expected, difficulty: l.difficulty, run };
+    try {
+      const r = await runAsk(l.q, reader, { corpus, model, ...(k ? { k } : {}) });
+      const readerMs = Date.now() - started;
+      const got = r.citation?.path ?? null;
+      const routing = isNone || staleIds.has(ids.get(l)!) ? null : got === l.expected;
+      // The stamp the PRODUCT would print, read off render() rather than recomputed. A local
+      // reimplementation counted superseded, cited-outside-pack and multi-note citations as
+      // VERIFIED, which the shipping renderer does not.
+      const stamp = render(r).split("\n", 1)[0].split(" ")[0].replace(/[^A-Z]/g, "") || "UNKNOWN";
+      const cleanVerified = render(r).startsWith("VERIFIED");
+      // A reader that cannot copy the nonce tag also produces no citation. That is a protocol
+      // failure, not the brain being empty, and ask.ts already distinguishes them.
+      const protocolFailure = r.protocol === "error";
+
+      let judges: Row["judges"] = [];
+      if (scorable) {
+        const verdicts = await Promise.all(
+          panel.map(async (j) => {
+            const v = await judge(j, l, r.answer);
+            return v ? { model: j.model, correct: v.correct, why: v.why } : null;
+          })
+        );
+        judges = verdicts.filter(Boolean) as Row["judges"];
+      }
+      const yes = judges.filter((j) => j.correct).length;
+      const answerOk = judges.length === 0 ? null : yes * 2 > judges.length;
+
+      return {
+        ...base,
+        got,
+        stamp,
+        // The reader's own act, not the product's stamp: a contract-valid abstention is the
+        // reader genuinely finding nothing. `notInBrain` additionally requires the search to
+        // have been complete for the question, which the corpus decides, not the reader — at
+        // a corpus larger than the pack budget is rarely complete on any path. The `stamp` column
+        // still shows what the product
+        // printed, so a miss the product would not call NOT IN BRAIN is visible as such.
+        absence: isNone ? r.protocol === "abstention" : null,
+        protocolFailure,
+        routing,
+        sameBlock:
+          !scorable
+            ? null
+            : routing === true &&
+              // The UNTRUNCATED block. A display-length cap must not limit evaluation reachability.
+              normalise(r.citation?.block ?? "").includes(normalise(l.expect_contains!)),
+        answerOk,
+        usable: answerOk === null ? null : answerOk && cleanVerified,
+        judges,
+        judgeDisagreed: judges.length > 1 && yes !== 0 && yes !== judges.length,
+        answer: r.answer,
+        packTokens: r.packTokens,
+        readerMs,
+      };
+    } catch (e) {
+      return {
+        ...base,
+        got: null,
+        stamp: "ERROR",
+        absence: isNone ? false : null,
+        protocolFailure: false,
+        routing: isNone || staleIds.has(ids.get(l)!) ? null : false,
+        sameBlock: scorable ? false : null,
+        answerOk: scorable ? false : null,
+        usable: scorable ? false : null,
+        judges: [],
+        judgeDisagreed: false,
+        answer: "",
+        packTokens: 0,
+        readerMs: Date.now() - started,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    } finally {
+      done++;
+      if (done % 10 === 0) console.error(`  ${done}/${work.length}`);
+    }
+  });
+
+  return {rows, corpusCommit: corpus.sha, stale};
+}
+
 async function main(): Promise<void> {
   const model = arg("model");
   if (!model || !(READER_MODEL_IDS as readonly string[]).includes(model)) {
@@ -289,119 +403,13 @@ async function main(): Promise<void> {
   const k = arg("k") ? num("k", 10) : undefined;
   const out = arg("out") ?? `results/eval-${model}.json`;
 
-  // Labels whose recorded span no longer exists anywhere in their note have rotted; they are
-  // reported, not scored, so corpus drift never reads as a reader failing.
-  const stale: string[] = [];
-  for (const l of all) {
-    if (!l.expect_contains || l.expected === "NONE") continue;
-    const f = path.join(brain, l.expected);
-    if (!existsSync(f)) {
-      stale.push(`${l.expected} (missing)`);
-      continue;
-    }
-    if (!normalise(readFileSync(f, "utf8")).includes(normalise(l.expect_contains))) {
-      stale.push(`${l.expected} :: ${l.q.slice(0, 50)}`);
-    }
-  }
-  const staleQs = new Set(
-    all
-      .filter(
-        (l) =>
-          l.expect_contains &&
-          l.expected !== "NONE" &&
-          stale.some((s) => s.includes(l.q.slice(0, 50)))
-      )
-      .map((l) => l.q)
-  );
-
   console.error(
     `eval: ${labels.length} labels x ${runs} run(s) · ${model} (${provider}) · concurrency ${concurrency}\n` +
       `      judges: ${panel.map((j) => j.model).join(", ")}${judgeIndependent ? "" : "  [NOT INDEPENDENT — same family as the candidate]"}\n` +
-      `      labels sha ${labelsHash}${stale.length ? ` · ${stale.length} stale label(s) excluded from scoring` : ""}\n`
+      `      labels sha ${labelsHash}\n`
   );
 
-  const work = labels.flatMap((l) => Array.from({ length: runs }, (_, run) => ({ l, run })));
-  let done = 0;
-  let corpusCommit = "";
-
-  const rows = await pool(work, concurrency, async ({ l, run }): Promise<Row> => {
-    const started = Date.now();
-    const isNone = l.expected === "NONE";
-    const scorable = Boolean(l.expect_contains) && !isNone && !staleQs.has(l.q);
-    const base = { q: l.q, expected: l.expected, difficulty: l.difficulty, run };
-    try {
-      const r = await ask(l.q, modelReader, { model, ...(k ? { k } : {}) });
-      const readerMs = Date.now() - started;
-      corpusCommit ||= r.commit;
-      const got = r.citation?.path ?? null;
-      const routing = isNone ? null : got === l.expected;
-      // The stamp the PRODUCT would print, read off render() rather than recomputed. A local
-      // reimplementation counted superseded, cited-outside-pack and multi-note citations as
-      // VERIFIED, which the shipping renderer does not.
-      const stamp = render(r).split("\n", 1)[0].split(" ")[0].replace(/[^A-Z]/g, "") || "UNKNOWN";
-      const cleanVerified = render(r).startsWith("VERIFIED");
-      // A reader that cannot copy the nonce tag also produces no citation. That is a protocol
-      // failure, not the brain being empty, and ask.ts already distinguishes them.
-      const protocolFailure = r.unresolvedTag;
-
-      let judges: Row["judges"] = [];
-      if (scorable) {
-        const verdicts = await Promise.all(
-          panel.map(async (j) => {
-            const v = await judgeOnce(j, l, r.answer);
-            return v ? { model: j.model, correct: v.correct, why: v.why } : null;
-          })
-        );
-        judges = verdicts.filter(Boolean) as Row["judges"];
-      }
-      const yes = judges.filter((j) => j.correct).length;
-      const answerOk = judges.length === 0 ? null : yes * 2 > judges.length;
-
-      return {
-        ...base,
-        got,
-        stamp,
-        absence: isNone ? r.notInBrain && !protocolFailure : null,
-        protocolFailure,
-        routing,
-        sameBlock:
-          !scorable
-            ? null
-            : routing === true &&
-              // The UNTRUNCATED block. Scoring against the 400-char display string capped a
-              // perfect reader at 83.5%.
-              normalise(r.citation?.block ?? "").includes(normalise(l.expect_contains!)),
-        answerOk,
-        usable: answerOk === null ? null : answerOk && cleanVerified,
-        judges,
-        judgeDisagreed: judges.length > 1 && yes !== 0 && yes !== judges.length,
-        answer: r.answer,
-        packTokens: r.packTokens,
-        readerMs,
-      };
-    } catch (e) {
-      return {
-        ...base,
-        got: null,
-        stamp: "ERROR",
-        absence: isNone ? false : null,
-        protocolFailure: false,
-        routing: isNone ? null : false,
-        sameBlock: scorable ? false : null,
-        answerOk: scorable ? false : null,
-        usable: scorable ? false : null,
-        judges: [],
-        judgeDisagreed: false,
-        answer: "",
-        packTokens: 0,
-        readerMs: Date.now() - started,
-        error: e instanceof Error ? e.message : String(e),
-      };
-    } finally {
-      done++;
-      if (done % 10 === 0) console.error(`  ${done}/${work.length}`);
-    }
-  });
+  const {rows, corpusCommit, stale} = await evaluateRows({all, labels, runs, concurrency, model, k, reader: modelReader, panel});
 
   const pct = (n: number, d: number) => (d === 0 ? null : Number(((n / d) * 100).toFixed(1)));
   const score = (key: "routing" | "sameBlock" | "absence" | "answerOk" | "usable") => {
@@ -409,9 +417,8 @@ async function main(): Promise<void> {
     const ok = scored.filter((r) => r[key] === true).length;
     return { ok, of: scored.length, pct: pct(ok, scored.length) };
   };
-  // Per-run spread, because one run is a sample and this project has already measured a reader
-  // swinging 47-98% across runs. A single figure with no dispersion invites a 3-point
-  // difference to be read as a real difference.
+  // Per-run spread, because one run is a sample. A single figure with no dispersion invites a
+  // small difference to be read as a real difference.
   const perRun = Array.from({ length: runs }, (_, i) => {
     const sub = rows.filter((r) => r.run === i && r.answerOk !== null);
     return pct(sub.filter((r) => r.answerOk).length, sub.length);
@@ -486,7 +493,7 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((e) => {
+if ((typeof require !== "undefined" && require.main === module) || (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href)) main().catch((e) => {
   console.error(e);
   process.exit(1);
 });

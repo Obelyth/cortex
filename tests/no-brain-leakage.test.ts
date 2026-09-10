@@ -37,6 +37,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { SECRETS } from "../lib/redact";
 import { SKIP_NAME, SKIP_PREFIX } from "../lib/corpus";
+import { substringHits, unescaped } from "./helpers/export-scan";
 
 const BRAIN = process.env.BRAIN_DIR ?? join(process.cwd(), "..", "brain");
 const REPO = process.cwd();
@@ -53,7 +54,7 @@ if (!present && process.env.REQUIRE_EXPORT_GATE === "1") {
 }
 
 /** Directories whose contents ship. node_modules and build output are not ours to police. */
-const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template", ".github"];
+const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template", "public", ".github"];
 /**
  * The repo root is scanned BY EXTENSION, not by allowlist. An allowlist of five names exempted
  * every root file nobody thought to add — DESIGN.md at 23 KB, package.json, the sonar and vitest
@@ -62,9 +63,6 @@ const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", 
  * (walking node_modules and .git would be absurd); files do not.
  */
 const SCAN_ROOT_SKIP = new Set(["package-lock.json"]);
-
-/** This file necessarily describes the leak it prevents, so it cannot be its own subject. */
-const SELF = "tests/no-brain-leakage.test.ts";
 
 /**
  * NOTHING SHIPPED IS EXEMPT. On the private side this gate excluded tests/hard-*.test.ts and
@@ -97,9 +95,12 @@ function repoSources(): Array<[string, string]> {
     if (statSync(join(REPO, f)).isFile()) files.push(f);
   }
   return files
-    .filter((f) => f !== SELF)
-    .filter((f) => /\.(ts|tsx|js|mjs|jsx|css|md|json|sql|sh|py|yml|yaml|command|txt)$/.test(f))
-    .map((f) => [f, readFileSync(join(REPO, f), "utf8")] as [string, string]);
+    .filter((f) => /\.(ts|tsx|js|cjs|mjs|jsx|css|md|json|sql|sh|py|yml|yaml|command|txt|example|properties|svg|service|timer)$/.test(f))
+    .flatMap((f) => {
+      const raw = readFileSync(join(REPO, f), "utf8");
+      const decoded = unescaped(raw);
+      return (decoded === raw ? [[f, raw]] : [[f, raw], [f, decoded]]) as Array<[string, string]>;
+    });
 }
 
 /** Real note paths, live and archived. Archive counts double: it is the least-reviewed material. */
@@ -255,6 +256,12 @@ describe("CSS_VAR — the identifier shape the credential extractor excludes", (
   });
 });
 
+describe("export gate source coverage", () => {
+  it("includes its own shipped source in the privacy scan", () => {
+    expect(repoSources().some(([file]) => file === "tests/no-brain-leakage.test.ts")).toBe(true);
+  });
+});
+
 if (!present) {
   // VISIBLE, not silent. skipIf alone shrank the reported test count and said nothing, so a run
   // without the brain looked identical to a run that had checked everything.
@@ -294,10 +301,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
    * matches none of them — every one of those is the note's name, and six real ones were green
    * here on 2026-09-03 while sitting in lib/ and tests/ on main.
    *
-   * The shapes above are this repo's own fixtures, deliberately. The first draft of this comment
-   * illustrated them with the six REAL names it had just removed, and the SELF exclusion two
-   * screens up meant this was the one file where that could not be caught — a gate cannot be its
-   * own subject. An example is not worth a disclosure.
+   * The examples above are synthetic. This test file is scanned too: explanations and fixtures
+   * must pass the same privacy checks as every other shipped source file.
    *
    * So the STEM is policed too, and it is the stem that discloses: a directory prefix and an
    * extension are format, and a reader who wants the note does not need either.
@@ -339,19 +344,7 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
   it("no distinctive line from any real note appears in any shipped source file", () => {
     const lines = brainLines();
     const sources = repoSources();
-    const hits: string[] = [];
-
-    for (const [file, text] of sources) {
-      if (text.length === 0) continue;
-      for (const [line, origin] of lines) {
-        const at = text.indexOf(line);
-        if (at < 0) continue;
-        const at1 = text.slice(0, at).split("\n").length;
-        // Coordinates only. The matching text is exactly what must not be reproduced, including
-        // here — printing it would put the private line into the CI log that proves it leaked.
-        hits.push(`${file}:${at1} reproduces a line from ${origin}`);
-      }
-    }
+    const hits = substringHits(sources, lines).map(({file,line}) => `${file}:${line}`);
 
     expect(hits, `verbatim brain content found in shipped source:\n  ${hits.join("\n  ")}`).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getFile, putFile, listTree, compareCommits } from "../lib/github";
-import { isLive, isSidecar } from "../lib/corpus";
+import { isLive } from "../lib/corpus";
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
@@ -13,7 +13,7 @@ function mockFetchOnce(status: number, body: unknown) {
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn());
   vi.stubEnv("GITHUB_TOKEN", "test-pat");
-  vi.stubEnv("BRAIN_REPO", "acme/brain");
+  vi.stubEnv("BRAIN_REPO", "example-owner/brain");
   vi.stubEnv("BRAIN_BRANCH", "main");
 });
 
@@ -24,7 +24,7 @@ describe("getFile", () => {
     expect(f).toEqual({ path: "profile.md", content: "hello", sha: "abc123" });
     const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe(
-      "https://api.github.com/repos/acme/brain/contents/profile.md?ref=main"
+      "https://api.github.com/repos/example-owner/brain/contents/profile.md?ref=main"
     );
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer test-pat");
   });
@@ -197,8 +197,8 @@ describe("compareCommits", () => {
         { filename: "notes/real.md", status: "removed" },
       ],
     });
-    const d = await compareCommits("aaa", "bbb", (p) => isLive(p) || isSidecar(p));
-    expect(d.changed).toEqual(["tools/atlas-snapshot.json"]);
+    const d = await compareCommits("aaa", "bbb", isLive);
+    expect(d.changed).toEqual([]);
     expect(d.removed).toEqual(["notes/real.md"]);
   });
 

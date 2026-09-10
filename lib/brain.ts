@@ -1,14 +1,16 @@
 import { randomBytes } from "node:crypto";
 import type { BrainFile } from "./github";
 import { getFile, listTree, putFile } from "./github";
-import { isLive, loadCorpus } from "./corpus";
-import { buildRouter, safeText, storableText, MAX_DESCRIPTION, type Temperature } from "./frontmatter";
+import { commitProposalOperation, type ProposalOperation } from "./proposal-git";
+import { isLive, loadCorpus, type LoadCorpusOptions } from "./corpus";
+import { buildRouter, routerCut, safeText, storableText, MAX_DESCRIPTION, ORDER, type Temperature } from "./frontmatter";
 import { mirrorStore } from "./mirror";
 import { logDigest, logSections } from "./digest";
 import { logNoteAccess } from "./access";
-import { bubbleStore, renderBubble } from "./bubble";
+import { bubbleStore, bubbleView, type BubbleRead } from "./bubble";
 import { redact } from "./redact";
 import { normaliseProject, mentionsProject } from "./project";
+import { utf8Bytes, utf8Prefix } from "./utf8";
 
 /**
  * Write policy: what a caller may create or overwrite. Deliberately narrow.
@@ -23,21 +25,27 @@ import { normaliseProject, mentionsProject } from "./project";
  * Archive is now what its name says: read-only history. Refusing the write loudly is the honest
  * half of the fix — a caller that cannot save to archive/ learns immediately, rather than a
  * month later when the note it "saved" cannot be found.
+ *
+ * `history/` IS here, and for exactly the reason archive/ is not. History pages are live notes:
+ * corpus.ts never skipped the prefix, so they are already retrieved, mirrored, scored and routed.
+ * Leaving them out of the write and read policies would have made them the mirror image of the
+ * archive bug — readable by every search and openable by none, with brain_read refusing the very
+ * path its own citations name. The split that creates them writes through this policy too.
  */
-const PATH_RE = /^(profile\.md|INDEX\.md|(projects|notes|log)\/[A-Za-z0-9._-]+\.md)$/;
+const PATH_RE = /^(profile\.md|INDEX\.md|(projects|notes|log|history)\/[A-Za-z0-9._-]+\.md)$/;
 
 /** Read policy: the write set PLUS the archive. Reading superseded material by exact path is
  *  fine and sometimes necessary; what is refused is pretending it is a live place to put things. */
 const READ_PATH_RE =
-  /^(profile\.md|INDEX\.md|(projects|notes|log)\/[A-Za-z0-9._-]+\.md|archive\/[A-Za-z0-9._/-]+\.md)$/;
+  /^(profile\.md|INDEX\.md|(projects|notes|log|history)\/[A-Za-z0-9._-]+\.md|archive\/[A-Za-z0-9._/-]+\.md)$/;
 
 export function validatePath(path: string): void {
   if (!PATH_RE.test(path) || path.includes("..")) {
     throw new Error(
       READ_PATH_RE.test(path)
         ? `${path} is archived history and cannot be written to. The archive is read-only: ` +
-          `write to projects/*.md, notes/*.md or log/*.md instead.`
-        : `Invalid brain path: ${path}. Allowed: profile.md, INDEX.md, projects/*.md, notes/*.md, log/*.md`
+          `write to projects/*.md, notes/*.md, log/*.md or history/*.md instead.`
+        : `Invalid brain path: ${path}. Allowed: profile.md, INDEX.md, projects/*.md, notes/*.md, log/*.md, history/*.md`
     );
   }
 }
@@ -60,7 +68,7 @@ export const MAX_WRITE_CHARS = 500_000;
 export function validateReadPath(path: string): void {
   if (!READ_PATH_RE.test(path) || path.includes("..")) {
     throw new Error(
-      `Invalid brain path: ${path}. Allowed: profile.md, INDEX.md, projects/*.md, notes/*.md, log/*.md, archive/**.md`
+      `Invalid brain path: ${path}. Allowed: profile.md, INDEX.md, projects/*.md, notes/*.md, log/*.md, history/*.md, archive/**.md`
     );
   }
 }
@@ -169,14 +177,47 @@ export function cutRecentDays(
     const text = files.get(`log/${d}.md`)!;
     // A day that would overflow is digested, and the walk CONTINUES — one enormous Tuesday must
     // not hide the three short days behind it, which a `break` here would do.
-    if (spent + text.length <= budgetBytes) {
+    if (spent + utf8Bytes(text) <= budgetBytes) {
       expand.push(d);
-      spent += text.length;
+      spent += utf8Bytes(text);
     } else {
       elide.push(d);
     }
   }
   return { expand, elide };
+}
+
+export interface ProjectLogSection {
+  date: string;
+  path: string;
+  section: ReturnType<typeof logSections>[number];
+  /** Stable discovery position for equal or malformed stamps. */
+  discovery: number;
+}
+
+/** Project entries newest-first for admission. Callers may reorder admitted entries to display. */
+export function projectLogSections(
+  dates: string[],
+  files: Map<string, string>,
+  project: string
+): ProjectLogSection[] {
+  const found: ProjectLogSection[] = [];
+  let discovery = 0;
+  for (const date of dates) {
+    const path = `log/${date}.md`;
+    const text = files.get(path);
+    if (!text) continue;
+    for (const section of logSections(text)) {
+      if (mentionsProject(section.tags, project)) found.push({ date, path, section, discovery });
+      discovery++;
+    }
+  }
+  const stamp = (x: ProjectLogSection): number => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(x.date) || !/^\d{2}:\d{2}$/.test(x.section.time)) return Number.NEGATIVE_INFINITY;
+    const parsed = Date.parse(`${x.date}T${x.section.time}:00Z`);
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  };
+  return found.sort((a, b) => stamp(b) - stamp(a) || a.discovery - b.discovery);
 }
 
 /**
@@ -203,6 +244,41 @@ export function cutRecentDays(
  */
 export const ROUTER_BUDGET_BYTES = 28_000;
 
+/** Complete PROFILE section ceiling, including its heading and clipping notice. */
+export const PROFILE_BUDGET_BYTES = 8_000;
+/** Complete brain_context reply ceiling. Section ceilings leave room for its safety/footer envelope. */
+export const CONTEXT_BUDGET_BYTES = 50_000;
+
+export type ContextBubbleOutcome =
+  | { state: "read"; read: BubbleRead }
+  | { state: "absent" }
+  | { state: "failed" };
+
+export interface ContextInputs {
+  corpus: Awaited<ReturnType<typeof loadCorpus>>;
+  bubble: ContextBubbleOutcome;
+  scores: Array<{ path: string; temperature: Temperature }> | null;
+  project?: string;
+  nonce: string;
+}
+
+export interface ContextPreview {
+  text: string;
+  bytes: number;
+  served: string[];
+  profileBytes: number;
+  routerBytes: number;
+  bubbleBytes: number;
+  recentBytes: number;
+  routerRows: number;
+  droppedRows: number;
+  coldRows: number;
+  expandedDays: string[];
+  digestedDays: string[];
+  bubble: "live" | "empty" | "absent" | "failed";
+  ranked: boolean;
+}
+
 /**
  * The boot call.
  *
@@ -216,10 +292,10 @@ export const ROUTER_BUDGET_BYTES = 28_000;
  * verbatim log answered "what has been written down lately" when the question a boot call actually
  * asks is "what were we doing".
  *
- * Now: profile in full, the router (paths WITH descriptions), the two most recent days that exist
- * in full, and every older day as one derived line. Nothing became unreachable — an elided day is
- * named, digested, and one `brain_read` away, which is stated in the output rather than left for
- * the reader to work out.
+ * Now: a bounded profile head with an explicit full-note route when clipping is necessary, the
+ * router (paths WITH descriptions), recent days admitted under their complete section budget,
+ * and every other day as one derived line. Nothing became unreachable — an elided day is named,
+ * digested, and one `brain_read` away, which is stated in the output.
  *
  * ONE COMMIT, ONE SNAPSHOT. It now reads the corpus tarball instead of making nine Contents API
  * calls. That is fewer requests, and more importantly every part of the reply comes from the same
@@ -232,7 +308,7 @@ export const ROUTER_BUDGET_BYTES = 28_000;
  * router stays FULL either way: it is the index, one line per note, and a map that hid the other
  * roads would be a worse map. Unscoped (no argument) is byte-for-byte the phase-3 boot call.
  */
-export async function getContext(project?: string): Promise<string> {
+async function gatherContextInputs(project?: string, opts: LoadCorpusOptions = {}): Promise<ContextInputs> {
   // "" means unscoped — every downstream branch tests `scope` truthiness, so a caller passing an
   // empty or whitespace name gets the full boot rather than a scope that matches nothing.
   const scope = project ? normaliseProject(project) : "";
@@ -242,9 +318,11 @@ export async function getContext(project?: string): Promise<string> {
   const store = bubbleStore();
   const scoreStore = mirrorStore();
   const [corpus, bubbleOutcome, scores] = await Promise.all([
-    loadCorpus(),
+    // The request deadline rides into the corpus load; the bubble and the scores keep their own
+    // 10 s ceilings, which sit inside any budget the corpus could have.
+    loadCorpus(false, opts),
     store
-      ? store.open().then(
+      ? store.open(scope ? { project: scope, includeGeneral: true } : undefined).then(
           (read) => ({ state: "read" as const, read }),
           (e) => {
             console.error(`[bubble] boot read failed, expanding logs instead: ${String(e)}`);
@@ -260,26 +338,47 @@ export async function getContext(project?: string): Promise<string> {
     scoreStore ? scoreStore.scores().catch(() => null) : Promise.resolve(null),
   ]);
 
+  return { corpus, bubble: bubbleOutcome, scores, project: scope || undefined, nonce: randomBytes(4).toString("hex") };
+}
+
+/** Pure construction: no model calls and no access telemetry. */
+export function renderContext(i: ContextInputs): ContextPreview {
+  const { corpus, scores } = i;
+  const scope = i.project ? normaliseProject(i.project) : "";
   const temps = new Map<string, { temperature: Temperature }>();
   for (const s of scores ?? []) temps.set(s.path, { temperature: s.temperature });
 
   // Per-request, so a note written yesterday cannot close a fence it has never been shown —
   // the same unforgeable-boundary rule ask.ts and proposals.ts already follow.
-  const nonce = randomBytes(4).toString("hex");
+  const nonce = i.nonce;
   const suspect: string[] = [];
   /** Every note-derived body that reaches the caller goes through here: redacted like any other
    *  egress, and checked for boundary forgery. */
-  const emit = (path: string, text: string): string => {
-    if (BOUNDARY_RE.test(text)) suspect.push(path);
+  const emit = (path: string, text: string, record = true): string => {
+    if (record && BOUNDARY_RE.test(text) && !suspect.includes(path)) suspect.push(path);
     return redact(text);
   };
 
   const parts: string[] = [];
   const profile = corpus.files.get("profile.md");
-  parts.push(
-    "# PROFILE\n\n" + (profile === undefined ? "(profile.md missing)" : emit("profile.md", profile))
-  );
-  parts.push(buildRouter(corpus.files, temps, ROUTER_BUDGET_BYTES));
+  let profileSection: string;
+  if (profile === undefined) {
+    profileSection = "# PROFILE\n\n(profile.md missing)";
+  } else {
+    const safeProfile = emit("profile.md", profile, false);
+    const full = `# PROFILE\n\n${safeProfile}`;
+    if (utf8Bytes(full) <= PROFILE_BUDGET_BYTES) profileSection = full;
+    else {
+      const note = `\n\n_(PROFILE HEAD ONLY · ${utf8Bytes(safeProfile)} UTF-8 bytes total · brain_read profile.md for the full note)_`;
+      const allowance = PROFILE_BUDGET_BYTES - utf8Bytes(`# PROFILE\n\n${note}`);
+      profileSection = `# PROFILE\n\n${utf8Prefix(safeProfile, allowance)}${note}`;
+    }
+    if (BOUNDARY_RE.test(profileSection)) suspect.push("profile.md");
+  }
+  parts.push(profileSection);
+  const routerSection = buildRouter(corpus.files, temps, ROUTER_BUDGET_BYTES);
+  const router = routerCut(corpus.files, temps, ROUTER_BUDGET_BYTES);
+  parts.push(routerSection);
 
   // THE BUBBLE REPLACES THE RAW LOG DUMP (spec §7.3) — when it has anything to say. Working
   // state answers "what were we doing"; seven days of verbatim log was always a poor proxy for
@@ -287,7 +386,8 @@ export async function getContext(project?: string): Promise<string> {
   // phase 2 did, so an empty (or absent, on a zero-env deploy, or failing) bubble degrades to
   // the old behaviour: expand recent days under the byte budget. One question, best available
   // answerer. When scoped, the bubble shows only this project's items plus the general ones.
-  const bubbleSection = bubbleOutcome.state === "read" ? renderBubble(bubbleOutcome.read, scope || undefined) : "";
+  const bubbleRendered = i.bubble.state === "read" ? bubbleView(i.bubble.read, scope || undefined) : { text: "", usableItems: 0, renderedItems: 0 };
+  const bubbleSection = bubbleRendered.text;
 
   // Only days that exist are candidates, so a quiet weekend does not spend the budget deciding
   // about absent files instead of the days that actually have something in them.
@@ -300,32 +400,21 @@ export async function getContext(project?: string): Promise<string> {
   let expandedDays: string[] = [];
   let recentFooter: string;
 
+  let digestedDays: string[] = [];
   if (scope) {
     // Project-scoped recent: only the log ENTRIES whose `## HH:MM · tags` heading names the
     // project, across the window, under the same byte budget — the boot-call analogue of what
     // brain_handoff already does with a day log. A scoped boot answers "what was I last doing on
     // THIS" without the other projects' weeks riding along. Days are NOT elided-by-bubble here:
     // the whole point of a scope is to surface this project's recent trail, not to defer it.
-    const blocks: string[] = [];
-    let spent = 0;
-    let cut = 0;
-    let matched = 0;
-    for (const d of present) {
-      let contributed = false;
-      for (const s of logSections(corpus.files.get(`log/${d}.md`)!)) {
-        if (!mentionsProject(s.tags, scope)) continue;
-        matched++;
-        const block = `--- ${nonce} log/${d}.md § ${s.time} · ${safeText(s.tags, 80)} ---\n${emit(`log/${d}.md`, s.text)}`;
-        if (spent + block.length > RECENT_BUDGET_BYTES) {
-          cut++;
-          continue;
-        }
-        blocks.push(block);
-        spent += block.length;
-        contributed = true;
-      }
-      if (contributed) expandedDays.push(d);
-    }
+    const candidates = projectLogSections(present, corpus.files, scope).map(({ date, path, section: s }) => ({
+      date,
+      path,
+      suspect: BOUNDARY_RE.test(s.text),
+      block: `--- ${nonce} ${path} § ${s.time} · ${safeText(s.tags, 80)} ---\n${emit(path, s.text, false)}`,
+    }));
+    const blocks: Array<{ date: string; path: string; suspect: boolean; block: string }> = [];
+    const matched = candidates.length;
     const heading = `# RECENT (last ${RECENT_DAYS} days · ${safeText(scope, 40)})`;
     if (matched === 0) {
       parts.push(
@@ -333,38 +422,79 @@ export async function getContext(project?: string): Promise<string> {
       );
       recentFooter = `0 ${scope} entries in ${present.length} day${present.length === 1 ? "" : "s"}`;
     } else {
+      for (const candidate of candidates) {
+        const next = [...blocks, candidate];
+        const omitted = matched - next.length;
+        const note = omitted > 0 ? `\n\n(${omitted} more ${safeText(scope, 40)} entr${omitted === 1 ? "y" : "ies"} did not fit — brain_read the day log)` : "";
+        if (utf8Bytes(`${heading}\n\n${next.map((x) => x.block).join("\n\n")}${note}`) <= RECENT_BUDGET_BYTES) blocks.push(candidate);
+      }
+      const cut = matched - blocks.length;
+      for (const block of blocks) if (block.suspect && !suspect.includes(block.path)) suspect.push(block.path);
+      expandedDays = [...new Set(blocks.map((x) => x.date))];
       const cutNote = cut > 0 ? `\n\n(${cut} more ${safeText(scope, 40)} entr${cut === 1 ? "y" : "ies"} did not fit — brain_read the day log)` : "";
-      parts.push(`${heading}\n\n${blocks.join("\n\n")}${cutNote}`);
+      parts.push(`${heading}\n\n${blocks.map((x) => x.block).join("\n\n")}${cutNote}`);
       recentFooter = `${matched - cut} ${scope} entr${matched - cut === 1 ? "y" : "ies"} shown${cut ? `, ${cut} deferred` : ""}`;
     }
   } else {
     // Unscoped: a live bubble elides every day to its digest line — one brain_read away, never
     // verbatim at boot. Otherwise the budget walk decides (cutRecentDays, shared with the heat
     // view). Unchanged from phase 3.
-    const { expand, elide } = bubbleSection
-      ? { expand: [] as string[], elide: [...present] }
-      : cutRecentDays(present, corpus.files);
-    expandedDays = expand;
-    if (present.length > 0) {
+    const raw = new Map(present.map((d) => [d, {
+      body: `--- ${nonce} log/${d}.md ---\n${emit(`log/${d}.md`, corpus.files.get(`log/${d}.md`)!, false)}`,
+      suspect: BOUNDARY_RE.test(corpus.files.get(`log/${d}.md`)!),
+    }]));
+    const digest = new Map(present.map((d) => {
+      const { description } = logDigest(corpus.files.get(`log/${d}.md`)!);
+      return [d, `--- log/${d}.md · ${safeText(description, MAX_DESCRIPTION)} · not expanded — brain_read log/${d}.md for the full day ---`];
+    }));
+    const renderRecent = (expand: Set<string>, digested: Set<string>) => {
+      const omitted = present.filter((d) => !expand.has(d) && !digested.has(d));
       const blocks = [
-        ...expand.map(
-          (d) =>
-            `--- ${nonce} log/${d}.md ---\n${emit(`log/${d}.md`, corpus.files.get(`log/${d}.md`)!)}`
-        ),
-        ...elide.map((d) => {
-          const { description } = logDigest(corpus.files.get(`log/${d}.md`)!);
-          // Through safeText like every other note-derived string that reaches a caller. This was the
-          // one render site that interpolated raw, so the line the budget uses to REPLACE an
-          // oversized day had no ceiling of its own.
-          return `--- log/${d}.md · ${safeText(description, MAX_DESCRIPTION)} · not expanded — brain_read log/${d}.md for the full day ---`;
-        }),
+        ...present.filter((d) => expand.has(d)).map((d) => raw.get(d)!.body),
+        ...present.filter((d) => digested.has(d)).map((d) => digest.get(d)!),
       ];
-      parts.push(`# RECENT (last ${RECENT_DAYS} days)\n\n${blocks.join("\n\n")}`);
+      if (omitted.length) {
+        blocks.push(
+          `(${omitted.length} day digest${omitted.length === 1 ? "" : "s"} did not fit — open with ` +
+            omitted.map((d) => `brain_read log/${d}.md`).join(", ") + ")"
+        );
+      }
+      return `# RECENT (last ${RECENT_DAYS} days)\n\n${blocks.join("\n\n")}`;
+    };
+    // Establish a bounded digest baseline first. Even seven fixed-count lines can exceed the
+    // section ceiling when their capped tags are multibyte, so every digest and the discovery
+    // notice compete inside the same complete rendered document.
+    const digested = new Set<string>();
+    for (const d of present) {
+      const next = new Set(digested).add(d);
+      if (utf8Bytes(renderRecent(new Set(), next)) <= RECENT_BUDGET_BYTES) digested.add(d);
     }
-    recentFooter = `${expand.length} day${expand.length === 1 ? "" : "s"} expanded, ${elide.length} digested`;
+    const selected = new Set<string>();
+    if (bubbleRendered.usableItems === 0) {
+      for (const d of present) {
+        if (!digested.has(d)) continue;
+        const next = new Set(selected).add(d);
+        const nextDigested = new Set(digested);
+        nextDigested.delete(d);
+        if (utf8Bytes(renderRecent(next, nextDigested)) <= RECENT_BUDGET_BYTES) {
+          selected.add(d);
+          digested.delete(d);
+        }
+      }
+    }
+    const expand = present.filter((d) => selected.has(d));
+    const elide = present.filter((d) => digested.has(d));
+    const omitted = present.filter((d) => !selected.has(d) && !digested.has(d));
+    expandedDays = expand;
+    digestedDays = elide;
+    for (const d of expand) {
+      if (raw.get(d)!.suspect) suspect.push(`log/${d}.md`);
+    }
+    if (present.length > 0) {
+      parts.push(renderRecent(selected, digested));
+    }
+    recentFooter = `${expand.length} day${expand.length === 1 ? "" : "s"} expanded, ${elide.length} digested${omitted.length ? `, ${omitted.length} omitted` : ""}`;
   }
-
-  logNoteAccess(["profile.md", ...expandedDays.map((d) => `log/${d}.md`)], "brain_context", "boot");
 
   const body = parts.join("\n\n");
   // Note contents are DATA. Said once, at the top, where a reader meets it before the material
@@ -388,14 +518,45 @@ export async function getContext(project?: string): Promise<string> {
     );
   }
   const tail = warnings.length ? `\n${warnings.join("\n")}` : "";
-  return (
+  const compose = (tokens: number) =>
     `${head}\n\n${body}\n\n---\n` +
     `brain @${corpus.sha.slice(0, 12)} · ${corpus.files.size} notes routed · ` +
     (scope ? `scoped to ${safeText(scope, 40)} · ` : "") +
     `${recentFooter} · ` +
-    (bubbleSection ? "bubble live · " : bubbleOutcome.state === "failed" ? "bubble unavailable — brain_bubble may still work · " : "") +
-    `~${Math.round(body.length / 4)} tokens. Open any note with brain_read, or brain_corpus for a set.${tail}`
-  );
+    (bubbleRendered.usableItems > 0 ? "bubble live · " : i.bubble.state === "failed" ? "bubble unavailable — brain_bubble may still work · " : "") +
+    `~${tokens} tokens. Estimated from UTF-8 bytes. Open any note with brain_read, or brain_corpus for a set.${tail}`;
+  let text = compose(0);
+  for (let pass = 0; pass < 3; pass++) text = compose(Math.round(utf8Bytes(text) / 4));
+  const bytes = utf8Bytes(text);
+  if (bytes > CONTEXT_BUDGET_BYTES) {
+    throw new RangeError(`brain_context assembly exceeded its ${CONTEXT_BUDGET_BYTES}-byte ceiling`);
+  }
+  return {
+    text,
+    bytes,
+    served: [...(profile === undefined ? [] : ["profile.md"]), ...expandedDays.map((d) => `log/${d}.md`)],
+    profileBytes: utf8Bytes(profileSection),
+    routerBytes: utf8Bytes(routerSection),
+    bubbleBytes: utf8Bytes(bubbleSection),
+    recentBytes: parts.find((part) => part.startsWith("# RECENT")) ? utf8Bytes(parts.find((part) => part.startsWith("# RECENT"))!) : 0,
+    routerRows: router.rendered.length,
+    droppedRows: router.dropped.length,
+    coldRows: router.cold.length,
+    expandedDays,
+    digestedDays,
+    bubble: i.bubble.state === "read" ? (bubbleRendered.usableItems > 0 ? "live" : "empty") : i.bubble.state,
+    ranked: scores !== null && scores.length > 0,
+  };
+}
+
+export async function previewContext(project?: string, opts: LoadCorpusOptions = {}): Promise<ContextPreview> {
+  return renderContext(await gatherContextInputs(project, opts));
+}
+
+export async function getContext(project?: string, opts: LoadCorpusOptions = {}): Promise<string> {
+  const preview = await previewContext(project, opts);
+  logNoteAccess(preview.served, "brain_context", "boot");
+  return preview.text;
 }
 
 
@@ -423,8 +584,8 @@ export async function readNote(path: string): Promise<string> {
  * it did. Feeding its output back into writeNote() therefore saves the redaction INTO the brain,
  * which is exactly what happened on 2026-08-17. The console's inbox buttons read through
  * readNote(), edited the frontmatter, and wrote the result back with mode `replace`. One press on
- * a project page destroyed two real lines — a `TOKEN="$(...)"` shell assignment and a
- * `CONNECTOR_PATH_SECRET=<value>` launch override, both of them documentation ABOUT
+ * the biggest project page destroyed two real lines — `TOKEN="$(security find-generic-password …)"`
+ * and a `CONNECTOR_PATH_SECRET=devpreview` launch override, both of them documentation ABOUT
  * credential handling rather than credentials — and baked the "values in this file were redacted
  * on the way out" footer into the note as if the note said it. Recovered from git.
  *
@@ -451,8 +612,10 @@ async function regenerateBareIndex(): Promise<void> {
     if (!groups.has(dir)) groups.set(dir, []);
     groups.get(dir)!.push(p);
   }
-  const order = ["Root", "projects", "notes", "log", "archive"];
-  const body = order
+  // The router's own order, imported rather than repeated. This generator DROPS any directory
+  // not on the list, so a second copy here is a prefix that is routed and retrievable but absent
+  // from the catalogue a human browses on GitHub — silent, and exactly what happened to history/.
+  const body = ORDER
     .filter((d) => groups.has(d))
     .map((d) => `## ${d}\n` + groups.get(d)!.sort().map((p) => `- ${p}`).join("\n"))
     .join("\n\n");
@@ -508,8 +671,10 @@ export async function writeNote(
   path: string,
   content: string,
   mode: "create" | "replace" | "append" | "edit",
-  find?: string
-): Promise<{ path: string; commitSha: string; indexWarning?: string }> {
+  find?: string,
+  operation?: ProposalOperation,
+  beforeOperationWrite?: () => Promise<void>
+): Promise<{ path: string; commitSha: string; indexWarning?: string; outcome?: "committed" | "canceled" }> {
   validatePath(path);
   // The MCP door already refuses these at the zod schema; this covers every direct importer
   // with the same contract, and runs before the first GitHub round-trip costs anything.
@@ -524,6 +689,15 @@ export async function writeNote(
       `find too large (${find.length} chars, limit ${MAX_WRITE_CHARS}) — pass only the exact ` +
         `text to replace, not the whole note`
     );
+  }
+  if (operation) {
+    if (mode === "edit" || operation.path !== path || operation.mode !== mode) throw new Error("invalid proposal operation");
+    const result = await commitProposalOperation(operation, (existing) => {
+      if (mode === "create" && existing) throw new Error(`${path} already exists — use replace or append.`);
+      if (mode === "replace" && !existing) throw new Error(`${path} does not exist — use create.`);
+      return storableText(mode === "append" ? joinAppend(existing?.content, content, content) : content);
+    }, beforeOperationWrite);
+    return finishProposalWrite(result);
   }
   const existing = await getFile(path);
   if (mode === "create" && existing) {
@@ -573,6 +747,13 @@ export async function writeNote(
   return { path, commitSha, indexWarning };
 }
 
+/** Replaying a receipt repairs the current derived index without replaying a note mutation. */
+export async function finishProposalWrite(result: { path: string; commitSha: string; outcome?: "committed" | "canceled" }): Promise<{ path: string; commitSha: string; indexWarning?: string; outcome?: "committed" | "canceled" }> {
+  validatePath(result.path);
+  if (result.outcome === "canceled") return result;
+  try { await regenerateIndexes(); return result; }
+  catch (e) { return { ...result, indexWarning: e instanceof Error ? e.message : String(e) }; }
+}
 
 export async function capture(
   text: string,

@@ -225,17 +225,13 @@ const HEADING_DIRECTIVE_RE = /\bDo not answer\b/i;
  * Is this text a retraction BANNER, rather than prose that happens to use the word?
  *
  * ONE rule, applied wherever a marker can appear — heading, block body, neighbouring block. An
- * earlier pass fixed headings only, which left the same defect one level down: 22 lines in the
- * corpus say things like "and #12 (superseded settings draft)", "the correction: the sidebar
- * layout is…", "building against a deprecated driver". Every one is a REFERENCE to a correction, not a banner
- * on the text around it, and each was marking live passages dead. A rule that depends on which
+ * earlier pass fixed headings only, which left the same defect one level down: ordinary prose
+ * can refer to a superseded draft or a correction without retracting the surrounding passage.
+ * A rule that depends on which
  * array the text arrived in is not a rule, it is a coincidence.
  *
- * MEASURED BEFORE LOOSENING, because loosening this is the dangerous direction. Across the whole
- * brain: 89 lines carry a marker. 67 are real banners and ALL 67 are ALL-CAPS or bold. 22 are
- * prose references and none is either. Zero real banners depend on any weaker signal — checked
- * specifically for blockquote-only banners, and there are none. So this rule loses nothing that
- * was being caught, which is the only justification for relaxing a safety check.
+ * Banners must use the documented uppercase, bold or directive form. Merely mentioning a
+ * correction is not a retraction. Synthetic tests cover both accepted and refused forms.
  *
  * Per-LINE, because a block can hold a banner and ordinary prose together; one shouted line makes
  * the block a banner.

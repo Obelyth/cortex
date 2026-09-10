@@ -28,15 +28,13 @@ describe("the setup guide", () => {
       path.join(HERE, "../app/s/[secret]/console/settings/page.tsx"),
       "utf8"
     );
-    for (const v of ["GUEST_PATH_SECRET", "MCP_TOKEN"]) {
-      const reads = [...page.matchAll(new RegExp(`process\\.env\\.${v}[^\\n]*`, "g"))].map(
-        (m) => m[0]
-      );
-      expect(reads.length, `${v} is read by the settings page`).toBeGreaterThan(0);
-      for (const r of reads) {
-        expect(r, `${v} must be read as presence only`).toMatch(/Boolean\(|\?\.trim\(\)/);
-      }
-    }
+    const readiness = readFileSync(
+      path.join(HERE, "../app/s/[secret]/console/settings/readiness.ts"),
+      "utf8"
+    );
+    expect(page).toContain('featureReadiness("GUEST_PATH_SECRET", process.env)');
+    expect(page).toContain('featureReadiness("MCP_TOKEN", process.env)');
+    expect(readiness).toMatch(/!env\[name\]\?\.trim\(\)/);
     // And no env value is ever interpolated into rendered output, either file.
     for (const f of [src, page]) {
       expect(f).not.toMatch(/\{\s*process\.env\.[A-Z_]+\s*\}/);
@@ -83,18 +81,21 @@ const wireSrc = readFileSync(
 describe("the wire-up picker", () => {
   it("derives the path secret from the address bar, never from the server", () => {
     expect(wireSrc).toContain("window.location.pathname");
-    // No env read is even possible to render from — a "use client" file has no server env,
-    // and none is smuggled through props: the only prop is a boolean.
+    // No env read is even possible to render from — a "use client" file has no server env.
+    // Props carry only booleans, safe missing variable names and the family read state.
     expect(wireSrc).not.toContain("process.env");
-    expect(wireSrc).toMatch(/guestOpen\s*}:\s*{\s*guestOpen:\s*boolean\s*}/);
+    expect(wireSrc).toContain("guestMissing?: readonly string[]");
+    expect(wireSrc).toContain('guestStoreState?: "store" | "unconfigured" | "unreachable"');
   });
 
-  it("renders the mask and copies the real value — never the reverse", () => {
-    // The visible snippet is built with MASK; only the click handler builds with the secret.
+  it("renders the mask until an explicit copy attempt and preserves the real value on rejection", () => {
+    // The normal snippet is built with MASK; only the click handler builds with the secret.
     expect(wireSrc).toMatch(/const shown = w\.snippet\(origin, MASK\)/);
     expect(wireSrc).toMatch(/w\.snippet\(origin, secret\)/);
-    // And the real assembly flows only into the clipboard, not into state or JSX.
-    expect(wireSrc).toMatch(/clipboard\.writeText\(real\)/);
+    expect(wireSrc).toMatch(/copyExactText\(real\)/);
+    // A rejected write becomes the exact, selectable fallback required by the control.
+    expect(wireSrc).toMatch(/setFallback\(result\.fallback\)/);
+    expect(wireSrc).toMatch(/<ClipboardFailure text=\{fallback\}/);
     expect(wireSrc).not.toMatch(/\{real\}/);
   });
 

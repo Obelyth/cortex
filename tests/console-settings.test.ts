@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 /**
  * The settings screen is the console's one control surface, and the screen most tempted to
@@ -73,5 +77,118 @@ describe("the settings screen", () => {
     // retrieval setting, and the row says why in those words.
     expect(learning).toContain("the eval gate is the only door");
     expect(learning).not.toMatch(/send\(\{\s*retrieval/i);
+  });
+});
+
+describe("deployment readiness", () => {
+  it("keeps a partially configured feature unavailable and reports only missing variable names", async () => {
+    const readiness = await import("../app/s/[secret]/console/settings/readiness").catch(() => null);
+    expect(readiness).not.toBeNull();
+    if (!readiness) return;
+    const state = readiness.featureReadiness("SUPABASE_URL", {
+      SUPABASE_URL: "https://private-project.example",
+      SUPABASE_SERVICE_ROLE_KEY: "",
+    });
+    expect(state).toEqual({ ready: false, missing: ["SUPABASE_SERVICE_ROLE_KEY"] });
+    expect(JSON.stringify(state)).not.toContain("private-project");
+  });
+
+  it("wires guest policy availability from the guest family rather than reader settings", () => {
+    expect(page).toContain("guestDoorReadiness.ready && guest.source === \"store\"");
+    expect(page).toContain("storeState: guest.source");
+    expect(page).not.toContain("kvReady: settings.source");
+  });
+
+  it.each([
+    ["CONNECTOR_PATH_SECRET", { CONNECTOR_PATH_SECRET: "path-only", MCP_TOKEN: "" }, "MCP_TOKEN"],
+    ["GUEST_PATH_SECRET", { GUEST_PATH_SECRET: "path-only", MCP_TOKEN: "" }, "MCP_TOKEN"],
+    ["KV_REST_API_URL", { KV_REST_API_URL: "https://private-kv.example", KV_REST_API_TOKEN: "" }, "KV_REST_API_TOKEN"],
+    ["RESEND_API_KEY", { RESEND_API_KEY: "private-mail-key", OPS_ALERT_TO: "" }, "OPS_ALERT_TO"],
+  ] as const)("requires the complete %s feature configuration", async (feature, env, missing) => {
+    const readiness = await import("../app/s/[secret]/console/settings/readiness").catch(() => null);
+    expect(readiness).not.toBeNull();
+    if (!readiness) return;
+    expect(readiness.featureReadiness(feature, env)).toEqual({ ready: false, missing: [missing] });
+  });
+
+  it("renders every exact-note and nested-folder grant by name and removes only the selected entry", async () => {
+    const controls = await import("../app/s/[secret]/console/settings/settings-client");
+    expect(controls.ExactGuestGrants).toBeTypeOf("function");
+    expect(controls.withoutGuestGrant).toBeTypeOf("function");
+    if (!controls.ExactGuestGrants || !controls.withoutGuestGrant) return;
+    const scope = ["projects/", "projects/one.md", "notes/two.md", "notes/team/", "profile.md"];
+    const html = renderToStaticMarkup(React.createElement(controls.ExactGuestGrants, {
+      scope,
+      disabled: false,
+      onChange: () => undefined,
+    }));
+    for (const path of ["projects/one.md", "notes/two.md", "notes/team/", "profile.md"]) expect(html).toContain(path);
+    expect(controls.withoutGuestGrant(scope, "notes/team/")).toEqual([
+      "projects/",
+      "projects/one.md",
+      "notes/two.md",
+      "profile.md",
+    ]);
+  });
+
+  it("renders the bearer-only guest prerequisite in the actual guest rows", async () => {
+    const controls = await import("../app/s/[secret]/console/settings/settings-client");
+    const g = {
+      open: false,
+      missing: ["MCP_TOKEN"],
+      kvReady: true,
+      scope: ["projects/", "notes/team/"],
+      citations: false,
+      dailyAsks: 50,
+      maxK: 8,
+      usedToday: 0,
+      queued: 0,
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(
+        controls.SettingsWrites,
+        null,
+        React.createElement(controls.GuestRows as React.ComponentType<any>, {
+          g,
+          writable: true,
+          storeState: "store",
+        }),
+      ),
+    );
+    expect(html).toContain("notes/team/");
+    expect(html).toMatch(/Door closed[\s\S]*missing MCP_TOKEN/);
+    expect(html).not.toContain("GUEST_PATH_SECRET not set");
+  });
+
+  it("keeps a loaded guest policy operational when only the reader settings family is unreachable", async () => {
+    const controls = await import("../app/s/[secret]/console/settings/settings-client");
+    const g = {
+      open: true,
+      missing: [],
+      storeState: "store",
+      kvReady: true,
+      scope: ["projects/", "notes/allowed.md", "notes/team/"],
+      citations: false,
+      dailyAsks: 25,
+      maxK: 8,
+      usedToday: 4,
+      queued: 0,
+    };
+    const html = renderToStaticMarkup(
+      React.createElement(
+        controls.SettingsWrites,
+        null,
+        React.createElement(controls.GuestRows as React.ComponentType<any>, {
+          g,
+          // These reader-family facts deliberately disagree. GuestRows must not use them.
+          writable: false,
+          storeState: "unreachable",
+        }),
+      ),
+    );
+    expect(html).toMatch(/Door open[\s\S]*4 of 25 asks used today/);
+    expect(html).toContain("notes/team/");
+    expect(html).not.toMatch(/door is closed until the store answers|KV missing/);
+    expect(html).toMatch(/aria-pressed="true" title="stop sharing projects\/"/);
   });
 });

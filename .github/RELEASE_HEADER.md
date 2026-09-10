@@ -1,24 +1,20 @@
-A snapshot of `main` with the full check suite re-run at this tag. Updates ship from `main` ([SECURITY.md](https://github.com/Obelyth/cortex/blob/main/SECURITY.md)).
+This release packages the source at its tag. Read any **Action required** section below before upgrading an existing installation.
 
-**Already running Cortex?** One command pulls what shipped, redeploys, and re-verifies the doors:
+**New installation:** follow the [setup guide](https://github.com/Obelyth/cortex/blob/main/README.md). The protected five-tab dashboard starts with a blank brain: only an empty profile and index, with no sample projects, notes, history, credentials, or selected working context. Basic browsing does not require a paid model key.
 
-```bash
-npm run update
-```
-
-If an **Action required** section appears below, do those steps too — they are the manual part (a new env var, a migration) the one command cannot do for you. No section means no manual steps. To hear about the next release: **Watch → Custom → Releases** on the repo.
-
-The attached `cortex-<tag>.tar.gz` is the exact tree at the tag, packaged by the release workflow with a signed provenance attestation — check it with `gh attestation verify cortex-<tag>.tar.gz --owner Obelyth`.
-
-**New here? Set up in five minutes** (Node 20+, `gh` and `vercel` CLIs logged in):
+The optional interactive wizard needs Node 22.x (tested with 22.23.2), Git, and authenticated GitHub and Vercel CLIs:
 
 ```bash
-npm install
+npm ci
 npm run onboard
 ```
 
-On a Mac, the download can do the prerequisites too: double-click **`Cortex Setup.command`** (first time: right-click it, choose Open) — it installs what is missing, asking before each step, signs you in to GitHub and Vercel, and starts the same wizard.
+The wizard asks before creating a private brain, importing notes, saving provider settings, or deploying. It verifies the production domain before checking the MCP door. Provider grants and optional database setup remain explicit administrator steps; a matching tool roster does not prove model answers or email delivery.
 
-The wizard creates your private brain repo from the included template, asks whether to start fresh or index an existing folder of notes (preview first, then commit), generates your secrets locally, deploys to Vercel, verifies the deployment against the live tool roster, and prints the wiring commands for your devices. Safe to re-run.
+**Database:** use the [pristine bootstrap guide](https://github.com/Obelyth/cortex/blob/main/docs/database-bootstrap.md) only for a new, empty database. Existing installations need a reviewed migration check and forward migration plan, never pristine bootstrap.
+
+**Updates:** `npm run update` is an optional interactive source and deployment helper. Back up notes and database state separately, review local changes and release instructions, and check the resulting deployment. It does not apply database migrations.
+
+The attached `cortex-<tag>.tar.gz` is the tree packaged by the release workflow. Verify its provenance attestation with `gh attestation verify cortex-<tag>.tar.gz --owner Obelyth`. Subscribe to GitHub **Watch → Custom → Releases** for future releases.
 
 ---

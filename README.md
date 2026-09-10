@@ -5,274 +5,146 @@
 
 **One memory, every surface.**
 
-A private markdown brain, served to every surface you trust over MCP —
-with a read path that proves its own citations instead of asking to be trusted.
-
-*Read. Cite. Abstain.*
-
-*Any model may read it. Claude earned the default.*
-
-[**Inside Cortex — the illustrated tour (PDF) →**](docs/inside-cortex.pdf)
-
-<a href="docs/inside-cortex.pdf"><img src="docs/inside-cortex.png" alt="Inside Cortex — answers with receipts. How the second brain actually works." width="720" /></a>
-
-[**Roadmap →**](ROADMAP.md)
+A protected dashboard and MCP server for your private Markdown notes.
 
 [![release](https://img.shields.io/github/v/release/Obelyth/cortex?label=release)](https://github.com/Obelyth/cortex/releases/latest)
 [![ci](https://img.shields.io/github/actions/workflow/status/Obelyth/cortex/ci.yml?branch=main&label=ci)](https://github.com/Obelyth/cortex/actions/workflows/ci.yml)
-[![quality gate](https://sonarcloud.io/api/project_badges/measure?project=cortex&metric=alert_status)](https://sonarcloud.io/summary/overall?id=cortex)
 [![license](https://img.shields.io/github/license/Obelyth/cortex?label=license)](LICENSE)
 
 </div>
 
----
+Cortex keeps durable notes in a private GitHub repository you control. Note writes become Git commits. An optional Supabase database adds a rebuildable notes mirror, working notes, device records, and operations history. Working notes and operations records are not recoverable from the notes repository, so back up that database separately.
 
-Your notes live in a **private GitHub repo** you own — plain markdown, no database, git history as the undo button. This server makes that repo reachable from **Claude Code on any machine, claude.ai on the web, the iPhone app, desktop, and any MCP client you trust** — the same eleven tools, the same corpus, everywhere. Assistants you *don't* trust get a third door: they may ask and propose, never write. Every write is a commit. Every answer is verified against the file it cites.
+The public release starts blank: no personal corpus, example project, sample history, provider credentials, or preselected working project. You can browse and edit notes and preview context without a paid model key. Generating an answer through Ask requires a configured reader provider and may incur charges.
 
-Stateless Next.js on Vercel. Writes go through the Contents API, so every write is a commit. Reads serve from a Supabase Postgres **mirror** of the corpus when one is configured — healed to the git head before serving, rebuildable from one tarball, and falling back to the tarball path whenever it is absent or unwell. Git owns every note.
+## The dashboard
 
-One class of data lives in Postgres and nowhere else: **the bubble** — working state (what is in progress, decisions not yet filed, open questions, handoffs), written deliberately through `brain_bubble`, riding every boot call, and leaving only by being filed into a note, dropped, or aged out after fourteen untouched days. It is the one table a fresh clone of the brain cannot rebuild, which is what the database's point-in-time recovery exists for.
+The protected dashboard has five tabs:
 
-```
-        iOS      Web      Desktop      Claude Code      Cursor · CLIs
-          \       |          |            /                /
-           `------+----------+-----------+---------------'
-                        YOUR ORCHESTRATOR                      guests
-                  Claude first-class · any MCP client        ask · propose
-                    reads · writes · reviews                   (scoped)
-                          |                                      |
-                        CORTEX  ·  MCP  ·  verify  ←─────────────'
-                          |             this repo, deployed on Vercel
-                     your brain         ← private repo · markdown · git
-```
+| Tab | Use it for |
+| --- | --- |
+| Ops | Review readiness and operational receipts; explicitly request available checks, migrations, or deployments. |
+| Overview | See activity and manage Working context. Choose a project, inspect its context, and edit or page through working notes here. |
+| Ask | Browse the notes catalog, open notes, capture or edit content, and optionally ask a reader model a question. |
+| Trends | Inspect recorded usage, memory growth, and retrieval patterns. A new installation has no history to chart. |
+| Settings | Set supported preferences, inspect provider readiness, enter supported configuration, and get client connection instructions. |
 
-## Quickstart
+Working context starts at **None**. Choosing a project is a read-only preview; clearing it does not delete notes or working state. Ask links back to that project's context on Overview. These navigation actions do not queue a job, write a note, or call a model. Writes and operational actions have separate controls.
 
-Three ways to your own copy, same five minutes after any of them — and whichever you pick,
-one command keeps it current later (see [Updating](#updating)):
+There is no public demo site on a deployed instance. Open `/s/<CONNECTOR_PATH_SECRET>/console` on your verified deployment domain and enter `CONSOLE_PASSCODE`. An unstamped browser visiting the bare domain receives a 404. After unlocking, that device can use the bare domain to return to the dashboard. Keep the path secret and passcode private.
 
-- **Use this template** on GitHub — your own repo, no fork relationship — then clone it.
-- Grab a [release](https://github.com/Obelyth/cortex/releases) — a snapshot of `main` with the full check suite re-run at the tag.
-- Or clone this repo directly.
+## Start with a private, blank brain
+
+You need Node **22.x** (tested with **22.23.2**), Git, a GitHub account, and a Vercel account to follow the hosted setup. Provider setup and permission grants are one-time administrator steps; the dashboard cannot grant itself access to your accounts.
+
+1. Make your own copy of [Obelyth/cortex](https://github.com/Obelyth/cortex), using GitHub's template action or a clone. This is the **application source**, not the notes repository. Keep secrets and notes out of it.
+2. Create a separate **private** GitHub repository for the brain. Put the two files from [brain-template](brain-template) at its root and make an initial commit. They contain only an empty `profile.md` and an `INDEX.md` listing that profile. Do not upload the enclosing `brain-template` directory. No other directories are needed until you create notes.
+3. Create a fine-grained GitHub token restricted to that brain repository, with **Contents: Read and write**. Set `BRAIN_REPO` to its `owner/repository` and `BRAIN_BRANCH` to its actual default branch. Do not assume the branch is `main` for an existing repository.
+4. Import your application source into Vercel. In the project's environment settings, set `BRAIN_REPO`, `BRAIN_BRANCH`, `GITHUB_TOKEN`, `MCP_TOKEN`, `CONNECTOR_PATH_SECRET`, and `CONSOLE_PASSCODE` for Production. Generate separate random values for the three access credentials and store them in a password manager. [.env.example](.env.example) explains each exact field name and whether it is a secret or configuration value.
+5. Deploy the configured project. Copy its actual production domain from the Vercel project dashboard, confirm it points to the successful deployment, then open the protected console path above. Never construct a host by guessing a project name.
+6. Open **Settings** and **Ops** to see what is ready and what is unavailable. Missing optional services should remain unconfigured until you want them. No model, database, email account, or guest connector is required to start browsing the private notes repository.
+
+Saving an environment variable does not update an already-running deployment. Deploy the environment where you saved it. If Vercel Deployment Protection blocks an MCP client, review the production access policy in Vercel; the client must be able to reach Cortex's own authentication. Keep preview deployment protection enabled.
+
+### Optional setup wizard
+
+The wizard performs the repository and Vercel steps interactively. Install and sign in to the [GitHub CLI](https://cli.github.com/) and [Vercel CLI](https://vercel.com/docs/cli) first; Vercel CLI 50.5.1 or newer is needed for its authenticated deployment check. Creating a brain through the wizard also requires your Git author name and email to be configured; setup checks this before creating the remote repository. The browser-based steps above do not require local Git configuration.
 
 ```bash
-# needs Node >= 20, plus gh and vercel CLIs (both logged in)
-git clone https://github.com/Obelyth/cortex && cd cortex
-npm install
+git clone https://github.com/Obelyth/cortex.git
+cd cortex
+npm ci
 npm run onboard
 ```
 
-**On a Mac, start from nothing**: download a [release](https://github.com/Obelyth/cortex/releases),
-unzip it, and double-click **`Cortex Setup.command`** (the first time, macOS warns about a file
-from the internet — right-click it and choose Open). It checks for Homebrew, Node, `gh` and
-`vercel`, offers to install whatever is missing — asking before each step — signs you in to
-GitHub and Vercel, and hands off to the same wizard. One line in Terminal does the same without
-a download:
+It checks that an existing brain is private, uses its real default branch, and keeps existing notes. A new brain gets only the blank skeleton. Importing an existing folder is optional, with a preview before an explicit commit confirmation. The wizard generates access credentials, lets you select a Vercel project, lists the field names it will change, and asks before saving settings and deploying production. Existing access credentials are retained by default; rotation requires a separate confirmation.
+
+Before using the connector secret, the wizard checks Vercel's authenticated deployment record and confirms that an assigned production domain resolves to that same project and deployment. It does not follow redirects during the MCP check. A matching tool roster proves that endpoint answered, not that a database is healthy, a model works, or email has been delivered. The wizard makes no paid-model call and never initializes a database.
+
+Pasted and generated credentials are visible in the setup terminal. Use a private terminal, save them securely, and clear its scrollback. Do not paste a setup transcript into an issue or chat.
+
+## Add services when you need them
+
+| Capability | One-time setup |
+| --- | --- |
+| Generated answers | Add a key for an allowlisted reader provider. The default reader uses `ANTHROPIC_API_KEY`; other supported providers and `READER_MODEL` are documented in `.env.example`. Reader calls can send selected notes to that provider. |
+| Durable preferences and guest metering | Create an Upstash store and set its exact `KV_REST_API_URL` and `KV_REST_API_TOKEN`. |
+| Working notes, mirror, devices, and Ops receipts | Create a dedicated Supabase project, perform the [new-database bootstrap](docs/database-bootstrap.md), then set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` server-side. |
+| Dashboard checks and deployments | Set the separate application-repository and provider grants described below. Merely entering project IDs does not grant access. |
+| Ops alert email | Configure `RESEND_API_KEY`, `OPS_ALERT_TO`, and an authorized `OPS_ALERT_FROM`. These are an API key value, recipient address, and sender address respectively. Resend Contacts do not set the recipient. `CORTEX_RESEND_API_KEY` and `OPS_ALERTS_FROM` are not the names the app reads. |
+
+After each provider change, deploy that environment and inspect readiness again. **Saved**, **present in the running app**, **permission checked**, and **delivery tested** are different states. Settings shows secrets as presence, never their stored values. Its Alerts form requires the complete three-field group; saving it sends no email. A refresh reads status or the latest receipt and does not deploy or run a delivery test.
+
+### Enable dashboard operations
+
+Basic browsing does not require these grants. To let **Ops** dispatch checks, migrations, or deployments, an administrator must first configure:
+
+- **Application source:** `CORTEX_APP_REPO` and `CORTEX_APP_BRANCH`, separate from `BRAIN_REPO`. The fixed `.github/workflows/cortex-dashboard-checks.yml` must exist on the application's default branch and the approved configured branch.
+- **GitHub Actions permission:** a dedicated selected-repository `CORTEX_ACTIONS_TOKEN` with Actions read/write and Contents read. Do not broaden the brain token to cover this.
+- **Vercel permission:** a dedicated `CORTEX_VERCEL_TOKEN`, the exact `CORTEX_VERCEL_PROJECT_ID` from project settings, and `CORTEX_VERCEL_TEAM_ID` only for a team-owned project. IDs identify resources; the token authorizes actions. Link the app source repository and enable Vercel System Environment Variables in project settings.
+- **Receipt storage:** the bootstrapped database above. Initial management credentials and receipt storage must be configured in provider settings and deployed before the browser can save supported service settings.
+- **Database upgrades:** `CORTEX_MIGRATION_TARGET` identifies the approved database. Put the administrator connection string `SUPABASE_DB_URL` and, when needed, trusted `CORTEX_DATABASE_CA` in the GitHub environment named `cortex-database`, not in the deployed app. Restrict that environment to the approved application branch and require review. The [database guide](docs/database-bootstrap.md) distinguishes bootstrap from upgrades.
+
+The dashboard reports missing prerequisites. A configured token's presence is not proof of provider access. Review the requested operation and its target before confirming it, then use its receipt to check what actually happened.
+
+## Connect a trusted client
+
+Use **Settings** for connection instructions based on your running deployment. Cortex exposes three MCP entry points:
+
+| Entry point | Access |
+| --- | --- |
+| `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` | Trusted reads and writes. |
+| `/api/s/<CONNECTOR_PATH_SECRET>/mcp` | The same trusted access for URL-only clients. The URL itself is a credential. |
+| `/api/g/<GUEST_PATH_SECRET>/mcp` | Restricted ask and propose only, enabled separately with a distinct secret and required backing services. Proposals enter a review queue; they do not commit notes. |
+
+Connect only clients you trust with the corresponding access. Do not give a trusted URL to an assistant that should only propose changes. Client-specific support for remote MCP and URL-only authentication varies.
+
+The exact tool roster is [lib/tool-roster.json](lib/tool-roster.json). Trusted connections have these eleven tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `brain_context` | Return bounded profile, note routing, and working context for a session. |
+| `brain_handoff` | Assemble a project-specific context bundle with source references. |
+| `brain_read` | Read a note by path. |
+| `brain_corpus` | Return the notes to the calling client. |
+| `brain_write` | Create, replace, append to, or precisely edit a note with a Git commit. |
+| `brain_capture` | Append a timestamped entry to the daily log. |
+| `brain_bubble` | Read and deliberately update database-backed working notes. |
+| `brain_ask` | Ask a configured reader model and check its quoted citations. |
+| `brain_proposals` | List proposed changes for trusted review. |
+| `brain_accept` | Accept a proposal and commit the approved change. |
+| `brain_reject` | Reject a proposal without committing it to the notes. |
+
+The guest connection exposes only scoped `brain_ask` and `brain_propose`. `brain_propose` submits to the review queue and cannot commit a note.
+
+`ANTHROPIC_API_KEY` is required when a Claude reader is selected for `brain_ask`. OpenAI and Gemini readers require their respective provider keys instead. No reader key is required for basic boot, browsing, or context previews. A client receiving notes through a model-free tool may still send them to its own model provider.
+
+The citation verifier checks quoted text against a source file. A verified quote proves the text appears there, not that the text is true or that the answer follows from it. Corrections and superseded passages are identified separately. There is no recall or accuracy guarantee for your corpus. See [SECURITY.md](SECURITY.md) for reporting and security details.
+
+## Local development
 
 ```bash
-/bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Obelyth/cortex/main/scripts/bootstrap-macos.sh)"
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-The setup wizard walks you through everything in a few minutes (with `gh` and `vercel` already authenticated): it creates your private brain repo from the included template, **asks whether to start fresh or index an existing folder of notes** (preview first, nothing written until you confirm), generates your three secrets locally (the console passcode among them — accept the suggestion or type your own), tells you exactly which one browser step it cannot do for you (a fine-grained PAT scoped to only the brain repo), deploys to Vercel, **verifies the deployment against the live tool roster**, and prints the two wiring commands and the console passcode for your devices. Safe to re-run — re-running is also the rotation runbook (see Upkeep).
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FObelyth%2Fcortex)
-
-The button deploys the **public site only** — landing, tools, guide and the synthetic demo map run with zero environment, and every gated route answers 404 until you configure it. Your brain comes from the wizard: clone the repo the button created for you and run `npm run onboard` in it.
-
-More to bring in later? Ingest is dry-run by default:
+Fill in your own brain repository and access settings in `.env.local`; never commit that file. Open `http://localhost:3000/s/<CONNECTOR_PATH_SECRET>/console` with your passcode. Without those settings, protected routes remain closed. Hosted secret-entry and deployment-management controls require their provider prerequisites and are not unlocked by pretending a local process is Vercel.
 
 ```bash
-npm run ingest -- --from ~/my-notes --repo <you>/brain            # preview
-npm run ingest -- --from ~/my-notes --repo <you>/brain --commit   # file it
-```
-
-Every ingested note gets a provenance line, because a brain that cannot say where a claim came from cannot be trusted to answer with it.
-
-## The eleven tools
-
-Trusted doors get all eleven. The guest door gets exactly two — a scoped `brain_ask` and `brain_propose`. The canonical list is `lib/tool-roster.json` — if this table and that file ever disagree, the file is right.
-
-| tool | what it does |
-|---|---|
-| `brain_ask` | The flagship. Fetches the whole live corpus as one tarball, hands a reader model the actual notes, then checks the quote it cited against the file — deterministically, no model in that loop. The reader is pluggable per call or per deployment: an allowlisted registry of Claude, OpenAI and Gemini models, all held to one contract — a refusal or truncation throws rather than masquerading as `NOT IN BRAIN`. |
-| `brain_corpus` | Returns the notes into the calling conversation instead. No model call; nothing leaves your storage. |
-| `brain_context` | The boot call: profile, a one-line router entry per note, and the working bubble. Bounded on purpose — it is paid on every session on every surface, and it currently loads about 4% of the corpus. |
-| `brain_read` | One note, by path. Paths are allowlisted by shape. |
-| `brain_write` | Create, replace, append — or `edit`: surgical in-place replacement, refused loudly if the target is absent or ambiguous. Returns the commit SHA — a save without a SHA did not happen. |
-| `brain_capture` | Timestamped append to today's log. The zero-friction path from a phone. |
-| `brain_bubble` | Working memory: what is in flight right now, carried across sessions and surfaces so work resumes instead of being re-explained. The one thing Postgres is authoritative for — notes never are. |
-| `brain_handoff` | One call resumes a project: the project page, its open bubble items, recent log entries that mention it, and the graph's neighbour notes — every piece cited with why it is there, the whole bundle budgeted and its coverage counted. Trusted doors only. |
-| `brain_propose` | Guest-only. Leaves a suggestion in a review queue — commits nothing, ever. |
-| `brain_proposals` · `brain_accept` · `brain_reject` | The review half, trusted doors only. Accepting is what commits. |
-
-## What a stamp means
-
-The verifier is deterministic — no model, no network. It compares text to a file at a commit and reports exactly what that proves:
-
-| stamp | meaning |
-|---|---|
-| `VERIFIED` | This exact text is in that file at that commit. Proves the text exists — **not** that the answer follows from it, and the stamp says so. |
-| `CORRECTED` | The quote sits *beside* an in-place correction marker — it **is** the current claim, kept with the wording it replaced. Answer from the current claim. Split out of `SUPERSEDED` because telling a reader to discard the freshest fact in the brain is how a stamp loses its credibility. |
-| `SUPERSEDED` | The quote is real and the passage is retracted. The brain keeps corrections *on the page* (`SUPERSEDED`, `CORRECTION`, `DEPRECATED`, `(was: "…")`, `Do not answer`), and the verifier enforces them — verbatim is exactly what a stale answer looks like. |
-| `PARTIALLY VERIFIED` | Verbatim in more than one note; the source is ambiguous. |
-| `NOT IN BRAIN` | The reader found nothing and said so. The abstain case — an honest no beats a confident guess. |
-| `UNVERIFIED` | Not in the cited file, spans a boundary, too short to prove, real text the reader was never shown, or a citation of a file that is not in the corpus. Shown anyway, labelled. |
-
-Why this architecture: measured on its own labelled eval, **ranking a generated index answered correctly 55% of the time; a frontier model reading the actual notes, 97%**. So this server does not rank summaries — it ships the notes.
-
-## What deploys
-
-- **The MCP endpoint**, three doors: `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` for clients that send headers (Claude Code, Cursor, the CLIs), `/api/s/<CONNECTOR_PATH_SECRET>/mcp` for trusted clients that cannot (claude.ai custom connectors — add once on the web and iOS and desktop inherit it), and `/api/g/<GUEST_PATH_SECRET>/mcp` for assistants you do not control — a smaller handler that registers only the scoped ask and the propose, so its `tools/list` is the honest answer to "what may I do here". All fail closed: a bad bearer gets a standard `401`; a wrong path secret gets an **empty 404**, because a secret door does not advertise that anything lives there; the guest door does not exist until its secret is set.
-- **A public site** — Overview, Tools, Guide, and a demo map (the real ring renderer over synthetic placeholders; nothing real ships on it).
-- **The secret-gated console** — seven screens at `/s/<CONNECTOR_PATH_SECRET>/console`: overview (corpus load, calls, activity, verdicts per reader, ingest feed of real commits), ask (put a question to the brain from the browser and watch the cited answer assemble), trends (memory growth and read patterns over time), notes (every note expandable to its own title, outline, heat, pins and retracted passages — with the handoff panel for working state), inbox (a triaged attention queue plus the guest proposal review, with one-click verify), the live map (your machine's rings, memory ring rebuilt from the corpus on every request — also standalone at `/s/<secret>/map`), and settings — every control in one place: default reader, provider switches, learning knobs, guest scope and budgets, plus the readers ledger and a setup guide that reads your deployment's real state and emits ready-to-paste client configs; secrets render as presence, never values. Entry is double-locked: the path secret finds the door, and `CONSOLE_PASSCODE` stamps the device — the link alone no longer opens the console. Gated because they are inventories; linked from nothing public. `/s/<secret>/health` survives as a redirect into the console.
-
-### Machine rings on the map (optional)
-
-The map's outer rings render from an optional sidecar committed to **your brain repo** at
-`tools/atlas-snapshot.json`. Without it the map still works: you get the live memory ring and a
-"machine rings absent" caption — absence is a supported state, not an error. To add rings,
-commit a snapshot shaped like this (only `capturedAt`, `layers[].key`, `layers[].ring`, and
-`nodes[].id`/`nodes[].layer` are validated; a malformed file is rejected whole and the map
-degrades to memory-only):
-
-```json
-{
-  "capturedAt": "2026-08-01",
-  "center": "claude",
-  "layers": [{ "key": "applications", "label": "APPLICATIONS", "ring": 1, "color": "#aeb8c4" }],
-  "nodes": [{ "id": "app:zsh", "label": "zsh", "layer": "applications", "group": "shell", "machine": "all" }],
-  "edges": [{ "source": "app:zsh", "target": "claude", "kind": "uses" }]
-}
-```
-
-The console map's machine filter (all / mac / linux …) appears only when nodes carry per-machine
-tags — a snapshot that tags everything `"all"` hides it. The sidecar rides the same authenticated
-tarball as your notes, and the corpus loader routes it to the map only: the reader tools never see it.
-
-## Not just Claude
-
-Cortex is **model-agnostic by architecture and Claude-first by evidence**. The reader allowlist
-spans Claude, OpenAI and Gemini; the only readers that have passed our labeled eval — 97% on 185
-questions against a live corpus — are Claude's, so Claude holds the default until another model
-earns it on the same test. That is the difference between a preference and a measurement.
-
-We didn't build Claude's second brain. We built *yours* — and chose the reader we could prove.
-Any MCP-capable agent connects through the same doors:
-
-- **Header-capable clients** (Cursor, Codex CLI, Gemini CLI, most IDE agents): point them at
-  `/api/mcp` with `Authorization: Bearer <MCP_TOKEN>` — the same wiring as Claude Code, in each
-  client's own MCP config syntax. Cursor (`~/.cursor/mcp.json`), full read + write:
-
-  ```json
-  {
-    "mcpServers": {
-      "cortex": {
-        "url": "https://<host>/api/mcp",
-        "headers": { "Authorization": "Bearer <MCP_TOKEN>" }
-      }
-    }
-  }
-  ```
-
-- **Header-less clients** (ChatGPT custom connectors, and anything else that only takes a URL):
-  the secret-URL door, `/api/s/<CONNECTOR_PATH_SECRET>/mcp` — the same mechanism claude.ai uses,
-  subject to each vendor's own connector availability and policies.
-- **Assistants you do not control** — a collaborator's model, or one you use without trusting it
-  with the pen: the guest door, `/api/g/<GUEST_PATH_SECRET>/mcp`. They ask (answered server-side
-  by a Claude reader, drawn only from the note areas you share, under a daily budget, without
-  source paths or excerpts) and they propose (into a review queue — accepting is what commits).
-  The corpus itself is never handed over.
-
-The reader behind `brain_ask` is pluggable — Claude, OpenAI and Gemini models on an allowlist,
-chosen per call or from the console, so a GPT or Gemini shop can run an all-one-vendor stack.
-`ANTHROPIC_API_KEY` still earns its place: it is the default reader and the one that answers
-guests. `brain_corpus` remains the no-egress path — the *calling* model reads the notes itself,
-whoever it is. The verifier never involves a model at all, which is why swapping readers never
-touches the trust story.
-
-## Privacy posture, in one paragraph
-
-Your notes never touch this repo — they stay in *your* private brain repo and are fetched at request time with a PAT scoped to that one repo. Credential-shaped strings are redacted at egress on every read path. `brain_ask` is the only model egress, its tool description discloses exactly what is sent, and the reader model list is allowlisted so a caller cannot pick an arbitrary model on your key. The site never links the gated pages; the demo map strips the icon roster and fails its own build if that strip ever drifts. Reporting and the full trust model: [SECURITY.md](SECURITY.md).
-
-## Updating
-
-Updates ship from `main`; releases are provenance snapshots with the full check suite re-run at
-the tag ([SECURITY.md](SECURITY.md)). However you got your copy, updating it is one command:
-
-```bash
-npm run update
-```
-
-It finds the remote updates come from — adding it the first time if your copy was made from the
-template, which has no fork relationship, so a plain `git pull` would never see a release — shows
-what shipped, merges (your local commits and edits are kept; a conflict aborts cleanly back to
-exactly where you were), reinstalls dependencies when the lockfile changed, redeploys, and
-re-verifies the live tool roster: the same check onboarding ends with. A copy that started as a
-release download is converted into a proper clone on the first run, anchored at the version it
-shipped as. A failed build never replaces what is live — Vercel promotes only builds that
-succeed. Wired surfaces keep working through an update; secrets do not change.
-
-Three ways to hear that an update exists:
-
-- **Watch the repo**: [github.com/Obelyth/cortex](https://github.com/Obelyth/cortex) → Watch →
-  Custom → Releases. GitHub notifies you per release and nothing else.
-- **The console footer** shows the running version, and a `vX.Y.Z available` link when a newer
-  release is published. The deployment asks api.github.com for the latest release tag — an
-  unauthenticated request carrying nothing about you or your corpus, cached six hours — and shows
-  nothing when the check fails, because absence beats a claim it cannot prove.
-- **The groundskeeper health check** appends an `UPDATE AVAILABLE` line on a healthy night when
-  the deployment is behind, so the nightly digest carries it.
-
-When an update needs a manual step — a new env var, a migration, re-wiring — its release notes
-open with an **Action required** section listing exactly those steps. No section means none:
-everything else is the one command.
-
-## Upkeep
-
-`ops/groundskeeper/` is a nightly maintenance task template for Claude Code's scheduler: health-check both auth paths (set-equality against `lib/tool-roster.json`, the one canonical roster, pinned to the server by its own test — a hardcoded count once silently disabled the reference deployment for four nights), absorb daily logs into project pages, fact-check pages against live state, leave a digest. The gated console's attention screen is the same story on demand.
-
-### Rotating secrets
-
-1. Run `npm run onboard` and answer **no** when it offers to keep the existing secrets. It generates fresh values, sets them on the project, redeploys, and reprints the wiring commands.
-2. Re-wire every surface: the claude.ai custom connector gets the new URL; each machine re-runs its `claude mcp add` line. Until then, wired surfaces hold the revoked values and fail closed. Stamped browsers need no re-wiring — the console simply asks for the new passcode on their next visit.
-3. `GUEST_PATH_SECRET` is not managed by the wizard: set a new value in the Vercel project env and redeploy — or unset it, which is how a guest is revoked entirely. Every guest surface shares that one secret, however many you have wired, so rotating it revokes all of them together and leaves the trusted doors untouched. That coupling is the point: guests are revoked as a class, without re-wiring your own machines. They also share the one daily ask budget — the counter is per deployment per UTC day, not per guest — so a busy surface can spend the whole allowance before a quieter one asks anything; raise `dailyAsks` on the settings screen before wiring a second guest you expect to use daily.
-4. Treat a leaked **trusted** credential as a compromise, not a nuisance: rotate first, then audit the brain repo's recent commits for writes you did not make.
-
-## Environment
-
-| var | required | what breaks without it |
-|---|---|---|
-| `BRAIN_REPO` | yes | every tool — no repo to read |
-| `GITHUB_TOKEN` | yes | every tool — 401 from the Contents API. Fine-grained PAT, Contents R/W, only the brain repo |
-| `MCP_TOKEN` | yes | all requests 401 |
-| `CONNECTOR_PATH_SECRET` | for claude.ai | the header-less alias and both gated pages 404 |
-| `CONSOLE_PASSCODE` | for the web console | every `/s/...` page is locked, fail closed — the entry renders "CONSOLE LOCKED" instead of the prompt, and no device can be stamped. The MCP doors never read it |
-| `ANTHROPIC_API_KEY` | yes, for `brain_ask` | `brain_ask` errors; everything else works. Each `brain_ask` bills this key — order of $0.25–$0.80/call depending on corpus size and model |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` | no | those readers error on selection; unset, they simply cannot be chosen |
-| `READER_MODEL` | no | deployment default reader; outranked by the console's own setting |
-| `KV_REST_API_URL` / `KV_REST_API_TOKEN` | for settings, guest, proposals, call log | console controls degrade to env defaults and say so; the guest door refuses every call — a budget that cannot be metered is not a budget |
-| `GUEST_PATH_SECRET` | no | guest door inert. Must differ from the connector secret |
-| `BRAIN_BRANCH` | no | defaults to `main` |
-| `BRAIN_TZ` | no | defaults to `UTC` — set your IANA zone or daily logs date to the wrong day |
-| `SENTRY_DSN` | no | error reporting disabled |
-| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | no | the Postgres mirror, working-state bubble and note temperatures stay off; every reader degrades to the GitHub tarball path. Server-side only — never `NEXT_PUBLIC_`. Apply the schema once with `npx tsx scripts/migrate.ts --apply` (dry-run without the flag; needs `SUPABASE_DB_URL` locally, never deployed) |
-
-## Development
-
-```bash
-npm run dev          # http://localhost:3000
-npm test             # vitest
+npm test
+npm run typecheck
 npm run build
 ```
 
-Design: the surface follows the **OBELYTH** design system — deep-slate foundation, matte off-white text, one restrained electric-cyan accent reserved for focus, links and live data, 1px hairlines doing the work of separation. Dark-only. Hanken Grotesk (UI) and JetBrains Mono (every ID and metric) are self-hosted — no third-party font CDN in the loading path. The display slot ships empty (the reference deployment's display face is licensed and not redistributable); `app/layout.tsx` documents how to wire your own. For local development, copy `.env.example` values into `.env.local` (already gitignored).
+Ordinary tests use synthetic data, not your notes or live provider credentials. Optional native-database tests have separate opt-in requirements; see their test files and the database guide. Never point test fixtures or bootstrap at an existing personal database.
 
-## License
+## Updates and recovery
 
-[AGPL-3.0](LICENSE) — Copyright (c) 2026 OBELYTH. Deploy it, fork it, run your own brain on it. If you offer a modified Cortex to others over a network, the AGPL asks you to share your changes the same way.
+Read the release's **Action required** section before updating, especially for existing-database changes. Back up the brain repository and database separately. An update does not replace that backup plan.
 
----
+`npm run update` is an optional interactive source-update and deployment helper. Review its planned merge and any local changes before confirming. It does not apply database migrations. Follow release-specific manual steps, then check the deployment and its Ops receipts; a successful build alone does not prove every configured integration works.
 
-<div align="center">
-  <sub>CORTEX BY OBELYTH — DATA. INFRASTRUCTURE. ASSURED.</sub>
-</div>
+To rotate access credentials, use provider environment settings and redeploy, or rerun onboarding and explicitly choose rotation. Reconnect trusted clients with the new credentials and unlock browser devices again. Revoking a GitHub or provider token is a separate action in that provider's account settings.
+
+[Releases](https://github.com/Obelyth/cortex/releases) · [Security](SECURITY.md) · [License](LICENSE)

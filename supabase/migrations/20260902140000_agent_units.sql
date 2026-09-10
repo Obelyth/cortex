@@ -1,0 +1,2 @@
+-- Public installations start without a developer workstation or agent. Owners add units only
+-- after their own reporters and lifecycle hooks are configured.

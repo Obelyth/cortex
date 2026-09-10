@@ -10,6 +10,9 @@ import {
   stampIsValid,
   stampValue,
 } from "@/lib/stamp";
+// From nav.ts, not tabs.tsx: tabs.tsx is "use client", and this route handler reading a named
+// export off a client module gets a client-reference stub back, not the string — see nav.ts.
+import { LANDING_SEG } from "./nav";
 
 /**
  * The console's front door, as a route handler because pages cannot set cookies — and now a
@@ -26,14 +29,14 @@ const YEAR_SECONDS = 31536000;
 
 function stampedRedirect(secret: string, status: 303 | 307): Response {
   const headers = new Headers();
-  // The stamp is re-set on every pass-through, so a device the owner actually uses never ages out.
+  // The stamp is re-set on every pass-through, so an active device never ages out.
   // Same scoping as the old cookie: httpOnly (no script access), lax (sent on top-level
   // navigation, not cross-site subresources), a year.
   headers.set(
     "Set-Cookie",
     `${STAMP_COOKIE}=${stampValue()}; Path=/; Max-Age=${YEAR_SECONDS}; HttpOnly; Secure; SameSite=Lax`,
   );
-  headers.set("Location", `/s/${secret}/console/overview`);
+  headers.set("Location", `/s/${secret}/console/${LANDING_SEG}`);
   headers.set("Cache-Control", "no-store");
   return new Response(null, { status, headers });
 }

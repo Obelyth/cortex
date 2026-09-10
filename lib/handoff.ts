@@ -9,9 +9,8 @@
  * "log mention <date>"), because a pile of notes with no receipts is exactly the unprovable
  * surface this system refuses to be.
  *
- * RANKING IS THE EVAL'S WINNER, not a vibe. scripts/eval-prediction.ts replayed the access log
- * (2026-08-11, 19 scored hour-windows): recency+frequency 38.0% recall@10, the
- * coaccess/link/tag blend 31.5% — the blend lost, so neighbours here are ordered by the live
+ * RANKING IS THE EVAL'S WINNER, not a vibe. The maintainer replay did not show the
+ * coaccess/link/tag blend beating recency and frequency, so neighbours here are ordered by the live
  * temperature score (recency+frequency's production form), and lib/prediction.ts's KIND_BLEND
  * is only the tiebreak and the scores-unavailable fallback. Promoting the blend to primary is a
  * change the eval must approve first, the same gate FTS failed.
@@ -26,13 +25,13 @@ import { mirrorStore, type ScoreRow } from "./mirror";
 import { bubbleStore, type BubbleItem, type BubbleRead } from "./bubble";
 import { edgesFor, type EdgeRow } from "./edges";
 import { KIND_BLEND } from "./prediction";
-import { lastNDates, BOUNDARY_RE } from "./brain";
-import { logSections } from "./digest";
+import { lastNDates, BOUNDARY_RE, projectLogSections } from "./brain";
 import { byName, safeText } from "./frontmatter";
 import { logNoteAccess } from "./access";
 import { redact } from "./redact";
 import { readPins, type PinRow } from "./pins";
 import { normaliseProject, mentionsProject } from "./project";
+import { utf8Bytes, utf8Prefix, utf8Suffix } from "./utf8";
 
 // normaliseProject and mentionsProject moved to lib/project.ts so the boot call can share them
 // without an import cycle; re-exported here for handoff's existing callers and tests.
@@ -56,9 +55,8 @@ export const NEIGHBOUR_K = 8;
 
 /**
  * The most of a neighbour note that rides — its head, where the frontmatter description and the
- * opening summary live. Whole-note-or-nothing was tried first and measured on the live brain:
- * the hot neighbours of an active project are its big notes, none fit the post-log remainder,
- * and the bundle shipped its citations with zero text. An announced excerpt beats an absence —
+ * opening summary live. Whole-note-or-nothing can leave citations with no text when large notes
+ * do not fit the post-log remainder. An announced excerpt beats an absence —
  * the WHY carries the numbers and the way to the rest. (Head, not tail: notes lead with what
  * they are; project pages append newest last, which is why the PAGE slice goes the other way.)
  */
@@ -82,7 +80,7 @@ function editDistance(a: string, b: string): number {
 
 /**
  * The project pages that exist, nearest-first to a name that resolved to none of them.
- * Substring matches outrank edit distance — "track" should offer tracker-v2 before anything a
+ * Substring matches outrank edit distance — "task" should offer task-example before anything a
  * transposition could reach — and ties break by name so the miss reads the same every time.
  */
 export function closestProjects(name: string, files: Map<string, string>, limit = 3): string[] {
@@ -285,15 +283,18 @@ export function renderHandoff(i: HandoffInputs): {
 
   const pageFull = emit(i.pagePath, i.files.get(i.pagePath) ?? "");
   const maxPage = Math.floor(i.budgetBytes * PAGE_SHARE);
-  if (pageFull.length > maxPage) {
-    // Cut on a line boundary so the tail never opens mid-sentence pretending to be a heading.
-    const at = pageFull.indexOf("\n", pageFull.length - maxPage);
-    const tail = at >= 0 ? pageFull.slice(at + 1) : pageFull.slice(pageFull.length - maxPage);
+  if (utf8Bytes(pageFull) > maxPage) {
+    // Slice by UTF-8 code points, then prefer a real line boundary only when it leaves content.
+    // A one-line page ending in `\n` used to choose that final newline and serve an empty tail.
+    const suffix = utf8Suffix(pageFull, maxPage);
+    const at = suffix.indexOf("\n");
+    const aligned = at >= 0 && suffix.slice(at + 1).replace(/\n$/, "").length > 0 ? suffix.slice(at + 1) : suffix;
+    const tail = aligned || suffix;
     pieces.push({
       kind: "page",
       label: i.pagePath,
       why:
-        `the project page — TAIL ONLY, the last ${kb(tail.length)} KB of ${kb(pageFull.length)} KB ` +
+        `the project page — TAIL ONLY, the last ${kb(utf8Bytes(tail))} KB of ${kb(utf8Bytes(pageFull))} KB ` +
         `(newest entries last; brain_read ${i.pagePath} for the whole page)`,
       body: tail,
       notePath: i.pagePath,
@@ -321,12 +322,7 @@ export function renderHandoff(i: HandoffInputs): {
   // Recent day-log entries whose `## HH:MM · tags` heading names the project. The heading is
   // the routing signal brain_capture already stamps; body mentions stay un-matched on purpose —
   // a heading is deliberate, a body mention is incidental.
-  for (const date of i.recentDates) {
-    const path = `log/${date}.md`;
-    const text = i.files.get(path);
-    if (!text) continue;
-    for (const s of logSections(text)) {
-      if (!mentionsProject(s.tags, i.project)) continue;
+  for (const { date, path, section: s } of projectLogSections(i.recentDates, i.files, i.project)) {
       const label = `${path} § ${s.time}`;
       pieces.push({
         kind: "log",
@@ -335,7 +331,6 @@ export function renderHandoff(i: HandoffInputs): {
         body: emit(label, s.text),
         notePath: path,
       });
-    }
   }
 
   // The operator's HOT pins ride next, cited as exactly what they are. Ahead of the graph's
@@ -353,15 +348,16 @@ export function renderHandoff(i: HandoffInputs): {
     riding.add(p.path);
     const full = emit(p.path, raw);
     const why = `pinned hot by the operator${p.reason ? ` — "${safeText(p.reason, 120)}"` : ""} (${stamp(p.pinned_at)})`;
-    if (full.length > NEIGHBOUR_EXCERPT_BYTES) {
+    if (utf8Bytes(full) > NEIGHBOUR_EXCERPT_BYTES) {
       // Head, not tail — pins mark standing notes, and notes lead with what they are. Sliced
       // AFTER redaction, same reason as the page and the neighbours.
-      const at = full.lastIndexOf("\n", NEIGHBOUR_EXCERPT_BYTES);
-      const head = full.slice(0, at > 0 ? at : NEIGHBOUR_EXCERPT_BYTES);
+      const prefix = utf8Prefix(full, NEIGHBOUR_EXCERPT_BYTES);
+      const at = prefix.lastIndexOf("\n");
+      const head = at > 0 ? prefix.slice(0, at) : prefix;
       pieces.push({
         kind: "pinned",
         label: p.path,
-        why: `${why} · HEAD ONLY, the first ${kb(head.length)} KB of ${kb(full.length)} KB (brain_read ${p.path} for the whole note)`,
+        why: `${why} · HEAD ONLY, the first ${kb(utf8Bytes(head))} KB of ${kb(utf8Bytes(full))} KB (brain_read ${p.path} for the whole note)`,
         body: head,
         notePath: p.path,
       });
@@ -383,13 +379,14 @@ export function renderHandoff(i: HandoffInputs): {
     // Sliced AFTER redaction, same reason as the page: a cut mid-credential is a shape the
     // redactor's patterns no longer match.
     const full = emit(n.path, raw);
-    if (full.length > NEIGHBOUR_EXCERPT_BYTES) {
-      const at = full.lastIndexOf("\n", NEIGHBOUR_EXCERPT_BYTES);
-      const head = full.slice(0, at > 0 ? at : NEIGHBOUR_EXCERPT_BYTES);
+    if (utf8Bytes(full) > NEIGHBOUR_EXCERPT_BYTES) {
+      const prefix = utf8Prefix(full, NEIGHBOUR_EXCERPT_BYTES);
+      const at = prefix.lastIndexOf("\n");
+      const head = at > 0 ? prefix.slice(0, at) : prefix;
       pieces.push({
         kind: "neighbour",
         label: n.path,
-        why: `${n.why} · HEAD ONLY, the first ${kb(head.length)} KB of ${kb(full.length)} KB (brain_read ${n.path} for the whole note)`,
+        why: `${n.why} · HEAD ONLY, the first ${kb(utf8Bytes(head))} KB of ${kb(utf8Bytes(full))} KB (brain_read ${n.path} for the whole note)`,
         body: head,
         notePath: n.path,
       });
@@ -405,8 +402,7 @@ export function renderHandoff(i: HandoffInputs): {
   // bundle shipped zero neighbours — the one section the connections graph exists to feed.
   // Unspent log share flows on to the neighbours; nothing is reserved for a section that has
   // nothing to say.
-  const rendered: string[] = [];
-  const served = new Set<string>();
+  const rendered: Array<{ block: string; pieceIndex: number }> = [];
   const decisions: PieceDecision[] = [];
   let spent = 0;
   let included = 0;
@@ -423,24 +419,23 @@ export function renderHandoff(i: HandoffInputs): {
       kind: p.kind,
       label: p.label,
       why: safeText(p.why, 400),
-      bytes: block.length,
+      bytes: utf8Bytes(block),
       included: false,
     };
     decisions.push(decision);
-    if (idx > 0 && spent + block.length > i.budgetBytes) {
+    if (spent + decision.bytes > i.budgetBytes) {
       decision.excludedBy = "budget";
       continue;
     }
-    if (p.kind === "log" && spentOnLogs + block.length > logCap) {
+    if (p.kind === "log" && spentOnLogs + decision.bytes > logCap) {
       decision.excludedBy = "log-share";
       continue;
     }
     decision.included = true;
-    rendered.push(block);
-    spent += block.length;
+    rendered.push({ block, pieceIndex: idx });
+    spent += decision.bytes;
     included++;
-    if (p.kind === "log") spentOnLogs += block.length;
-    if (p.notePath) served.add(p.notePath);
+    if (p.kind === "log") spentOnLogs += decision.bytes;
   }
 
   // ── Head, body, coverage ─────────────────────────────────────────────────────────────────
@@ -479,16 +474,47 @@ export function renderHandoff(i: HandoffInputs): {
   const pinnedWord = hotPins.length
     ? `${hotPins.length} note${hotPins.length === 1 ? "" : "s"} pinned hot · `
     : "";
-  const coverage =
-    `handoff · ${i.project} @${i.sha.slice(0, 12)} · included ${included} of ${pieces.length} candidate pieces · ` +
-    `${kb(spent)} KB of ${kb(i.budgetBytes)} KB budget · ${bubbleWord} · ${graphWord} · ${pinnedWord}` +
-    `~${Math.round(spent / 4)} tokens. Open any note with brain_read; update working state with brain_bubble.`;
-
   const tail = warnings.length ? `\n${warnings.join("\n")}` : "";
+  const coverageAt = (bytes: number) =>
+    `handoff · ${i.project} @${i.sha.slice(0, 12)} · included ${included} of ${pieces.length} candidate pieces · ` +
+    `${kb(bytes)} KB of ${kb(i.budgetBytes)} KB budget · ${bubbleWord} · ${graphWord} · ${pinnedWord}` +
+    `~${Math.round(bytes / 4)} estimated tokens. Open any note with brain_read; update working state with brain_bubble.`;
+  const compose = (): { text: string; coverage: string; bytes: number } => {
+    let bytes = 0;
+    let coverage = coverageAt(bytes);
+    let text = "";
+    // The displayed size changes only when its decimal width changes; three passes reaches the
+    // fixed point while measuring the exact string that will be returned.
+    for (let pass = 0; pass < 3; pass++) {
+      text = `${head}\n\n# HANDOFF · ${i.project}\n\n${rendered.map((r) => r.block).join("\n\n")}\n\n---\n${coverage}${tail}`;
+      bytes = utf8Bytes(text);
+      coverage = coverageAt(bytes);
+    }
+    text = `${head}\n\n# HANDOFF · ${i.project}\n\n${rendered.map((r) => r.block).join("\n\n")}\n\n---\n${coverage}${tail}`;
+    return { text, coverage, bytes: utf8Bytes(text) };
+  };
+
+  let output = compose();
+  while (output.bytes > i.budgetBytes && rendered.length > 0) {
+    const removed = rendered.pop()!;
+    const decision = decisions[removed.pieceIndex];
+    decision.included = false;
+    decision.excludedBy = "budget";
+    spent -= decision.bytes;
+    included--;
+    output = compose();
+  }
+  if (output.bytes > i.budgetBytes) {
+    throw new RangeError(`handoff budget ${i.budgetBytes} bytes is too small for its minimum truthful envelope`);
+  }
+  const served = new Set<string>();
+  for (const [idx, decision] of decisions.entries()) {
+    if (decision.included && pieces[idx].notePath) served.add(pieces[idx].notePath);
+  }
   return {
-    text: `${head}\n\n# HANDOFF · ${i.project}\n\n${rendered.join("\n\n")}\n\n---\n${coverage}${tail}`,
+    text: output.text,
     served: [...served],
-    coverage,
+    coverage: output.coverage,
     decisions,
     warnings,
   };
@@ -517,7 +543,7 @@ async function gatherHandoffInputs(project: string, budgetBytes?: number): Promi
   const [corpus, bubbleOutcome, scores, pins, guessedEdges] = await Promise.all([
     loadCorpus(),
     store
-      ? store.open().then(
+      ? store.open({ project: name, includeGeneral: false }).then(
           (read) => ({ state: "read" as const, read }),
           (e) => {
             console.error(`[handoff] bubble read failed, bundling without working state: ${String(e)}`);

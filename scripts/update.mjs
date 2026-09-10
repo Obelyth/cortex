@@ -17,10 +17,13 @@
  * check, not the deploy log.
  */
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, mkdtempSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
 import readline from "node:readline/promises";
+import { checkDeployment, deploymentLookupPath } from "./onboard-helpers.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const CANONICAL = "https://github.com/Obelyth/cortex.git";
@@ -223,60 +226,74 @@ if (deploy === "n") {
   rl.close();
   process.exit(0);
 }
-execFileSync(vercelBin, ["deploy", "--prod", "--yes"], { cwd: ROOT, stdio: "inherit" });
 const project = JSON.parse(readFileSync(join(ROOT, ".vercel", "project.json"), "utf8"));
-const url = `https://${project.projectName ?? project.name}.vercel.app`;
-ok(`deployed — production alias: ${url}`);
+if (!project.projectId || !project.orgId ||
+    (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_PROJECT_ID !== project.projectId) ||
+    (process.env.VERCEL_ORG_ID && process.env.VERCEL_ORG_ID !== project.orgId)) {
+  act("Linked project and shell overrides do not agree. Clear the overrides and relink. Nothing was deployed.");
+  rl.close();
+  process.exit(1);
+}
+try { execFileSync(vercelBin, ["api", "--help"], { cwd: ROOT, stdio: "ignore" }); }
+catch {
+  act("Update Vercel CLI to 50.5.1 or newer before deploying; verified host lookup requires vercel api.");
+  rl.close();
+  process.exit(1);
+}
+// stdout is the immutable URL; the helper resolves the actual assigned production domain.
+const deployedUrl = execFileSync(vercelBin, ["deploy", "--prod", "--yes"], {
+  cwd: ROOT, encoding: "utf8", stdio: ["inherit", "pipe", "inherit"],
+}).trim();
 
 // ---------------------------------------------------------------- verify ---
 head("5 · Verify — trust the check, not the deploy log");
-const tmpEnv = join(ROOT, ".vercel", ".update-env.tmp");
+const envDirectory = mkdtempSync(join(tmpdir(), "cortex-update-env-"));
+const tmpEnv = join(envDirectory, "production.env");
 let liveSecret = "", liveToken = "";
 try {
   execFileSync(vercelBin, ["env", "pull", "--environment", "production", tmpEnv, "--yes"], {
     cwd: ROOT,
     stdio: "ignore",
   });
-  const pulled = readFileSync(tmpEnv, "utf8");
-  liveSecret = (pulled.match(/^CONNECTOR_PATH_SECRET="?([^"\n]+)/m) || [])[1] ?? "";
-  liveToken = (pulled.match(/^MCP_TOKEN="?([^"\n]+)/m) || [])[1] ?? "";
+  const pulled = parseEnv(readFileSync(tmpEnv, "utf8"));
+  liveSecret = pulled.CONNECTOR_PATH_SECRET ?? "";
+  liveToken = pulled.MCP_TOKEN ?? "";
 } catch { /* reported just below — an unverified deploy is named, not guessed at */ } finally {
-  rmSync(tmpEnv, { force: true });
+  rmSync(envDirectory, { recursive: true, force: true });
 }
 if (!liveSecret && !liveToken) {
   act("could not pull this project's env (vercel env pull), so the deploy cannot be verified");
-  act("   from here. The deploy itself may be fine — re-run npm run update to verify, or run");
-  act("   ops/groundskeeper/healthcheck.sh with your CONNECTOR_PATH_SECRET.");
+  act("   from here. Inspect the actual production deployment and environment in Vercel,");
+  act("   or use npm run onboard to recheck setup while keeping existing credentials.");
   rl.close();
   process.exit(1);
 }
-const body = JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 });
-// The connector door when its secret is set, the bearer door otherwise — either one
-// answers with the roster, and either one proves the new build is the one serving.
-const doorArgs = liveSecret
-  ? `"${url}/api/s/${liveSecret}/mcp"`
-  : `-H "Authorization: Bearer ${liveToken}" "${url}/api/mcp"`;
-// HTTPS only, redirects included, same as the ops healthcheck: the request
-// carries a credential, and a downgrade would put it on the wire in the clear.
-const tools = sh(
-  `curl -s --max-time 30 --proto '=https' --proto-redir '=https' -X POST ` +
-  `-H 'Content-Type: application/json' ` +
-  `-H 'Accept: application/json, text/event-stream' --data '${body}' ${doorArgs} ` +
-  String.raw`| grep -o 'brain_[a-z]*' | sort -u | tr '\n' ' '`
-);
+let checked;
+try {
+  checked = await checkDeployment({
+    deploymentUrl: deployedUrl, projectId: project.projectId, secret: liveSecret, token: liveToken,
+    readDeployment: async (host) => JSON.parse(execFileSync(vercelBin, ["api", deploymentLookupPath(host, project.orgId)], {
+      cwd: ROOT, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"],
+    })),
+  });
+} catch {
+  // A fetch error can contain its credential-bearing URL. Never echo it or a guessed link.
+  act("Deployment verification did not pass. Check the linked project's ready status, production domain, protection, and logs in Vercel.");
+  act("The deployment may already be live. No unverified wiring link is being printed.");
+  rl.close();
+  process.exit(1);
+}
 // Same rule as onboard and the ops healthcheck: the expected roster is read from
 // lib/tool-roster.json at run time, never inlined — and read AFTER the merge, so a
 // release that ships a new tool is verified against its own roster.
 const roster = JSON.parse(readFileSync(join(ROOT, "lib", "tool-roster.json"), "utf8"));
-const expected = roster.trusted.join(" ");
-if (tools.trim() === expected) {
-  ok(`live and healthy — ${roster.trusted.length} tools answering: ${tools.trim()}`);
-  ok(`updated to v${vNew}, deployed, verified. Wired surfaces need no re-wiring.`);
+const matches = JSON.stringify(checked.tools) === JSON.stringify([...roster.trusted].sort());
+if (matches) {
+  ok(`Verified production host: ${checked.origin}; ${roster.trusted.length} trusted tools answering.`);
+  ok(`Updated to v${vNew}, deployed, and the MCP tool roster checked.`);
+  say("  This is not a database, model-answer, or email-delivery test. Inspect readiness and receipts in Settings and Ops.");
 } else {
-  act(`UNHEALTHY — got: ${tools.trim() || "<none>"} (expected: ${expected})`);
-  act("the deploy went out, but the doors did not answer with the roster. Check Vercel");
-  act("   Deployment Protection (must be off for production) and the project logs, then");
-  act("   re-run npm run update — an up-to-date copy just re-verifies.");
+  act("The verified production host returned an unexpected tool roster. Inspect the deployed source and logs before trusting the connection.");
 }
 rl.close();
-process.exit(tools.trim() === expected ? 0 : 1);
+process.exit(matches ? 0 : 1);

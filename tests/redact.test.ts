@@ -1,7 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { redact, hasSecret } from "../lib/redact";
+import { redact, hasSecret, SECRETS } from "../lib/redact";
 
 describe("redact", () => {
+  it.each(["Authorization: Bearer opaque-synthetic-value-4821", '"Authorization": "Bearer opaque-synthetic-value-4821"', "Bearer opaque-synthetic-value-4821", "Authorization: Basic dXNlcjpwYXNz", "Authorization: Basic YTpi", "Proxy-Authorization: Bearer c3ludGhldGlj", "Authorization: opaque_header_value", "Bearer abcdefghijklmnopqrstuvwxyzabcdef", "Bearer abcdefghijklmnopqrst", "Bearer ab+cd/ef==ghijklmn", "Authorization: ApiKey VnVhbGlkOnNlY3JldA==", "Authorization: SSWS 00Qh3syntheticokta", "Authorization: GenieKey eb24synthetic-4821", "Authorization: Splunk 1234synthetic", "Authorization: Zoho-oauthtoken 1000.8cbsynthetic", "github_pat_synthetic", "github_pat_a"])("classifies and masks recognized complete or partial credentials: %s", value => {
+    expect(hasSecret(value)).toBe(true);
+    expect(redact(value)).not.toContain("opaque-synthetic");
+    expect(redact(value)).not.toContain("github_pat_");
+    expect(SECRETS.some(([p])=>new RegExp(p.source,p.flags).test(value))).toBe(true);
+  });
+  it("keeps benign URL tokens intact and does bounded work on repeated URL starts", () => {
+    const benign="http://".repeat(16384);
+    const started=performance.now();expect(redact(benign)).toBe(benign);expect(hasSecret(benign)).toBe(false);
+    expect(performance.now()-started).toBeLessThan(500);
+    for(const value of ["https://example.test/path?q=hello", "Bearer of good news", "Authorization is required", "https://one.test/path https://two.test/path"]){expect(redact(value)).toBe(value);expect(hasSecret(value)).toBe(false);}
+  });
+
+  it("leaves prose alone: a scheme word followed by a word is a sentence, not a header", () => {
+    // Each of these came back censored from brain_ask on 2026-09-09 — the memory system
+    // redacting its own notes. A word after "bearer" has no digit, no underscore and no
+    // 24-character run; a header value has at least one of them, or a scheme in front of it.
+    for (const value of [
+      "Use bearer authentication for the door",
+      "The bearer readiness row shows presence only",
+      "Authorization: none is required for the guest door",
+      "Bearer Grylls-fan",
+      "the bearer of this note is the operator",
+      "Authorization: Bearer",
+      "Authorization: see section four for the door policy",
+      "Authorization: operator-only, see the guest door",
+      "Authorization: see notes/door.md for the policy",
+    ]) {
+      expect(redact(value)).toBe(value);
+      expect(hasSecret(value)).toBe(false);
+    }
+    expect(redact("https://one.test/?next=https://two.test/?token=syntheticValue")).not.toContain("syntheticValue");
+  });
   it("catches the shape actually sitting in this brain", () => {
     // The brain's archive carries a real ADMIN_PASSWORD=… line. A plain \b(password) misses it
     // entirely — underscore is a word character, so the boundary never matches inside
@@ -38,10 +71,9 @@ describe("redact", () => {
     expect(redact("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N")).toBe(
       "<redacted-jwt>"
     );
-    // Google's key shape, as a Gemini invalid-key error body echoes it back. The value is
-    // deliberately nonsense: the real documented example key fires every secret scanner that
-    // reads this repo, and the assertion only needs AIza followed by 35 characters.
-    expect(redact("API key not valid: AIzaEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLE")).toBe(
+    // Google's key shape — the one vendor form the operator's GAS/Sheets stack actually mints, and
+    // the shape a Gemini invalid-key error body echoes back.
+    expect(redact("API key not valid: AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY")).toBe(
       "API key not valid: <redacted-token>"
     );
   });

@@ -13,7 +13,7 @@
  */
 import { gh, repo, branch } from "./github";
 import { bubbleStore, type BubbleRead } from "./bubble";
-import { sidecarPaths } from "./corpus";
+import { LEGACY_NON_NOTE_PATHS } from "./mirror";
 
 const PULSE_TIMEOUT_MS = 6_000;
 
@@ -71,10 +71,9 @@ export async function mirrorPulse(): Promise<MirrorPulse | null> {
       // GitHub socket must degrade this card, never the page.
       gh(`/repos/${repo()}/commits/${branch()}`, { signal: AbortSignal.timeout(PULSE_TIMEOUT_MS) }),
       pg(e, "sync_state?select=head_sha,synced_at&id=is.true"),
-      // NOTES, not rows: the mirror also carries sidecar files the corpus explicitly excludes,
-      // and a count that includes one makes this card disagree with the hero by exactly the
-      // amount nobody can explain from the screen.
-      exactCount(e, `notes?select=path&path=not.in.(${encodeURIComponent(sidecarPaths().map((s) => `"${s}"`).join(","))})`),
+      // NOTES, not rows: old Map snapshots may remain in customer-owned storage, but no current
+      // count or corpus view includes them.
+      exactCount(e, `notes?select=path&path=not.in.(${encodeURIComponent(LEGACY_NON_NOTE_PATHS.map((s) => `"${s}"`).join(","))})`),
     ]);
     if (!headRes.ok || !syncRes.ok) return null;
     const gitHead = ((await headRes.json()) as { sha: string }).sha;
@@ -167,47 +166,6 @@ export interface TemperaturePulse {
    *  A sample when `cold` exceeds its length — the render says so rather than implying it is
    *  the complete set. */
   coldest: Array<{ path: string; score: number }>;
-}
-
-export interface NoteHeat {
-  path: string;
-  temperature: "hot" | "warm" | "cold";
-  score: number;
-  reads: number;
-}
-
-/** The three values note_scores is allowed to claim. Anything else in a row is a schema drift
- *  this reader refuses to forward, because the map turns temperature straight into brightness. */
-const TEMPERATURES = new Set(["hot", "warm", "cold"]);
-
-/**
- * Every note's temperature, for the map — the SAME rows the router and the trends read, so the
- * map can never disagree with the console about which notes are alive. This reads note_scores;
- * it never rescores. Paged like every other full-table read here, because trusting one response
- * silently serves a partial answer the day the table outgrows PostgREST's max-rows.
- *
- * Null for every not-an-answer state — store off, table missing, store unwell — so the map
- * renders without heat rather than rendering "everything is cold" out of a blink.
- */
-export async function noteHeat(): Promise<NoteHeat[] | null> {
-  const e = env();
-  if (!e) return null;
-  try {
-    const out: NoteHeat[] = [];
-    const PAGE = 1000;
-    for (let from = 0; ; from += PAGE) {
-      const res = await pg(e, "note_scores?select=path,temperature,score,reads&order=path.asc", {
-        headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
-      });
-      if (!res.ok) return null;
-      const rows = (await res.json()) as NoteHeat[];
-      out.push(...rows.filter((r) => TEMPERATURES.has(r.temperature)));
-      if (rows.length < PAGE) return out;
-    }
-  } catch (err) {
-    console.error(`[pulse] note heat unavailable — the map renders without temperatures: ${String(err)}`);
-    return null;
-  }
 }
 
 export async function temperaturePulse(): Promise<TemperaturePulse | null> {

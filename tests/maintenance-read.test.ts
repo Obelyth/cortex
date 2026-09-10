@@ -71,8 +71,8 @@ const readSchema = z.object(brainRead.config.inputSchema ?? {});
 async function readAndCaptureRow(args: Record<string, unknown>) {
   const rows: AccessRow[] = [];
   __setStore({
+    snapshot: async () => ({ head: null, rows: [] }),
     head: async () => null,
-    all: async () => [],
     paths: async () => [],
     apply: async () => true,
     access: async (r: AccessRow[]) => void rows.push(...r),

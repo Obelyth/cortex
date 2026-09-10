@@ -25,10 +25,21 @@ vi.mock("../lib/learning", async (importOriginal) => ({
   writeLearning: learning.writeLearning,
 }));
 
-import { POST } from "../app/s/[secret]/console/settings/save/route";
+const guest = vi.hoisted(() => ({
+  readGuestPolicy: vi.fn(),
+  writeGuestPolicy: vi.fn(),
+}));
+vi.mock("../lib/guest", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/guest")>()),
+  readGuestPolicy: guest.readGuestPolicy,
+  writeGuestPolicy: guest.writeGuestPolicy,
+}));
+
+import * as saveRoute from "../app/s/[secret]/console/settings/save/route";
 import { STAMP_COOKIE, stampValue } from "../lib/stamp";
 
 const SECRET = "a".repeat(64);
+const REVISION = "b".repeat(40);
 
 function call(
   body: unknown,
@@ -49,7 +60,20 @@ function call(
     headers,
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
-  return POST(req, { params: Promise.resolve({ secret }) });
+  return saveRoute.POST(req, { params: Promise.resolve({ secret }) });
+}
+
+function read(
+  family: string,
+  { secret = SECRET, cookie = "stamped" }: { secret?: string; cookie?: "stamped" | "none" } = {},
+) {
+  const headers: Record<string, string> = {};
+  if (cookie === "stamped") headers.cookie = `${STAMP_COOKIE}=${stampValue()}`;
+  const req = new Request(
+    `https://cortex.test/s/${secret}/console/settings/save?family=${encodeURIComponent(family)}`,
+    { headers },
+  );
+  return saveRoute.GET(req, { params: Promise.resolve({ secret }) });
 }
 
 beforeEach(() => {
@@ -73,6 +97,16 @@ beforeEach(() => {
     conflicts: [],
   });
   learning.writeLearning.mockResolvedValue(undefined);
+  guest.readGuestPolicy.mockResolvedValue({
+    scope: ["projects/", "notes/private.md"],
+    citations: false,
+    dailyAsks: 50,
+    maxK: 8,
+    source: "store",
+    usedToday: 0,
+    revision: REVISION,
+  });
+  guest.writeGuestPolicy.mockImplementation(async (next) => ({...next,revision:"c".repeat(40)}));
 });
 
 describe("settings write endpoint", () => {
@@ -138,7 +172,7 @@ describe("settings write endpoint", () => {
   it("rejects a model off the allowlist before it reaches the store", async () => {
     const res = await call({ defaultReader: "gpt-4" });
     expect(res.status).toBe(400);
-    expect(await res.json()).toMatchObject({ error: expect.stringContaining("gpt-4") });
+    expect(await res.json()).toMatchObject({ error: "not an allowed reader model" });
     expect(settings.writeSettings).not.toHaveBeenCalled();
   });
 
@@ -153,13 +187,29 @@ describe("settings write endpoint", () => {
     expect((await call(["google"])).status).toBe(400);
   });
 
-  it("passes a refusal from the settings layer through as a sentence", async () => {
-    settings.writeSettings.mockRejectedValue(
-      new Error("gemini-3.6-flash cannot be the default while google is off — change the default first")
-    );
+  it("preserves the allowlisted local contradiction without asking the store to write", async () => {
+    settings.readSettings.mockResolvedValue({
+      defaultReader: "gemini-3.6-flash",
+      disabledProviders: [],
+      source: "store",
+      conflicts: [],
+    });
     const res = await call({ disabledProviders: ["google"] });
-    expect(res.status).toBe(409);
+    expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/change the default first/);
+    expect(settings.writeSettings).not.toHaveBeenCalled();
+  });
+
+  it("maps an upstream reader-store failure to a fixed safe response", async () => {
+    settings.writeSettings.mockRejectedValue(
+      new Error("UPSTREAM_SECRET_SENTINEL command=[SET, cortex:settings, private-payload]")
+    );
+    const res = await call({ defaultReader: "claude-opus-5" });
+    const text = await res.text();
+    expect(res.status).toBe(503);
+    expect(text).toMatch(/reader settings store did not confirm/i);
+    expect(text).not.toContain("UPSTREAM_SECRET_SENTINEL");
+    expect(text).not.toContain("private-payload");
   });
 
   it("dedupes a provider list rather than storing it twice", async () => {
@@ -167,6 +217,35 @@ describe("settings write endpoint", () => {
     expect(settings.writeSettings).toHaveBeenCalledWith(
       expect.objectContaining({ disabledProviders: ["google", "openai"] })
     );
+  });
+
+  it("refuses a reader read-modify-write when the current settings are unreachable", async () => {
+    settings.readSettings.mockResolvedValue({
+      defaultReader: null,
+      disabledProviders: [],
+      source: "unreachable",
+      conflicts: [],
+    });
+    const res = await call({ defaultReader: "claude-opus-5" });
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("not saved") });
+    expect(settings.writeSettings).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { defaultReader: "claude-opus-5", learning: { ansCache: false } },
+    { learning: { ansCache: false }, guest: { citations: true } },
+    { disabledProviders: ["google"], guest: { citations: true } },
+  ])("rejects a request that mixes settings families instead of silently choosing one", async (body) => {
+    const res = await call(body);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining("one settings family") });
+    expect(settings.readSettings).not.toHaveBeenCalled();
+    expect(learning.readLearning).not.toHaveBeenCalled();
+    expect(guest.readGuestPolicy).not.toHaveBeenCalled();
+    expect(settings.writeSettings).not.toHaveBeenCalled();
+    expect(learning.writeLearning).not.toHaveBeenCalled();
+    expect(guest.writeGuestPolicy).not.toHaveBeenCalled();
   });
 });
 
@@ -177,6 +256,7 @@ describe("the learning patch", () => {
     expect(learning.writeLearning).toHaveBeenCalledWith({ coaccessFloor: 6, ansCache: false });
     // A learning patch must never touch the reader settings family.
     expect(settings.writeSettings).not.toHaveBeenCalled();
+    expect(settings.readSettings).not.toHaveBeenCalled();
   });
 
   it("null hands a knob back to env-and-code defaults", async () => {
@@ -202,10 +282,95 @@ describe("the learning patch", () => {
     expect(learning.writeLearning).not.toHaveBeenCalled();
   });
 
-  it("passes a store refusal through as a sentence", async () => {
-    learning.writeLearning.mockRejectedValue(new Error("no KV store is configured, so a learning setting has nowhere durable to live"));
+  it("maps an upstream learning-store failure to a fixed safe response", async () => {
+    learning.writeLearning.mockRejectedValue(new Error("UPSTREAM_SECRET_SENTINEL learning-command"));
     const res = await call({ learning: { ansCache: false } });
+    const text = await res.text();
+    expect(res.status).toBe(503);
+    expect(text).toMatch(/learning settings store did not confirm/i);
+    expect(text).not.toContain("UPSTREAM_SECRET_SENTINEL");
+  });
+});
+
+describe("the guest patch", () => {
+  it("returns the authoritative conflict without writing another settings family", async () => {
+    const {GuestPolicyConflict}=await import("../lib/guest");
+    const current={scope:["notes/private.md"],citations:false,dailyAsks:50,maxK:8,revision:"c".repeat(40)};
+    guest.writeGuestPolicy.mockRejectedValue(new GuestPolicyConflict(current));
+    const res=await call({guest:{scope:["projects/"],expectedRevision:REVISION}});
     expect(res.status).toBe(409);
-    expect((await res.json()).error).toMatch(/nowhere durable/);
+    expect(await res.json()).toMatchObject({code:"conflict",family:"guest",current});
+    expect(settings.writeSettings).not.toHaveBeenCalled();
+    expect(learning.writeLearning).not.toHaveBeenCalled();
+  });
+
+  it("removes one exact-note grant without erasing its folder or another exact grant", async () => {
+    guest.readGuestPolicy.mockResolvedValue({
+      scope: ["projects/", "projects/one.md", "notes/two.md"],
+      citations: false,
+      dailyAsks: 50,
+      maxK: 8,
+      source: "store",
+      usedToday: 0,
+    });
+    const res = await call({ guest: { scope: ["projects/", "notes/two.md"], expectedRevision: REVISION } });
+    expect(res.status).toBe(200);
+    expect(guest.writeGuestPolicy).toHaveBeenCalledWith({
+      scope: ["projects/", "notes/two.md"],
+      citations: false,
+      dailyAsks: 50,
+      maxK: 8,
+    }, REVISION);
+    expect(settings.readSettings).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty guest scope before asking the store to write", async () => {
+    const res = await call({ guest: { scope: [] } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/at least one allowed path/i);
+    expect(guest.writeGuestPolicy).not.toHaveBeenCalled();
+  });
+
+  it("maps an upstream guest-store failure to a fixed safe response", async () => {
+    guest.writeGuestPolicy.mockRejectedValue(new Error("UPSTREAM_SECRET_SENTINEL guest-command"));
+    const res = await call({ guest: { citations: true, expectedRevision: REVISION } });
+    const text = await res.text();
+    expect(res.status).toBe(503);
+    expect(text).toMatch(/guest policy store did not confirm/i);
+    expect(text).not.toContain("UPSTREAM_SECRET_SENTINEL");
+  });
+});
+
+describe("fresh Settings reconciliation reads", () => {
+  it("gates independently before reading and returns no body for a bad secret", async () => {
+    expect(saveRoute.GET).toBeTypeOf("function");
+    const res = await read("reader", { secret: "b".repeat(64) });
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("");
+    expect(settings.readSettings).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["reader", "reader"],
+    ["learning", "learning"],
+    ["guest", "guest"],
+  ] as const)("returns a minimal no-store %s snapshot for receipt reconciliation", async (family, expected) => {
+    expect(saveRoute.GET).toBeTypeOf("function");
+    const res = await read(family);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    expect(await res.json()).toMatchObject({ family: expected, current: expect.any(Object) });
+  });
+
+  it("does not turn an unreadable family fallback into an authoritative snapshot", async () => {
+    guest.readGuestPolicy.mockResolvedValue({
+      scope: ["projects/"], citations: false, dailyAsks: 50, maxK: 8,
+      source: "unreachable", usedToday: null,
+    });
+    const res = await read("guest");
+    const text = await res.text();
+    expect(res.status).toBe(503);
+    expect(res.headers.get("cache-control")).toContain("no-store");
+    expect(text).not.toContain("projects/");
   });
 });

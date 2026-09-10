@@ -1,0 +1,116 @@
+name: Cortex dashboard checks
+run-name: cortex:${{ inputs.request_id }}
+on:
+  workflow_dispatch:
+    inputs:
+      request_id:
+        required: true
+        type: string
+      source_sha:
+        required: true
+        type: string
+      operation:
+        required: true
+        type: choice
+        options: [checks, migrations.check, migrations.apply]
+      target_identity:
+        required: true
+        type: string
+      pending_digest:
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: cortex-dashboard-${{ inputs.request_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Validate immutable source and fixed operation
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          OPERATION: ${{ inputs.operation }}
+          TARGET_IDENTITY: ${{ inputs.target_identity }}
+          PENDING_DIGEST: ${{ inputs.pending_digest }}
+        run: node scripts/dashboard-workflow.cjs validate
+
+  checks:
+    needs: validate
+    if: inputs.operation == 'checks'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      # No project/provider/database/private-corpus secrets enter this job or lifecycle hooks.
+      - name: Install locked dependencies without lifecycle hooks
+        run: npm ci --ignore-scripts
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit suite
+        if: always()
+        run: npm test
+      - name: Production build
+        if: always()
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+        run: npm run build
+
+
+  migrations:
+    needs: validate
+    if: inputs.operation == 'migrations.check' || inputs.operation == 'migrations.apply'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Repository owner: create this production database environment before dispatching.
+    # Require reviewer approval, disallow self-review/bypass where supported, and allow
+    # only your approved application branch. Store the DSN and optional trusted CA here,
+    # never as repository-wide secrets. Both check and apply run behind this protection.
+    environment: cortex-database
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22.23.2'
+          package-manager-cache: false
+      - name: Install without lifecycle hooks
+        run: npm ci --ignore-scripts
+      - name: Read-only migration check
+        if: inputs.operation == 'migrations.check'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          CORTEX_DATABASE_CA: ${{ secrets.CORTEX_DATABASE_CA }}
+          CORTEX_WORKFLOW_OPERATION: migrations.check
+          CORTEX_MIGRATION_TARGET: ${{ inputs.target_identity }}
+        run: node --experimental-strip-types scripts/migrate.ts
+      - name: Confirmed migration apply
+        if: inputs.operation == 'migrations.apply'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          CORTEX_DATABASE_CA: ${{ secrets.CORTEX_DATABASE_CA }}
+          CORTEX_WORKFLOW_OPERATION: migrations.apply
+          CORTEX_MIGRATION_TARGET: ${{ inputs.target_identity }}
+          CORTEX_PENDING_DIGEST: ${{ inputs.pending_digest }}
+        run: node --experimental-strip-types scripts/migrate.ts --apply

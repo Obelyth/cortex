@@ -1,4 +1,5 @@
 import { redact } from "./redact";
+import { abortAfter, DeadlineExceeded, githubBudgetMs, type Deadline } from "./deadline";
 
 const API = "https://api.github.com";
 
@@ -21,28 +22,34 @@ export function branch(): string {
  * `catch` away. loadCorpus() only falls back on a thrown error, never on a hang; this is what
  * turns the hang into an error. Generous enough for a tarball redirect, far inside the wall.
  */
-const REQUEST_TIMEOUT_MS = 15_000;
+/** One GitHub round trip's ceiling. Exported so app/api/ops/sweep reserves the real number for
+ *  the per-path commit lookup that rides this client. */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+/** A request's options, plus the deadline of the request it rides in. */
+export type GhInit = RequestInit & { deadline?: Deadline };
 
 /**
- * Every caller assembles `path` from repo/branch config plus note paths that arrive over MCP.
- * Whatever it contains, it must stay a path under the API origin: no second origin smuggled in
- * through a leading `//`, no parent-directory hop that could re-aim the request.
+ * The ceiling one call actually gets: the caller's own signal when it passed one; otherwise the
+ * per-request cap, cut down to what the request deadline has left. A deadline with less left than
+ * one useful round trip refuses to start rather than begin a fetch it cannot finish — a stage
+ * that starts and is killed leaves nothing behind; one that declines can be reported.
  */
-function assertApiPath(path: string): void {
-  const bare = path.split("?")[0];
-  if (!path.startsWith("/") || path.startsWith("//") || bare.split("/").includes("..")) {
-    throw new Error(`refusing GitHub API path: ${path}`);
-  }
+function signalFor(init: GhInit): AbortSignal {
+  if (init.signal) return init.signal;
+  if (!init.deadline) return abortAfter(REQUEST_TIMEOUT_MS).signal;
+  const ms = githubBudgetMs(REQUEST_TIMEOUT_MS, init.deadline.remaining());
+  if (ms === 0) throw new DeadlineExceeded("github", init.deadline.remaining(), false);
+  return abortAfter(ms).signal;
 }
 
-export async function gh(path: string, init: RequestInit = {}): Promise<Response> {
+export async function gh(path: string, init: GhInit = {}): Promise<Response> {
   const token = process.env.GITHUB_TOKEN;
   if (!token) throw new Error("GITHUB_TOKEN env var not set");
-  assertApiPath(path);
+  const { deadline: _deadline, ...rest } = init;
   return fetch(`${API}${path}`, {
-    // Callers can still pass their own signal — spread last so an explicit one wins.
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    ...init,
+    ...rest,
+    signal: signalFor(init),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: "application/vnd.github+json",

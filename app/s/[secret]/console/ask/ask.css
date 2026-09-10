@@ -1,0 +1,320 @@
+/*
+ * ask.css — the Ask screen, v2 (from the approved "ask-explorer" concept):
+ * the Notes screen folded in as a file-type explorer, the ask band over both columns, and an
+ * answer that shows what it read. Every value here is the concept render's own, ported to a
+ * class; the tokens come from theme.css and nothing else, so the same rules read on ink and on
+ * paper.
+ *
+ * The anatomy, top to bottom: 01 · the ask band on the inverted ground (the input governs both
+ * columns — its text filters the tree, Enter fills the readout); the body as READOUT above the
+ * full-width EXPLORER; the note, the handoff, a tool and a unit open
+ * in the shared lens, whose body classes live at the foot.
+ *
+ * Prefix: ask*. The console's older ask block (console.css) styles the same-named classes of the
+ * previous demonstration screen; this file names none of them, so the two cannot fight, and that
+ * block goes when console.css is next open. tests/ask-classes.test.ts holds every class the
+ * markup names to a rule here.
+ */
+
+/* ── 01 · the ask band, on the inverted ground ─────────────────────────────── */
+/* Full-bleed like the console's bands; the −44px lifts it into .conBody's top air so it touches
+   the masthead, as the concept draws it. */
+.askBand { position: relative; z-index: 1; margin: -44px calc(50% - 50vw) 0; width: 100vw; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-bottom: 1px solid var(--line); box-shadow: var(--cast), inset 0 0 0 1px var(--inv-hair); }
+.askBand { --cx-d: 0ms; }
+/* The band is full-bleed, so its inner column is what has to line up with the body beneath —
+   the input governs both columns and cannot sit inset from them. .conBody clamps at 1560px,
+   so the body is re-clamped to this same 1440 rather than the band widened: every ported
+   screen re-clamps its body to its band, and Ops is the exact precedent: a 1440 strip with
+   28px padding gives 1384 of content, and .opsBody is 1384 with no padding of its own. Below
+   1440 both are fluid inside .conBody's gutters and the two already agreed. */
+.askBandIn { max-width: 1440px; margin: 0 auto; padding: 30px 28px 26px; box-sizing: border-box; }
+.askBody { max-width: 1384px; margin-left: auto; margin-right: auto; }
+.askChipNo { display: inline-flex; flex: none; margin-bottom: 14px; }
+.askChipNo b { background: var(--signal); color: var(--signal-on); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
+.askChipNo span { background: var(--inv-chip); color: var(--inv-fg); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; }
+.askForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--ground); color: var(--ink); border: 1px solid var(--inv-line); border-radius: var(--r); box-shadow: var(--well); transition: border-color 160ms var(--ease); }
+.askForm:focus-within { border-color: var(--inv-accent); }
+/* Controls on the inverted slab take the slab's accent: the foundation's ring is --accent-hi
+   at 2px offset, tuned for the normal ground, and on --inv-bg it is the same near-invisible
+   1.38:1 the Overview's corpus field had to solve. --inv-accent clears the 3:1 floor, and
+   the offset is pulled to 0 so the ring is not swallowed by the band it sits on. */
+.conRoot .askQ:focus-visible, .conRoot .askSubmit:focus-visible, .conRoot .askAlsoRow:focus-visible {
+  outline: 2px solid var(--inv-accent); outline-offset: 0;
+}
+.askSr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.askQ { height: 56px; min-width: 0; padding: 0 18px; border: 0; background: transparent; color: var(--bright); font-family: var(--sans); font-size: 16px; outline: 0; border-radius: var(--r) 0 0 var(--r); }
+.askQ::placeholder { color: var(--faint); }
+.askQ:disabled { color: var(--muted); }
+.askSubmit { min-height: 56px; padding: 0 22px; border: 0; border-left: 1px solid var(--line); border-radius: 0 var(--r) var(--r) 0; background: var(--accent); color: var(--accent-on); cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+.askSubmit:disabled { background: var(--surface2); color: var(--disabled); cursor: default; }
+.askHints { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); white-space: nowrap; }
+.askHints b { color: var(--inv-muted); font-weight: 500; }
+.askHintCrit { color: var(--inv-crit); }
+
+/* The ALSO strip: units and tools a find matched. They have no directory, so they sit under the
+   input as v2's jump rows, capped at eight. */
+.askAlso { display: grid; gap: 0; margin-top: 10px; }
+/* Structure by rule and ground, not by boxes: a top hairline, no fill, no radius, and the row
+   leans toward what it points at on hover. A ladder of framed slabs was the one place this
+   screen argued with the law. */
+.askAlsoRow { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; width: 100%; min-height: 44px; padding: 10px 0; border: 0; border-top: 1px solid var(--inv-hair); border-radius: 0; background: transparent; color: var(--inv-fg); text-align: left; cursor: pointer; font-family: var(--mono); font-size: 11px; text-decoration: none; transition: transform 140ms var(--ease), color 140ms var(--ease); }
+.askAlsoRow:hover { color: var(--inv-fg); text-decoration: none; transform: translateX(6px); }
+@media (prefers-reduced-motion: reduce) { .askAlsoRow:hover { transform: none; } }
+.askAlsoKind { letter-spacing: 0.12em; text-transform: uppercase; color: var(--inv-faint); font-size: 10px; }
+.askAlsoName { color: var(--inv-fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.askAlsoMeta { color: var(--inv-faint); white-space: nowrap; }
+.askAlsoHead { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0 6px; margin-top: 12px; border-top: 1px solid var(--inv-line); font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--inv-faint); white-space: nowrap; }
+.askAlsoMore { padding: 8px 0 0; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
+.askAlsoNone { margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
+
+/* ── The body: readout first, corpus beneath ───────────────────────────────── */
+.askBody { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; padding-top: 28px; }
+@media (max-width: 899px) {
+  .askBody { grid-template-columns: minmax(0, 1fr); padding-top: 20px; }
+}
+
+/* ── The explorer ──────────────────────────────────────────────────────────── */
+.askExplorer { --cx-d: 60ms; position: static; max-height: none; overflow: visible; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--bezel); min-width: 0; }
+.askExHead { background: var(--surface); border-bottom: 1px solid var(--line); padding: 14px 16px 10px; }
+.askExTitle { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.askLbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--bright); white-space: nowrap; flex: none; }
+.askLblSm { font-size: 10px; letter-spacing: 0.14em; color: var(--faint); }
+.askLblMeta { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.askSeatStrip { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+.askSeatStrip b { color: var(--accent); font-weight: 500; }
+.askSeatStrip i { width: 6px; height: 6px; background: var(--accent); display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.askExSum { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+/* The degraded line: scoring off, unavailable, empty, the cold start — said out loud. */
+.askDegrade { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--warn); line-height: 1.6; }
+.askExTools { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 10px; margin-top: 10px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.askExShown { margin-left: auto; }
+.askSort { display: inline-flex; flex: none; border: 1px solid var(--line); border-radius: var(--r-chip); overflow: hidden; }
+.askSort button { padding: 5px 8px; border: 0; background: transparent; color: var(--faint); cursor: pointer; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; min-height: 26px; }
+.askSort button[aria-pressed="true"] { background: var(--surface2); color: var(--bright); }
+.askSort button:hover { color: var(--bright); }
+.askCols { position: sticky; top: 0; z-index: 2; background: var(--surface); display: grid; grid-template-columns: minmax(0, 1fr) 28px 26px 38px 18px 46px; gap: 6px; padding: 8px 16px 6px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--hair); white-space: nowrap; }
+.askR { text-align: right; }
+.askC { text-align: center; }
+.askTree { padding: 2px 0 12px; }
+.askNone { padding: 22px 16px; font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+/* A directory: its ledger line, then its children (months, pages, rows). */
+.askDir { min-width: 0; }
+/* Group rows: the directory's ledger line. Wraps rather than truncates. */
+.askGroup { display: grid; grid-template-columns: 14px auto minmax(0, 1fr); gap: 8px; align-items: baseline; width: 100%; text-align: left; padding: 9px 16px; border: 0; border-top: 1px solid var(--hair); background: var(--surface2); color: var(--ink); cursor: pointer; min-height: 40px; transition: background-color 160ms var(--ease); }
+.askGroup:hover { background: var(--glass); }
+.askCaret { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.askGroupName { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--bright); white-space: nowrap; }
+.askGroupMeta { font-family: var(--mono); font-size: 10px; color: var(--faint); min-width: 0; line-height: 1.5; }
+.askGroupMeta b { font-weight: 500; }
+.askWarnFg { color: var(--warn); }
+.askAccentFg { color: var(--accent); }
+.askKids .askGroup { background: transparent; }
+/* Depth as a class, never an inline custom property (the port brief's rule 1). */
+.askD1 { padding-left: 32px; }
+.askD2 { padding-left: 48px; }
+.askRow.askD1 { padding-left: 32px; }
+.askRow.askD2 { padding-left: 48px; }
+
+/* Note rows: v2's row grammar — glass fill, signal edge, a 4px shift on hover; accent-soft and
+   the accent edge while the lens is open on it. 40px with a mouse, 44px on a coarse pointer. */
+.askRow { display: grid; grid-template-columns: minmax(0, 1fr) 28px 26px 38px 18px 46px; gap: 6px; align-items: center; width: 100%; text-align: left; padding: 0 16px; border: 0; border-top: 1px solid var(--hair); border-left: 3px solid transparent; margin-left: -3px; background: transparent; color: var(--ink); cursor: pointer; min-height: 40px; border-radius: 0 var(--r-chip) var(--r-chip) 0; transition: transform 200ms var(--ease), border-color 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease); }
+.askRow:hover, .askRowLit { transform: translateX(4px); border-left-color: var(--signal); background: var(--glass); box-shadow: var(--elev1); }
+.askRowSel { background: var(--accent-soft); border-left-color: var(--accent); }
+.askRowSel:hover { border-left-color: var(--accent); }
+.askRowRead .askLeaf { color: var(--bright); }
+.askRowOff .askLeaf, .askRowOff .askTok, .askRowOff .askTitle { color: var(--disabled); }
+.askRowOff, .askRowOff:hover { cursor: default; transform: none; border-left-color: transparent; background: transparent; box-shadow: none; }
+@media (pointer: coarse) { .askRow, .askGroup { min-height: 44px; } .askSort button { min-height: 44px; padding: 0 12px; } .askBtnSm { min-height: 44px; } }
+.askRowName { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.askLeaf { font-family: var(--mono); font-size: 12px; color: var(--ink); flex: 0 1 auto; min-width: 3ch; overflow: hidden; text-overflow: ellipsis; }
+/* The title gives way first (a zero basis), then the leaf; the pin and the mark never clip. */
+.askTitle { font-family: var(--sans); font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1 1 0; }
+.askMark { display: inline-block; padding: 1px 6px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); color: var(--accent); white-space: nowrap; flex: none; line-height: 1.4; }
+.askMarkCited { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.askMarkCut { color: var(--faint); }
+.askPinTag { display: inline-block; padding: 1px 5px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border-radius: var(--r-chip); border: 1px solid currentColor; flex: none; line-height: 1.4; }
+.askPin-hot { color: var(--warn); }
+.askPin-warm { color: var(--muted); }
+.askPin-cold { color: var(--faint); }
+.askTemp { display: inline-flex; gap: 2px; align-items: center; justify-self: start; }
+.askTemp i { width: 6px; height: 6px; display: inline-block; background: transparent; border: 1px solid var(--line); }
+.askTemp i.on { background: var(--muted); border-color: var(--muted); }
+.askTemp i.hot { background: var(--warn); border-color: var(--warn); }
+.askSeat { display: inline-flex; justify-self: center; }
+.askSeat i { width: 7px; height: 7px; display: inline-block; border: 1px solid var(--line); background: transparent; }
+.askSeat.on i { background: var(--accent); border-color: var(--accent); }
+.askStampAge { font-family: var(--mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.askStampStale { color: var(--warn); }
+.askStampNone { color: var(--disabled); }
+.askStampRec { color: var(--faint); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; }
+.askStampSet { color: var(--disabled); }
+.askRet { font-family: var(--mono); font-size: 11px; color: var(--disabled); text-align: right; font-variant-numeric: tabular-nums; }
+.askRet.on { color: var(--warn); }
+.askTok { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+/* archive/: dim, dashed, closed. */
+.askDirOff .askGroupName, .askDirOff .askCaret { color: var(--disabled); }
+.askDirOff .askGroup { background: transparent; border-top: 1px dashed var(--line); }
+.askOffNote { padding: 10px 16px 12px 32px; font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; }
+.askKids[hidden] { display: none; }
+.askLegend { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; color: var(--faint); line-height: 1.6; }
+.askLegend b { color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; margin-right: 4px; }
+.askLegend i { font-style: normal; color: var(--muted); }
+
+/* ── The readout ───────────────────────────────────────────────────────────── */
+.askReadout { --cx-d: 120ms; min-width: 0; }
+.askAnswerCard { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--bezel); padding: 18px 22px 20px; }
+.askAnswerHead { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.askEyebrow { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.askAnswerQ { margin: 0; font-family: var(--sans); font-weight: 500; font-variation-settings: "wdth" 112; font-size: 20px; line-height: 1.2; color: var(--bright); letter-spacing: -0.01em; text-wrap: pretty; }
+.askVerdictRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; padding: 14px 0 0; }
+.askVerdict { display: inline-block; padding: 3px 9px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-on); white-space: nowrap; flex: none; border-radius: var(--r-chip); }
+.askVerdictOk { background: var(--ok); }
+.askVerdictWarn { background: var(--warn); }
+.askVerdictBad { background: var(--crit); }
+/* An honest abstention is not painted as a failure. */
+.askVerdictAbstain { background: var(--muted); }
+.askVerdictLine { font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; min-width: 0; }
+.askAnswerText { margin: 0; padding: 14px 0 6px; font-size: 16px; line-height: 1.55; color: var(--ink); max-width: 70ch; text-wrap: pretty; white-space: pre-wrap; }
+.askCitation { min-width: 0; }
+.askSectionHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 0 8px; border-bottom: 1px solid var(--line); margin-top: 10px; flex-wrap: wrap; }
+.askCitationLine { display: flex; flex-wrap: wrap; gap: 6px 12px; font-family: var(--mono); font-size: 11px; color: var(--faint); margin: 10px 0 8px; white-space: nowrap; }
+.askLink { border: 0; background: transparent; padding: 0 0 1px; color: var(--accent); cursor: pointer; font-family: var(--mono); font-size: 12px; white-space: nowrap; background-image: linear-gradient(var(--accent-hi), var(--accent-hi)); background-size: 0% 1px; background-repeat: no-repeat; background-position: 0 100%; transition: background-size 260ms var(--ease); }
+.askLink:hover { background-size: 100% 1px; color: var(--accent-hi); }
+.askQuote { margin: 0; padding: 12px 16px; background: var(--sunk); box-shadow: var(--trough); border-left: 3px solid var(--ok); font-size: 14px; line-height: 1.5; color: var(--ink); border-radius: 0 var(--r) var(--r) 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.askQuoteBad { border-left-color: var(--crit); }
+.askQuoteWarn { border-left-color: var(--warn); }
+.askReason { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+.askNoCite { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.6; max-width: 70ch; }
+.askActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.askBtn { display: inline-flex; align-items: center; min-height: 38px; padding: 0 12px; border: 1px solid var(--line); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; flex: none; border-radius: var(--r-chip); text-decoration: none; transition: transform 140ms var(--ease), border-color 140ms var(--ease); }
+.askBtn:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--ink); text-decoration: none; }
+.askBtn:active { transform: translateY(1px); }
+.askBtn:is(:disabled, [aria-disabled="true"]), .askBtn[aria-disabled="true"]:hover { color: var(--disabled); border-color: var(--hair); cursor: default; transform: none; }
+.askBtnPrimary { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.askBtnPrimary:hover { color: var(--accent-on); }
+.askBtnSm { min-height: 30px; padding: 0 10px; font-size: 10px; }
+
+/* WHAT IT READ: one row per note in the pack, then the notes a cap refused, then the zero line. */
+.askRead { margin-top: 4px; }
+.askReadCols { display: grid; grid-template-columns: 22px minmax(0, 1fr) 56px 58px; gap: 10px; padding: 8px 0 6px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.askReadRow { display: grid; grid-template-columns: 22px minmax(0, 1fr) 56px 58px; grid-template-areas: "r p t m" "r w w w"; gap: 2px 10px; align-items: center; width: 100%; text-align: left; padding: 8px 0 8px 3px; border: 0; border-top: 1px solid var(--hair); border-left: 3px solid transparent; margin-left: -3px; background: transparent; color: var(--ink); cursor: pointer; min-height: 40px; border-radius: 0 var(--r-chip) var(--r-chip) 0; transition: transform 200ms var(--ease), border-color 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease); }
+.askReadRow:hover { transform: translateX(4px); border-left-color: var(--signal); background: var(--glass); box-shadow: var(--elev1); }
+.askReadRowCited { border-left-color: var(--accent); }
+.askReadRowCut { color: var(--faint); }
+.askReadRank { grid-area: r; font-family: var(--mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; align-self: start; padding-top: 2px; }
+.askReadPath { grid-area: p; font-family: var(--mono); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3; }
+.askReadDir { color: var(--faint); }
+.askReadPath b { font-weight: 500; color: var(--bright); }
+.askReadRowCut .askReadPath b { color: var(--muted); }
+.askReadWhy { grid-area: w; font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.askReadPart { color: var(--faint); font-size: 11px; }
+.askReadPart::before { content: " · "; }
+.askReadTok { grid-area: t; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.askReadMark { grid-area: m; justify-self: end; }
+.askReadSub { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 0 6px; border-bottom: 1px solid var(--hair); margin-top: 4px; flex-wrap: wrap; }
+.askReadNote { font-family: var(--mono); font-size: 11px; color: var(--warn); padding: 8px 0 2px; line-height: 1.6; }
+.askReadZero { font-family: var(--mono); font-size: 11px; color: var(--faint); padding: 12px 0 2px; line-height: 1.6; border-top: 1px solid var(--hair); margin-top: 6px; }
+.askCost { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 18px; padding: 10px 14px; background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r); font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.askCost b { color: var(--bright); font-weight: 500; }
+
+/* The empty readout: the corpus at a glance, and where the answer will land. */
+.askEmpty { margin-top: 0; }
+.askGlance { display: grid; gap: 0; margin-top: 4px; }
+.askGlanceRow { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; padding: 9px 0; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 12px; color: var(--ink); }
+.askGlanceRow dt { margin: 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); align-self: baseline; }
+.askGlanceRow dd { margin: 0; overflow-wrap: anywhere; }
+.askEmptyLine { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; }
+
+.askContextLink { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-top:20px; font-size:12px; line-height:1.6; color:var(--muted); }
+
+.askBusy { margin-top: 14px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.askBusyBar { display: block; height: 2px; background: var(--accent); margin-bottom: 12px; animation: cx-load 2.4s var(--ease-out) infinite; }
+.askSteps { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.askStep { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 8px; align-items: baseline; line-height: 1.6; }
+.askStep i { width: 6px; height: 6px; display: inline-block; background: var(--accent); animation: cx-breathe 1.6s ease-in-out infinite; vertical-align: 1px; }
+.askStep b { color: var(--bright); font-weight: 500; }
+.askElapsed { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; font-variant-numeric: tabular-nums; }
+.askReadRow:disabled { cursor: default; }
+.askReadRow:disabled:hover { transform: none; border-left-color: transparent; background: transparent; box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .askBusyBar, .askStep i { animation: none; } .askRow, .askReadRow, .askBtn, .askLink, .askAlsoRow { transition: none; } .askRow:hover, .askReadRow:hover, .askBtn:hover, .askBtn:active { transform: none; } }
+
+/* A refused ask: the server's own sentence, in crit, above the empty readout. The explorer is
+   untouched by any of it. */
+.askFail { margin-bottom: 14px; padding: 10px 14px; border-left: 3px solid var(--crit); background: var(--sunk); box-shadow: var(--trough); border-radius: 0 var(--r) var(--r) 0; font-family: var(--mono); font-size: 12px; color: var(--ink); line-height: 1.6; }
+
+@media (max-width: 899px) {
+  /* Narrow: the leaf and its tags on one line, the title beneath — nothing shrinks to a stub. */
+  .askRowName { flex-wrap: wrap; row-gap: 0; }
+  .askLeaf { flex: 0 1 auto; min-width: 0; }
+  .askTitle { flex: 1 1 100%; }
+  .askRow { padding-top: 6px; padding-bottom: 6px; }
+  .askBandIn { padding: 22px 16px 20px; }
+  .askHints, .askHints span { white-space: normal; }
+  .askAnswerCard { padding: 14px 16px 16px; }
+  .askCost { gap: 4px 14px; }
+  .askCost span { white-space: normal; }
+  .askReadWhy, .askLblMeta, .askCitationLine { white-space: normal; }
+  .askReadPath { white-space: normal; overflow-wrap: anywhere; }
+  .askGlanceRow { grid-template-columns: 96px minmax(0, 1fr); }
+}
+
+/* ── The lens bodies: a note, a handoff, a tool ────────────────────────────── */
+.askChip { display: inline-block; padding: 2px 8px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); white-space: nowrap; flex: none; }
+.askChipAccent { color: var(--accent); }
+.askChipMuted { color: var(--faint); }
+.askLensTop { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.askLensId { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
+.askLensDesc { font-size: 14px; line-height: 1.55; margin: 0; color: var(--ink); text-wrap: pretty; }
+.askKv { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; }
+.askKv dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 8px 0; border-top: 1px solid var(--hair); white-space: nowrap; }
+.askKv dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--ink); padding: 8px 0; border-top: 1px solid var(--hair); overflow-wrap: anywhere; }
+.askPinRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0; padding: 10px 12px; background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r); }
+.askPinState { font-family: var(--mono); font-size: 11px; }
+.askLensNote { font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; margin-top: 10px; flex-basis: 100%; }
+.askPinRow .askLensNote { margin-top: 2px; }
+.askLensBlock { margin: 0; min-width: 0; }
+.lensBody > .askActions { margin-top: 0; }
+.askErr { color: var(--crit); }
+.askEdgeEvi .askActions { margin-top: 8px; }
+.askLensLabel { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); padding-bottom: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.askLensLine { font-family: var(--mono); font-size: 12px; color: var(--ink); padding: 8px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.askOutlineRow, .askDeadRow { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 12px; line-height: 1.4; color: var(--ink); }
+.askOutlineHit { color: var(--accent); }
+.askDeadRow span:last-child { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.askFig { font-family: var(--mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; text-align: right; }
+.askEdgeRow { display: grid; grid-template-columns: 72px 14px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; width: 100%; text-align: left; padding: 8px 0; border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); min-height: 36px; }
+.askEdgeRow:hover .askEdgeOther { color: var(--bright); }
+.askEdgeKind { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }
+.askEdgeDir { font-size: 11px; color: var(--faint); }
+.askEdgeOther { font-size: 11px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.askEdgeW { font-size: 10px; color: var(--faint); white-space: nowrap; }
+.askEdgeEvi { padding: 6px 0 8px 22px; font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; border-bottom: 1px solid var(--hair); overflow-wrap: anywhere; }
+
+/* ── The stacked explorer ──────────────────────────────────────────────────── */
+/* Below 900px the panel stops being a 440px column and takes the whole width, which the canvas
+   never drew — it has two columns at every artboard. At 880px that left an 11px label with a
+   400px run of nothing between it and its own meta, and the stat lines stretched to an 837px
+   measure they were sized for at 440. The title takes the top of the mono ramp and the prose
+   takes a measure it can be read at.
+   These live at the FOOT of the sheet on purpose: the same media query written above .askLbl's
+   own declaration loses to it at equal specificity, which is the positional override that has
+   already flattened the CX gradient and the footer's two colours in this console.
+
+   And moving it here made the same mistake in the other direction. `.askLbl { font-size: 13px }`
+   at the foot also beats `.askLblSm { font-size: 10px }` at :84, so below 900px the SMALL variant
+   rendered 13px — 30% larger than the base label it modifies, on the two nodes that carry both
+   ("Ranked, not packed · N" in the explorer, "Pin" in the lens). :not() states the exemption in
+   the selector, where it cannot be undone by anything moving. */
+@media (max-width: 899px) {
+  /* Vertical only. The side padding stays 16px because .askCols, .askGroup and .askRow are all
+     16px: taking the head to 20px stepped the panel's left edge in for the title and back out for
+     every row beneath it. */
+  .askExHead { padding: 18px 16px 14px; }
+  .askLbl:not(.askLblSm) { font-size: 13px; }
+  /* space-between is right for a 440px column and wrong for an 837px one: it threw the meta to
+     the far edge and left 360px of nothing between a label and the number that belongs to it.
+     They sit together now and the row ends where the text ends. */
+  .askExTitle { justify-content: flex-start; gap: 6px 20px; }
+  .askSeatStrip, .askExSum { font-size: 12px; max-width: 78ch; }
+}

@@ -59,9 +59,10 @@ export default async function Attention({
             : "Guests reach the brain through the read-and-propose URL; anything they suggest waits here until you accept it. The corpus flags its own problems into the queue."
         }
       >
-        {waiting && <ProposalsClient proposals={proposals} />}
+        {/* The same key keeps committed-result warnings alive when the empty queue moves. */}
+        {waiting && <ProposalsClient key="proposal-review" proposals={proposals} />}
         <AttentionClient queue={queue} />
-        {!waiting && <ProposalsClient proposals={proposals} />}
+        {!waiting && <ProposalsClient key="proposal-review" proposals={proposals} />}
       </Band>
 
       <Band

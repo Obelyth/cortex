@@ -6,14 +6,11 @@
  * deterministic and model-free: same rows in, same numbers out, which is what lets
  * scripts/eval-prediction.ts replay history for free on every PR.
  *
- * THE MEASURED VERDICT (2026-08-11, 19 scored windows): BASELINE 38.0% recall@10,
- * CANDIDATE 31.5% — the blend LOST, exactly the way FTS lost to BM25, and the incumbent
- * therefore stands: lib/handoff.ts ranks its bundle by recency+frequency (which in production
- * is the live temperature score — this module's baseline is that same signal, replayable), and
- * uses KIND_BLEND only as the tiebreak and the scores-unavailable fallback. Five days of log is
- * thin evidence; the candidate machinery stays here so the eval can re-ask the question as the
- * log grows — but no ranking change ships until it wins on the replay. Same law as everything
- * else: measured gates, not vibes.
+ * THE MEASURED VERDICT: the candidate blend did not beat the recency-and-frequency baseline,
+ * so the incumbent stands. lib/handoff.ts ranks its bundle by the live temperature score and
+ * uses KIND_BLEND only as the tiebreak and scores-unavailable fallback. The candidate machinery
+ * stays here so a deployment can re-run the evaluation on its own history; no ranking change
+ * ships until it wins on that replay.
  *
  * WHY THE BASELINE IS A PROXY. The incumbent to beat is temperature ranking, but note_scores is
  * a LIVE table — it holds today's temperatures, and replaying history against today's scores
@@ -30,6 +27,22 @@ export interface AccessEvent {
   /** ISO timestamp (note_access.at). */
   at: string;
   path: string;
+  /** Omitted only for callers supplying an already-filtered history. */
+  mode?: string;
+}
+
+/** Versioned with edges_usage_identity / edges_rebuild_v2; native tests check SQL parity. */
+export const LEARNING_POLICY = "coaccess-v2-90d-closed-utc-6-2";
+export const LEARNING_DAYS = 90;
+export const MAX_LEARNING_FANOUT = 6;
+export const MIN_COACCESS_WINDOWS = 2;
+export const NON_LEARNING_MODES = ["boot", "handoff", "maintenance"] as const;
+export const eligibleAccess = (r: AccessEvent): boolean => !NON_LEARNING_MODES.some(mode => mode === r.mode);
+
+/** Production's bounded completed-hour input interval, including its UTC boundary. */
+export function learningHistory(rows: AccessEvent[], at: number): AccessEvent[] {
+  const cutoff = Math.floor(at / 3_600_000) * 3_600_000;
+  return rows.filter(r => eligibleAccess(r) && Date.parse(r.at) >= cutoff - LEARNING_DAYS * 86_400_000 && Date.parse(r.at) < cutoff);
 }
 
 /**
@@ -85,6 +98,7 @@ export function hourOf(at: string): number {
 export function sessionize(rows: AccessEvent[]): SessionWindow[] {
   const byHour = new Map<number, Set<string>>();
   for (const r of rows) {
+    if (!eligibleAccess(r)) continue;
     const t = Date.parse(r.at);
     if (!Number.isFinite(t)) continue;
     const h = Math.floor(t / HOUR_MS) * HOUR_MS;
@@ -110,6 +124,7 @@ function decay(ageMs: number): number {
 export function baselineScores(prior: AccessEvent[], now: number): Map<string, number> {
   const scores = new Map<string, number>();
   for (const r of prior) {
+    if (!eligibleAccess(r)) continue;
     const t = Date.parse(r.at);
     if (!Number.isFinite(t) || t >= now) continue;
     scores.set(r.path, (scores.get(r.path) ?? 0) + decay(now - t));
@@ -127,21 +142,30 @@ export function pairKey(a: string, b: string): string {
 
 /**
  * Co-occurrence counts over prior windows: in how many distinct hour-windows were two notes
- * touched together? Same definition as the coaccess edge derivation, including the ≥2 floor
- * being the CONSUMER's job — this table reports every pair and lets the scorer weigh it,
- * because a replayed history is exactly where a one-window pair still carries a little signal.
+ * touched together? Apply the production distinct-path fanout cap and two-window floor before
+ * scoring. Availability filters pair endpoints AFTER fanout classification, as in SQL.
+ * Replayed input must already be bounded to learningHistory's interval. The replay adapter
+ * supplies its pinned corpus set; callers omitting it retain the unfiltered pure helper.
  */
-export function cooccurrence(priorWindows: SessionWindow[]): Map<string, number> {
+export function cooccurrence(priorWindows: SessionWindow[], available?: ReadonlySet<string>): Map<string, number> {
   const counts = new Map<string, number>();
+  const hours = new Map<number, Set<string>>();
   for (const w of priorWindows) {
-    for (let i = 0; i < w.paths.length; i++) {
-      for (let j = i + 1; j < w.paths.length; j++) {
-        const k = pairKey(w.paths[i], w.paths[j]);
+    if (!hours.has(w.start)) hours.set(w.start, new Set());
+    for (const p of w.paths) hours.get(w.start)!.add(p);
+  }
+  for (const set of hours.values()) {
+    const paths = [...set].sort(byName);
+    if (paths.length > MAX_LEARNING_FANOUT) continue;
+    for (let i = 0; i < paths.length; i++) {
+      for (let j = i + 1; j < paths.length; j++) {
+        if (available && (!available.has(paths[i]) || !available.has(paths[j]))) continue;
+        const k = pairKey(paths[i], paths[j]);
         counts.set(k, (counts.get(k) ?? 0) + 1);
       }
     }
   }
-  return counts;
+  return new Map([...counts].filter(([, count]) => count >= MIN_COACCESS_WINDOWS));
 }
 
 /** Structural neighbours of a note, from the corpus: explicit links and shared tags. The eval
@@ -167,15 +191,18 @@ export function candidateScores(
   priorWindows: SessionWindow[],
   structure: StructuralEdges,
   now: number,
-  blend: typeof KIND_BLEND = KIND_BLEND
+  blend: typeof KIND_BLEND = KIND_BLEND,
+  available?: ReadonlySet<string>
 ): Map<string, number> {
   const scores = baselineScores(prior, now);
-  const cooc = cooccurrence(priorWindows);
+  const cutoff = Math.floor(now / HOUR_MS) * HOUR_MS;
+  const cooc = cooccurrence(priorWindows.filter(w=>w.start>=cutoff-LEARNING_DAYS*DAY_MS && w.start<cutoff),available);
 
   // Each note's most recent prior touch — the "pull" a note exerts on its neighbours fades on
   // the same half-life as everything else here.
   const lastTouch = new Map<string, number>();
   for (const r of prior) {
+    if (!eligibleAccess(r)) continue;
     const t = Date.parse(r.at);
     if (!Number.isFinite(t) || t >= now) continue;
     if (t > (lastTouch.get(r.path) ?? -Infinity)) lastTouch.set(r.path, t);

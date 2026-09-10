@@ -108,11 +108,23 @@ describe("the pin endpoint", () => {
     expect(store.clears).toEqual(["notes/a.md"]);
   });
 
+  it("pins a history page — it is mirrored and scored like any other live note", async () => {
+    const store = fakePins();
+    __setPinStore(store);
+    const res = await call(pinPost, {
+      path: "history/harbor-2026-08.md",
+      pin: { temperature: "hot", reason: "the August record" },
+    });
+    expect(res.status).toBe(200);
+    expect(store.sets).toEqual([["history/harbor-2026-08.md", "hot", "the August record"]]);
+  });
+
   it.each([
     ["archive/old.md", "archive is never mirrored, so a pin there would score nothing"],
     ["../etc/passwd", "traversal shape"],
     ["INDEX.md", "generated, not a note"],
     ["projects/x.txt", "not markdown"],
+    ["history/../x.md", "traversal through the history prefix"],
   ])("refuses %s (%s)", async (path) => {
     const store = fakePins();
     __setPinStore(store);
@@ -157,7 +169,6 @@ describe("the handoff staging endpoint", () => {
           "log/2026-08-10.md": "# Log\n\n## 09:00 · harbor\n\nmoved the buoys",
         })
       ),
-      sidecar: new Map(),
       sha: "deadbeefcafe0000",
       bytes: 0,
       fetchedAt: Date.now(),

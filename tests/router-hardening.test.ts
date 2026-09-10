@@ -51,7 +51,7 @@ describe("the router cannot be structurally forged from a note", () => {
 
   // Line-based parsing already blocks a literal newline, but a LONE CR is not a line break to the
   // parser and is a cursor-return to a terminal — enough to redraw a row over the one above it.
-  it.each([["\r", "carriage return"], ["\u2028", "line separator"], ["", "bell"]])(
+  it.each([["\r", "carriage return"], [" ", "line separator"], ["", "bell"]])(
     "strips a %s (%s) rather than rendering it",
     (ch) => {
       const line = routerLine(entryFor("notes/a.md", note(`"before${ch}after"`)));
@@ -73,12 +73,12 @@ describe("the router cannot be structurally forged from a note", () => {
 
 describe("hardening does not damage honest notes", () => {
   it("leaves a normal description exactly as written", () => {
-    const d = "Quarry access: base URL, dataset 12, and the three places the key rotates";
+    const d = "Redash access: base URL, data source 56, and the three places the key rotates";
     expect(routerLine(entryFor("notes/a.md", note(`"${d}"`)))).toContain(d);
   });
 
   it("keeps an em-dash, apostrophe and parentheses untouched", () => {
-    const d = "The operator's rig — dormant since PR #4 (2025-01-09)";
+    const d = "The operator's rig — dormant since PR #16 (2026-06-03)";
     expect(routerLine(entryFor("notes/a.md", note(`"${d}"`)))).toContain(d);
   });
 

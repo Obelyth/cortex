@@ -1,28 +1,37 @@
 import { requireSecret } from "@/lib/gate";
-import { modelRecordRows, readCalls } from "@/lib/calls";
-import { readSettings, safeActiveReader, readerCards } from "@/lib/settings";
+import { readCalls } from "@/lib/calls";
+import { CUT_STAMP, TIMED_OUT_STAMP } from "@/lib/deadline";
+import { edgesPulse } from "@/lib/edges";
+import { assembleHeat } from "@/lib/heat";
+import { listSkipped } from "@/lib/corpus";
+import { opsBoard } from "@/lib/ops-board";
+import { readSettings, safeActiveReader } from "@/lib/settings";
+import { DEFAULT_K, DEFAULT_MAX_PARTS_PER_PAGE, NARROW_BUDGET_BYTES } from "@/lib/ask";
+import { DEFAULT_MAX_LOGS } from "@/lib/narrow";
+import { ROUTER_BUDGET_BYTES } from "@/lib/brain";
 import roster from "@/lib/tool-roster.json";
-import { AskClient } from "./ask-client";
-import { ModelsTable, type ReaderVM } from "../settings/models-table";
-import { Band } from "../band";
-import { Reveal } from "../reveal";
-import styles from "../console.module.css";
+import { consoleHealth } from "../loaders";
+import { PROCESS_CEILING, spentThisInstance } from "./ceiling";
+import { AskScreen } from "./ask-screen";
+import { sortFrom, type AskModel, type Connections, type RetractedLine, type ToolFacts } from "./ask-model";
+import "./ask.css";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export const metadata = { title: "Ask · Cortex console" };
 
 /**
- * Ask — the demonstration, and the tool surface it belongs to.
+ * Ask — the explorer, the ask, and what it read (v2).
  *
- * The console had no surface where a newcomer could see the product work. `guide/` is a redirect
- * stub; every other screen measures the brain rather than using it. This screen answers "what is
- * this thing" by doing it, then explains the shape of what just happened.
+ * The Notes screen folded in here as a file-type explorer: the whole live corpus as files —
+ * directory tree, kinds, counts, stamps, temperatures — every note trackable in the lens, and
+ * every answer showing its work: what was narrowed and why, what was read, what was quoted, at
+ * which commit, at what cost. "No black box." This file is the server half only: gate, load,
+ * serialize. The composition is ask-screen.tsx; the state is ask-explorer.tsx.
  *
  * The roster below is READ FROM lib/tool-roster.json, never retyped. That file is pinned to
  * registerTools() by a test, and its own comment records that a hardcoded roster going stale in
- * a verifier caused three separate multi-night outages. A console screen listing the tools from
- * memory would be a fourth copy waiting to drift.
+ * a verifier caused three separate multi-night outages.
  */
 const WHAT: Record<string, string> = {
   brain_ask: "Fetches the whole live corpus, hands a reader model the actual notes, then checks the quote it cited against the file.",
@@ -39,139 +48,122 @@ const WHAT: Record<string, string> = {
   brain_reject: "Rejecting leaves no trace.",
 };
 
+const DAY = 86_400_000;
+
 export default async function Ask({
   params,
   searchParams,
 }: {
   params: Promise<{ secret: string }>;
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ note?: string; q?: string; find?: string; sort?: string }>;
 }) {
   await requireSecret(params);
-  // ?q= arrives from a triage item's "ask the brain about it" — the question lands typed and
-  // ready, but NOT auto-submitted: this endpoint spends a model call, and a link that bills on
-  // arrival is a link nobody can safely share or reload.
-  const { q: prefill } = await searchParams;
+  const sp = await searchParams;
   const now = Date.now();
-  const { rows } = await readCalls(2_592_000_000);
-  const calls = new Map<string, number>();
-  for (const r of rows) calls.set(r.tool, (calls.get(r.tool) ?? 0) + 1);
 
-  // The eval table moved here from Settings. It is reference material, not a control: it says
-  // which readers have been measured against the labelled set and which have not, which is the
-  // question a newcomer has immediately after watching one of them answer. On a screen of
-  // switches it was the largest block and the only one you could not act on.
-  const settings = await readSettings();
-  const { active } = await safeActiveReader(settings);
-  const cards = readerCards(settings, active);
-  const { rows: dayRows, durable, source: callSource, covers } = await readCalls(86_400_000, now);
-  const asks = dayRows.filter((r) => r.tool === "brain_ask");
-  // The model record counts only calls the model actually answered. Cached rows are replays of
-  // an earlier answer — modelRecordRows drops them, so a question asked five times at one
-  // commit is one entry in the model's record, not five. Their count is reported below.
-  const attributed = modelRecordRows(asks);
-  const cachedAsks = asks.filter((r) => r.cached).length;
-  const models: ReaderVM[] = cards.map((c) => {
-    const mine = attributed.filter((r) => r.model === c.model);
-    const ms = mine.map((r) => r.ms).sort((a, b) => a - b);
-    return {
-      model: c.model,
-      provider: c.provider,
-      configured: c.configured,
-      disabled: c.disabled,
-      evalState: c.eval.state,
-      evalNote: c.eval.note,
-      isDefault: c.isDefault,
-      defaultSource: c.defaultSource ?? null,
-      calls: mine.length,
-      verified: mine.filter((r) => r.stamp === "VERIFIED").length,
-      unverified: mine.filter((r) => r.stamp === "UNVERIFIED").length,
-      errors: mine.filter((r) => r.stamp === "ERROR").length,
-      p50: ms.length ? ms[Math.floor((ms.length - 1) / 2)] : null,
-    };
-  });
-  // Cached rows are attributed but deliberately outside the record, so they get their own
-  // count here — folding them into "pre-date per-model logging" would misname what they are.
-  const unattributed = asks.length - asks.filter((r) => r.model).length;
-  const usageNote = durable
-    ? asks.length === 0
-      ? "no asks in the window yet"
-      : `${attributed.length} of ${asks.length} asks attributed${cachedAsks > 0 ? ` · ${cachedAsks} served from the answer cache (no model call — not counted in the record)` : ""}${unattributed > 0 ? ` · ${unattributed} pre-date per-model logging` : ""}${covers < 86_400_000 ? " · partial log" : ""}`
-    : callSource === "unconfigured"
-      ? "no durable call store — this is one instance's view"
-      : "call store unreachable — in-memory view";
+  // No data dependency between these; serial awaits would stack GitHub, Postgres and KV round
+  // trips for nothing. consoleHealth and assembleHeat share loadCorpus's per-instance cache, so
+  // the corpus is fetched once; listSkipped is its own read (archive/ is never in the corpus).
+  const [h, heat, skipped, settings, calls, edges, board] = await Promise.all([
+    consoleHealth(),
+    assembleHeat(),
+    listSkipped(),
+    readSettings(),
+    readCalls(30 * DAY, now),
+    edgesPulse(),
+    opsBoard(),
+  ]);
+  const { active, error: readerError } = await safeActiveReader(settings);
 
-  const trusted: string[] = roster.trusted;
-  const guest: string[] = roster.guest;
-  // Both memberships are tested. Painting "trusted" on every row would have shown brain_propose
-  // as reachable from the trusted doors, which is exactly backwards — it is the guest-only tool,
-  // and the trusted doors cannot see it at all.
-  const trustedSet = new Set(trusted);
-  const guestSet = new Set(guest);
-  const all = [...new Set([...trusted, ...guest])].sort((a, b) => a.localeCompare(b));
+  // "off" collapses to null — the opt-in law: with no SUPABASE_URL there is no graph store, so
+  // the panel does not render at all rather than rendering an apology. Every OTHER state
+  // reaches the client, because each one names something true the operator can act on.
+  const connections: Connections | null =
+    edges.state === "off"
+      ? null
+      : edges.state === "built"
+        ? { state: "built", head: edges.head.slice(0, 8), builtAt: edges.builtAt, byNote: edges.byNote }
+        : { state: edges.state };
 
-  return (
-    <div className="ovSheet">
-      <Band
-        n="01"
-        label="Ask"
-        tone="ink"
-        grid
-        title={<>Ask the brain a question<br />and watch it <b>prove the answer.</b></>}
-        lede="A reader model is handed the actual notes. Its quote is then checked against the file at a commit — deterministically, with no model in that step. The stamp is the product."
-      >
-        <AskClient prefill={prefill} />
-      </Band>
+  // Grouped once here so the client gets a plain serializable map, capped per note — the lens
+  // is a glance, not the attention screen.
+  const retractedByPath: Record<string, RetractedLine[]> = {};
+  for (const r of h.retractedList) (retractedByPath[r.path] ??= []).push({ line: r.line, heading: r.heading, text: r.text });
+  for (const k of Object.keys(retractedByPath)) retractedByPath[k] = retractedByPath[k].slice(0, 6);
 
-      {/* The control is NOT here — picking the answering model stays on Settings. This is the
-          record: measured, shaky, or not yet run against the labelled set. */}
-      <Band
-        n="02"
-        label="Readers"
-        tone="grey"
-        title={<>Any model may read the brain.<br /><b>Claude earned the default.</b></>}
-        lede="The default follows the measurement, not the logo. A reader takes the chair by beating the labelled eval, which is what scripts/eval.ts exists to referee."
-      >
-        <ModelsTable readers={models} usageNote={usageNote} writable={false} />
-      </Band>
+  // The seat strip: exactly what one brain_context boot call serves at this head.
+  const s = heat.seat;
+  const tokOf = (bytes: number) => Math.round(bytes / 4);
+  const bubbleWord =
+    s.bubble === "live" ? `bubble live ~${tokOf(s.bubbleBytes).toLocaleString("en-US")} tok`
+    : s.bubble === "empty" ? "an empty bubble"
+    : s.bubble === "failed" ? "bubble unavailable this render"
+    : "no bubble on this deploy";
+  const recentWord = s.expandedDays.length
+    ? `${s.expandedDays.length} recent day${s.expandedDays.length === 1 ? "" : "s"} verbatim ~${tokOf(s.recentBytes).toLocaleString("en-US")} tok`
+    : s.digestedDays.length
+      ? `${s.digestedDays.length} recent day${s.digestedDays.length === 1 ? "" : "s"} as digest lines`
+      : "no recent days";
+  const seatParts = [
+    heat.tiles.some((t) => t.seat === "profile") ? "profile included" : "no profile.md",
+    `router ${s.routerRows} rows${s.ranked ? "" : " · unranked"} · ${s.droppedRows} refused by the ${Math.round(ROUTER_BUDGET_BYTES / 1000)} KB budget · ${s.coldRows} cold not rendered`,
+    bubbleWord,
+    recentWord,
+  ];
 
-      <Band
-        n="03"
-        label="The tools"
-        tone="paper"
-        title={<>{trusted.length} tools on a trusted door.<br /><b>{guest.length} on the guest door.</b></>}
-        lede="A guest sees a smaller toolset, not a refused one — nothing else is registered on that handler. A tool that appears and then errors teaches a model to keep trying, and tells it what exists to attack."
-      >
-        {/* A guest sees a SMALLER toolset, not a refused one — nothing else is registered on that
-            handler, so nothing else appears in its tools/list. A tool that appears and then
-            errors teaches a model to keep trying, and tells it what exists to attack. That is
-            why this table marks reach rather than listing everything as available. */}
-        <div className="toolTable" data-cx="rise">
-          {all.map((t) => {
-            const n = calls.get(t) ?? 0;
-            return (
-              <div key={t} className="toolRow2">
-                <span className="toolName2">{t}</span>
-                <span className="toolWhat2">{WHAT[t] ?? ""}</span>
-                <span className="toolDoors">
-                  <span className={trustedSet.has(t) ? "toolDoor toolDoorOn" : "toolDoor"}>trusted</span>
-                  <span className={guestSet.has(t) ? "toolDoor toolDoorOn" : "toolDoor"}>guest</span>
-                </span>
-                <span className={n > 0 ? "toolCalls toolCallsOn" : "toolCalls"}>
-                  {n > 0 ? n.toLocaleString() : "—"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div className={styles.note}>
-          Counts come from this environment&rsquo;s call log, so a dash means never called here —
-          not that the tool is unavailable.{" "}
-          <Reveal label="where the roster comes from">
-            The roster itself is read from lib/tool-roster.json,
-            which a test pins to the real registration.
-          </Reveal>
-        </div>
-      </Band>
-    </div>
-  );
+  // How answers checked out — the last 24 h of the 30 d window, by the stamp the log recorded.
+  const asks = calls.rows.filter((r) => r.tool === "brain_ask" && r.ts >= now - DAY);
+  const count = (stamp: string) => asks.filter((r) => r.stamp === stamp).length;
+  const glance = {
+    asks: asks.length,
+    verified: count("VERIFIED") + count("CORRECTED"),
+    superseded: count("SUPERSEDED"),
+    partial: count("PARTIALLY VERIFIED"),
+    unverified: count("UNVERIFIED"),
+    notInBrain: count("NOT IN BRAIN"),
+    errors: count("ERROR"),
+    cutOff: count(CUT_STAMP),
+    timedOut: count(TIMED_OUT_STAMP),
+    source: calls.source,
+    covers: calls.covers,
+  };
+
+  // Both memberships are real: painting "trusted" on every row would show brain_propose as
+  // reachable from the trusted doors, which is exactly backwards.
+  const trusted = new Set<string>(roster.trusted);
+  const guest = new Set<string>(roster.guest);
+  const tools: ToolFacts[] = [...new Set([...roster.trusted, ...roster.guest])].sort().map((name) => ({
+    name,
+    doors: [trusted.has(name) ? "trusted" : null, guest.has(name) ? "guest" : null].filter(Boolean).join(" · "),
+    what: WHAT[name] ?? "",
+    trusted: trusted.has(name),
+    guest: guest.has(name),
+    calls: calls.durable ? calls.rows.filter((r) => r.tool === name).length : null,
+  }));
+
+  const model: AskModel = {
+    sha: h.sha,
+    notes: h.notes.map((n) => ({ path: n.path, dir: n.dir, title: n.title, desc: n.desc, headings: n.headings, tokens: n.tokens, blocks: n.blocks, retracted: n.retracted, age: n.age, decays: n.decays })),
+    heat: heat.tiles.map((t) => ({ path: t.path, temperature: t.temperature, score: t.score, reads: t.reads, seat: t.seat, pinned: t.pinned, pinReason: t.pinReason, lastRead: t.lastRead })),
+    skipped: skipped ? skipped.files : null,
+    retractedByPath,
+    connections,
+    units: board.groups.flatMap((g) => g.rows).map((r) => ({ id: r.id, name: r.name, state: r.stateLabel })),
+    tools,
+    reader: active?.model ?? null,
+    readerError,
+    spent: spentThisInstance(),
+    ceiling: PROCESS_CEILING,
+    narrowing: { k: DEFAULT_K, maxLogs: DEFAULT_MAX_LOGS, maxPartsPerPage: DEFAULT_MAX_PARTS_PER_PAGE, budgetBytes: NARROW_BUDGET_BYTES },
+    corpusTokens: h.totals.tokens,
+    seat: { tokens: s.tokens, parts: seatParts },
+    scoring: heat.scoring,
+    coldStart: heat.coldStart,
+    pinsAvailable: heat.pinsAvailable,
+    glance,
+    repoUrl: process.env.BRAIN_REPO ? `https://github.com/${process.env.BRAIN_REPO}` : null,
+    initial: { note: sp.note?.trim() || null, q: sp.q?.trim() || null, find: sp.find?.trim() || null, sort: sortFrom(sp.sort) },
+  };
+
+  return <AskScreen model={model} />;
 }
