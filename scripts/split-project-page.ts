@@ -38,6 +38,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { dirname, join, resolve } from "node:path";
 import { parseFrontmatter, safeText, MAX_DESCRIPTION } from "../lib/frontmatter";
 import { HISTORY_PATH, MAX_PAGE_BYTES } from "../lib/digest";
+import { resolveTrustedExecutable } from "./command-path.cjs";
 
 /**
  * One H2 section, as bytes.
@@ -369,7 +370,7 @@ export function splitPage(text: string, opts: SplitOpts): SplitResult {
   const keptAt = keptSectionIndexes(parsed.sections, opts.keepHeadings);
 
   const dated = parsed.sections.filter((s) => s.date).map((s) => s.date!.slice(0, 7));
-  const earliest = dated.length ? dated.reduce((a, b) => (a < b ? a : b)) : null;
+  const earliest = dated.reduce<string | null>((a, b) => a === null || b < a ? b : a, null);
 
   const byMonth = new Map<string, Section[]>();
   const kept: Section[] = [];
@@ -403,7 +404,7 @@ export function splitPage(text: string, opts: SplitOpts): SplitResult {
   const tags = parseFrontmatter(text).tags;
   const history = new Map<string, string>();
   const months: HistoryFileReport[] = [];
-  for (const month of [...byMonth.keys()].sort()) {
+  for (const month of [...byMonth.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)) {
     const parts = partitionMonth(byMonth.get(month)!, maxHistoryBytes);
     parts.forEach((secs, i) => {
       // A month that fits stays under its plain name. Renaming every month to `-1` for the sake of
@@ -673,7 +674,8 @@ export function writeSplit(brain: string, page: string, out: SplitResult): strin
  */
 function gitStatus(dir: string, paths: string[]): string[] | null {
   try {
-    const out = execFileSync("git", ["-C", dir, "status", "--porcelain", "--", ...paths], {
+    const git = resolveTrustedExecutable("git");
+    const out = execFileSync(git, ["-C", dir, "status", "--porcelain", "--", ...paths], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });

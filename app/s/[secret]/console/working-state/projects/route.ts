@@ -32,7 +32,7 @@ export async function GET(request: Request, context: Context): Promise<Response>
       if (!project || project.length > MAX_PROJECT_LENGTH || redact(project) !== project) continue;
       projects.add(project);
     }
-    const sorted = [...projects].sort();
+    const sorted = [...projects].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
     return reply({ projects: sorted.slice(0, MAX_PROJECTS), truncated: sorted.length > MAX_PROJECTS });
   } catch {
     return reply({ error: "project options unavailable" }, 503);

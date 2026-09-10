@@ -1196,6 +1196,7 @@
 /* 52px, matching .conMast's own height (:25). It said 56, which left a 4px band of live,
    undimmed, still-clickable page between the masthead's bottom edge and the top of the scrim. */
 .ntDim { position: fixed; inset: 52px 0 0 0; background: rgba(17, 19, 21, .28); z-index: 40; }
+.ntBackdrop { position: absolute; inset: 0; width: 100%; padding: 0; border: 0; background: transparent; cursor: pointer; }
 /* The canvas's tray, token for token: 460 not 520, the v2 dictionary rather than the paper-era
    aliases it was still carrying (--paper-raised/--rule/--elev-2), a bottom rule as well as a left
    one, and the entrance it never had. The port marked it data-cx="rise", but kinetic.tsx excludes
@@ -1203,7 +1204,7 @@
    appeared — which is the motion difference you could see against the design. A plain CSS
    animation runs on mount and needs no reveal class. */
 .ntTray {
-  position: fixed; right: 0; top: 52px; width: min(460px, 100vw);
+  position: fixed; z-index: 1; right: 0; top: 52px; width: min(460px, 100vw);
   max-height: calc(100vh - 52px); overflow: hidden;
   /* The scroller is the LIST, not the drawer. The canvas scrolls its whole aside because its tray
      is only filters + rows + a footnote; ours also carries a head with the unread count and the

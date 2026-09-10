@@ -72,10 +72,12 @@ export interface BrainFile {
  * returns `e.message` verbatim to the client — an uncontrolled channel from an upstream
  * service into someone else's context. GitHub does not echo the Authorization header today,
  * but "today" is the only thing holding that. Keep the status and GitHub's own one-line
- * `message`, drop everything else, and put the full body in the server log where it is
- * actually useful for debugging.
+ * `message` in the redacted caller error, drop everything else, and log only the fixed
+ * operation name plus numeric HTTP status — never an upstream body or note path.
  */
-async function ghError(label: string, res: Response): Promise<Error> {
+type GithubOperation = "getFile" | "putFile" | "listTree" | "listCommits" | "compare";
+
+async function ghError(operation: GithubOperation, label: string, res: Response): Promise<Error> {
   let body = "";
   try {
     body = await res.text();
@@ -89,14 +91,14 @@ async function ghError(label: string, res: Response): Promise<Error> {
   } catch {
     /* non-JSON body: report the status alone rather than guessing */
   }
-  if (body) console.error(`[github] ${label} ${res.status}: ${body.slice(0, 2000)}`);
+  if (body) console.error(`[github] ${operation} failed with HTTP ${res.status}`);
   return new Error(`GitHub ${label}: ${res.status}${detail ? ` ${redact(detail)}` : ""}`);
 }
 
 export async function getFile(path: string): Promise<BrainFile | null> {
   const res = await gh(`/repos/${repo()}/contents/${path}?ref=${branch()}`);
   if (res.status === 404) return null;
-  if (!res.ok) throw await ghError(`getFile ${path}`, res);
+  if (!res.ok) throw await ghError("getFile", `getFile ${path}`, res);
   const data = (await res.json()) as { content: string; sha: string; encoding: string };
   if (data.encoding !== "base64") {
     throw new Error(
@@ -161,14 +163,14 @@ export async function putFile(
     committed = merge ? await merge(fresh) : content;
     res = await putOnce(path, committed, message, fresh?.sha);
   }
-  if (!res.ok) throw await ghError(`putFile ${path}`, res);
+  if (!res.ok) throw await ghError("putFile", `putFile ${path}`, res);
   const data = (await res.json()) as { commit: { sha: string } };
   return { commitSha: data.commit.sha, content: committed };
 }
 
 export async function listTree(): Promise<string[]> {
   const res = await gh(`/repos/${repo()}/git/trees/${branch()}?recursive=1`);
-  if (!res.ok) throw await ghError("listTree", res);
+  if (!res.ok) throw await ghError("listTree", "listTree", res);
   const data = (await res.json()) as {
     tree: Array<{ path: string; type: string }>;
     truncated?: boolean;
@@ -196,7 +198,7 @@ export interface CommitInfo {
  *  write history, with no telemetry layer needed to show it. */
 export async function listCommits(limit = 20): Promise<CommitInfo[]> {
   const res = await gh(`/repos/${repo()}/commits?sha=${branch()}&per_page=${limit}`);
-  if (!res.ok) throw await ghError("listCommits", res);
+  if (!res.ok) throw await ghError("listCommits", "listCommits", res);
   const data = (await res.json()) as Array<{
     sha: string;
     commit: { message: string; author?: { date?: string }; committer?: { date?: string } };
@@ -248,7 +250,7 @@ export async function compareCommits(
   keep: (path: string) => boolean = () => true
 ): Promise<CompareResult> {
   const res = await gh(`/repos/${repo()}/compare/${base}...${head}`);
-  if (!res.ok) throw await ghError("compare", res);
+  if (!res.ok) throw await ghError("compare", "compare", res);
   const data = (await res.json()) as {
     status?: string;
     files?: Array<{ filename: string; status: string; previous_filename?: string }>;

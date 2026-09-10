@@ -287,7 +287,7 @@ try {
 // lib/tool-roster.json at run time, never inlined — and read AFTER the merge, so a
 // release that ships a new tool is verified against its own roster.
 const roster = JSON.parse(readFileSync(join(ROOT, "lib", "tool-roster.json"), "utf8"));
-const matches = JSON.stringify(checked.tools) === JSON.stringify([...roster.trusted].sort());
+const matches = JSON.stringify(checked.tools) === JSON.stringify([...roster.trusted].sort((a, b) => a < b ? -1 : a > b ? 1 : 0));
 if (matches) {
   ok(`Verified production host: ${checked.origin}; ${roster.trusted.length} trusted tools answering.`);
   ok(`Updated to v${vNew}, deployed, and the MCP tool roster checked.`);

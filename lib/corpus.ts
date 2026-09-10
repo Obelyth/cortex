@@ -296,7 +296,11 @@ export async function loadCorpus(force = false, opts: LoadCorpusOptions = {}): P
     // not "half a brain" — it is whole, just possibly one commit behind, and every answer
     // already carries the commit it was proven against, so the staleness stays visible.
     if (!force && cached) {
-      console.error(`[corpus] head resolution failed, serving cache @${cached.sha}: ${String(e)}`);
+      if (e instanceof DeadlineExceeded) {
+        console.error("[corpus] head resolution deadline exceeded, serving cache");
+      } else {
+        console.error("[corpus] head resolution failed, serving cache");
+      }
       scheduleEdgeRebuild(cached.files, cached.sha);
       return cached;
     }

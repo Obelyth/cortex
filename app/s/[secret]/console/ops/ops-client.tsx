@@ -237,13 +237,12 @@ export function OpsClient({ board, secret, decisions, initialOpenId = null }: Re
                     role="row"
                     className={`opsRow${r.state === "needs_you" ? " opsRowCrit" : ""}${on ? " opsRowOn" : ""}`}
                     aria-current={on ? "true" : undefined}
-                    onClick={() => openUnit(r.id)}
                   >
                     <span role="cell" className="opsNo">{String(i + 1).padStart(2, "0")}</span>
                     <span role="cell" className="opsUnit">
                       {/* The name is the accessible control; the row around it is the pointer's
                           target, and the chevron at the right is the hint. */}
-                      <button type="button" className="opsName" aria-haspopup="dialog" aria-expanded={on}>{r.name}</button>
+                      <button type="button" className="opsName" aria-label={`Open ${r.name}`} aria-haspopup="dialog" aria-expanded={on} onClick={() => openUnit(r.id)}>{r.name}</button>
                       <span className="opsKind">{r.kind}{r.kind === "machine" ? " · never pages" : ""}</span>
                     </span>
                     <span role="cell" className="opsSched" data-col="Schedule">{r.schedule}</span>

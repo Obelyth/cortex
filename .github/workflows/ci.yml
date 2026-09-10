@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: '22.23.2'
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
@@ -60,7 +60,7 @@ jobs:
         with:
           node-version: '22.23.2'
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Create synthetic database roles
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}

@@ -3,7 +3,6 @@ import { DEFAULT_MODEL } from "./ask";
 import { providerOf, type ReaderModel } from "./reader";
 import type { SettingsState } from "./settings";
 import {GUEST_POLICY_SCRIPT} from "./guest-policy-atomic";
-import {createHash} from "node:crypto";
 
 /**
  * What a guest may do, and how much of it.
@@ -51,7 +50,9 @@ const dayKey = (now: number) =>
 
 export type GuestSnapshot=GuestPolicy&{revision:string};
 export class GuestPolicyConflict extends Error {readonly code="conflict";constructor(readonly current:GuestSnapshot){super("Guest policy changed in another tab. Current policy loaded; review it before another edit.");}}
-const MISSING_REVISION = createHash("sha1").update("cortex:guest:missing:v1").digest("hex");
+// Fixed protocol marker returned by Redis for an absent policy. This is not a
+// credential or security digest; keep it byte-identical to the Lua CAS protocol.
+const MISSING_REVISION = "b3d99964bee9e17d4f75dd0722414933f8e5189a";
 function snapshot(raw:unknown):{outcome:string;current:GuestSnapshot}{
   if(!Array.isArray(raw)||raw.length!==3||typeof raw[0]!=="string"||typeof raw[2]!=="string"||!/^[a-f0-9]{40}$/.test(raw[2]))throw new Error("guest policy unavailable");
   // Upstash recursively JSON-decodes EVAL members. Never parse a second time: a stored JSON

@@ -59,7 +59,8 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
         {data.unread > 0 && <span className="ntBadge">{data.unread}</span>}
       </button>
       {open && (
-        <div className="ntDim" onClick={() => setOpen(false)}>
+        <div className="ntDim">
+          <button type="button" className="ntBackdrop" aria-label="Close notices" onClick={() => setOpen(false)} />
           {/* A disclosure, not a modal. It claimed aria-modal="true" — which tells assistive tech
               the rest of the page is hidden — while its own bell sat in the masthead behind it and
               stayed clickable; making that claim true would render the bell inert and stop it
@@ -67,7 +68,7 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
               group the bell owns through aria-expanded, closed by Escape, the dim, or its own
               close button. data-cx also goes: kinetic.tsx excludes client components by
               construction, so the reveal class never reaches a node rendered here. */}
-          <aside ref={tray} tabIndex={-1} className="ntTray" role="group" aria-label="Notices" onClick={(e) => e.stopPropagation()}>
+          <aside ref={tray} tabIndex={-1} className="ntTray" role="group" aria-label="Notices">
             <div className="ntHead">
               <span className="secTag"><span className="secTagN">05</span><span className="secTagLabel">Notices</span></span>
               <span className="mono ntCount">{data.unread} unread · {data.notices.length} in 7 d</span>

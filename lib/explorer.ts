@@ -282,7 +282,12 @@ export function buildExplorer(
   const revealPage = reveal ? historyPageName(reveal) : null;
 
   const groups: ExplorerGroup[] = [];
-  const dirs = [...ORDER, ...[...byDir.keys()].filter((d) => !ORDER.includes(d)).sort()];
+  const dirs = [
+    ...ORDER,
+    ...[...byDir.keys()]
+      .filter((d) => !ORDER.includes(d))
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+  ];
   for (const dir of dirs) {
     const mine = byDir.get(dir) ?? [];
     if (mine.length === 0) continue;

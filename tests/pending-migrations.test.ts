@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pendingMigrationItem, pendingMigrations, shippedMigrations } from "../lib/migrations";
+
+const unicodeNames = ["😀.sql", "é.sql", "a.sql", "Z.sql"];
+const codeUnitOrder = ["Z.sql", "a.sql", "é.sql", "😀.sql"];
 
 describe("pendingMigrations — merged is not applied", () => {
   it("names every shipped file the ledger has no row for, in apply order", () => {
@@ -13,6 +19,10 @@ describe("pendingMigrations — merged is not applied", () => {
 
   it("is empty when the ledger carries every file", () => {
     expect(pendingMigrations(["a.sql", "b.sql"], ["b.sql", "a.sql"])).toEqual([]);
+  });
+
+  it("keeps JavaScript's existing UTF-16 code-unit apply order for Unicode filenames", () => {
+    expect(pendingMigrations(unicodeNames, [])).toEqual(codeUnitOrder);
   });
 
   // A ledger row for a file this build does not ship (an older checkout, a deleted file) is not
@@ -51,6 +61,19 @@ describe("shippedMigrations — read from the directory this build carries", () 
     expect(files!.every((f) => f.endsWith(".sql"))).toBe(true);
     expect(files).toEqual([...files!].sort());
     expect(files).toContain("20260905100000_sync_apply_content_aware.sql");
+  });
+
+  it("keeps JavaScript's existing UTF-16 code-unit disk order for Unicode filenames", () => {
+    const root = mkdtempSync(join(tmpdir(), "cortex-migrations-"));
+    const dir = join(root, "supabase", "migrations");
+    mkdirSync(dir, { recursive: true });
+    for (const name of unicodeNames) writeFileSync(join(dir, name), "-- fixture\n");
+    writeFileSync(join(dir, "ignored.txt"), "fixture\n");
+    try {
+      expect(shippedMigrations(root)).toEqual(codeUnitOrder);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("is null, not empty, for a root with no migrations directory", () => {

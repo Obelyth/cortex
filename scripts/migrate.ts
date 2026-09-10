@@ -64,7 +64,7 @@ export function migrationPlan(files:Map<string,string>,ledger:MigrationLedger,al
     if(!done.has(name))pending.push({name,checksum});
   }
   if([...done.values()].includes(migrationHash("")))throw new Error("Ledger contains an empty migration checksum");
-  const highest=[...done.keys()].sort().at(-1);
+  const highest=[...done.keys()].sort((a,b)=>a<b?-1:a>b?1:0).at(-1);
   if(!allowOutOfOrder&&highest&&pending.some(p=>p.name<highest))throw new Error("Out-of-order migration refused");
   return {pending,digest:migrationHash(JSON.stringify({version:1,pending})),legacyChecksums:[...done.values()].some(v=>v===null)};
 }

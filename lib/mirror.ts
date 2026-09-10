@@ -363,13 +363,13 @@ export async function syncMirror(
         if (!(await store.apply(mirrorHead, sha, rows, gone))) {
           // Another instance moved the head first. Its state is the truth now; ours would have
           // been a rollback. Losing this race is a non-event, not an error.
-          console.error(`[mirror] patch to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
+          console.error("[mirror] patch lost the sync race — serving the winner's state");
           return;
         }
         return;
       }
-    } catch (e) {
-      console.error(`[mirror] patch sync failed, falling back to full: ${String(e)}`);
+    } catch {
+      console.error("[mirror] patch sync failed, falling back to full");
     }
   }
 
@@ -397,7 +397,7 @@ export async function syncMirror(
   // The one exception is the explicit legacy allowlist above.
   const stale = (await store.paths()).filter((p) => !current.has(p) && !LEGACY_NON_NOTE_SET.has(p));
   if (!(await store.apply(mirrorHead, sha, rows, stale))) {
-    console.error(`[mirror] full sync to ${sha.slice(0, 8)} lost the sync race — serving the winner's state`);
+    console.error("[mirror] full sync lost the sync race — serving the winner's state");
     return;
   }
 }

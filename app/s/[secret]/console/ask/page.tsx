@@ -132,14 +132,16 @@ export default async function Ask({
   // reachable from the trusted doors, which is exactly backwards.
   const trusted = new Set<string>(roster.trusted);
   const guest = new Set<string>(roster.guest);
-  const tools: ToolFacts[] = [...new Set([...roster.trusted, ...roster.guest])].sort().map((name) => ({
+  const tools: ToolFacts[] = [...new Set([...roster.trusted, ...roster.guest])]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((name) => ({
     name,
     doors: [trusted.has(name) ? "trusted" : null, guest.has(name) ? "guest" : null].filter(Boolean).join(" · "),
     what: WHAT[name] ?? "",
     trusted: trusted.has(name),
     guest: guest.has(name),
     calls: calls.durable ? calls.rows.filter((r) => r.tool === name).length : null,
-  }));
+    }));
 
   const model: AskModel = {
     sha: h.sha,

@@ -144,7 +144,7 @@ try {
       secret: live.CONNECTOR_PATH_SECRET, readDeployment,
     });
     const roster = JSON.parse(readFileSync(join(ROOT, "lib/tool-roster.json"), "utf8"));
-    if (JSON.stringify(checked.tools) !== JSON.stringify([...roster.trusted].sort())) throw new Error("Tool roster mismatch");
+    if (JSON.stringify(checked.tools) !== JSON.stringify([...roster.trusted].sort((a, b) => a < b ? -1 : a > b ? 1 : 0))) throw new Error("Tool roster mismatch");
   } catch {
     // Network errors may contain the credential-bearing URL. Do not echo them or print a guessed link.
     throw new Error("Deployment verification did not pass. No wiring link is being printed. Check the linked project's production domain, ready status, protection, and logs in Vercel, then rerun. Settings already saved remain saved; existing secrets are kept by default.");

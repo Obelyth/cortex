@@ -47,6 +47,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { safeLogValue } from "./safe-terminal.cjs";
 import Anthropic from "@anthropic-ai/sdk";
 import { ask, render, type Reader } from "../lib/ask";
 import {
@@ -478,7 +479,7 @@ async function main(): Promise<void> {
   writeFileSync(out, JSON.stringify({ summary, rows }, null, 2));
 
   console.error("");
-  console.log(JSON.stringify(summary, null, 2));
+  console.log(JSON.stringify(summary, (_key, value) => typeof value === "string" ? safeLogValue(value) : value, 2));
   console.error(`\nfull results → ${out}`);
   for (const w of [
     summary.errors > 0 && `${summary.errors} calls errored and are scored as failures`,

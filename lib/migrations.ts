@@ -12,6 +12,7 @@ import type { TriageItem } from "./health";
 
 /** Same per-request ceiling as the other small console reads (lib/pulse.ts). */
 const REQUEST_TIMEOUT_MS = 6_000;
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * The migration files this build shipped with, from disk — which is why next.config.ts traces
@@ -22,7 +23,7 @@ export function shippedMigrations(root = process.cwd()): string[] | null {
   try {
     return readdirSync(join(root, "supabase", "migrations"))
       .filter((f) => f.endsWith(".sql"))
-      .sort();
+      .sort(byCodeUnit);
   } catch {
     return null;
   }
@@ -49,7 +50,7 @@ export async function appliedMigrations(): Promise<string[] | null> {
 /** Files on disk the ledger has no row for, in apply order. Pure, so the rule is testable. */
 export function pendingMigrations(shipped: string[], applied: string[]): string[] {
   const done = new Set(applied);
-  return shipped.filter((f) => !done.has(f)).sort();
+  return shipped.filter((f) => !done.has(f)).sort(byCodeUnit);
 }
 
 /** The triage item, or null when nothing is pending. */

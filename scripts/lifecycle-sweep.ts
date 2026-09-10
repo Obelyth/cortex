@@ -15,6 +15,9 @@
  * execute on propose_deletions from public, anon and authenticated, leaving service_role.
  */
 import { summariseLifecycle, type Candidate, type TempCount } from "../lib/lifecycle";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { safeLogValue } from "./safe-terminal.cjs";
 
 const url = process.env.SUPABASE_URL?.replace(/\/$/, "");
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,36 +41,63 @@ async function rest<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers: { ...headers, ...(init.headers ?? {}) },
     signal: AbortSignal.timeout(20_000),
   });
-  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} → ${res.status} ${(await res.text()).slice(0, 200)}`);
+  if (!res.ok) throw new Error(`${init.method ?? "GET"} ${path} → ${res.status}`);
   return (await res.json()) as T;
 }
 
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   if (propose) {
-    const n = await rest<number>("rpc/propose_deletions", {
+    const rawN = await rest<unknown>("rpc/propose_deletions", {
       method: "POST",
       body: JSON.stringify({ min_age_days: days }),
     });
+    if (typeof rawN !== "number" || !Number.isSafeInteger(rawN) || rawN < 0) {
+      throw new Error("propose_deletions returned an invalid count");
+    }
+    const n = rawN;
     console.log(`propose_deletions(${days}) nominated ${n} new note(s)`);
   }
 
   // note_scores is a view over the mirror; one row per scored note.
-  const scored = await rest<Array<{ temperature: string }>>("note_scores?select=temperature");
+  const rawScored = await rest<unknown>("note_scores?select=temperature");
+  if (!Array.isArray(rawScored) || rawScored.some((row) =>
+    typeof row !== "object" || row === null || typeof (row as { temperature?: unknown }).temperature !== "string"
+  )) throw new Error("note_scores returned invalid score rows");
+  const scored = rawScored as Array<{ temperature: string }>;
   const byTemp = new Map<string, number>();
   for (const r of scored) byTemp.set(r.temperature, (byTemp.get(r.temperature) ?? 0) + 1);
   const temps: TempCount[] = [...byTemp].map(([temperature, n]) => ({ temperature, n }));
 
-  const candidates = await rest<Candidate[]>(
+  const rawCandidates = await rest<unknown>(
     "deletion_candidates?select=path,reason&decision=is.null"
   );
+  if (!Array.isArray(rawCandidates) || rawCandidates.some((row) =>
+    typeof row !== "object" || row === null ||
+    typeof (row as { path?: unknown }).path !== "string" ||
+    typeof (row as { reason?: unknown }).reason !== "string"
+  )) throw new Error("deletion_candidates returned invalid rows");
+  const candidates = rawCandidates as Candidate[];
 
-  console.log(summariseLifecycle(temps, candidates));
+  const safeTemps = temps.map(({ temperature, n }) => ({ temperature: safeLogValue(temperature), n }));
+  const safeCandidates = candidates.map(({ path, reason }) => ({
+    path: safeLogValue(path),
+    reason: safeLogValue(reason),
+  }));
+  console.log(summariseLifecycle(safeTemps, safeCandidates));
   if (!propose) console.log("\nread-only — re-run with --propose to nominate new candidates.");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+export function isDirectRun(moduleUrl: string, argv1: string | undefined): boolean {
+  return argv1 !== undefined && resolve(argv1) === fileURLToPath(moduleUrl);
+}
+
+export function reportLifecycleError(error: unknown, write: (message: string) => void = console.error): void {
+  write(safeLogValue(error instanceof Error ? error.message : error));
+}
+
+if (isDirectRun(import.meta.url, process.argv[1])) {
   main().catch((e) => {
-    console.error(e instanceof Error ? e.message : e);
+    reportLifecycleError(e);
     process.exit(1);
   });
 }

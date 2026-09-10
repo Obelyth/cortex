@@ -70,6 +70,7 @@ import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
+import { resolveTrustedExecutable } from "./command-path.cjs";
 
 interface Label {
   q: string;
@@ -196,10 +197,12 @@ export function frozenTree(brainDir: string, sha: string): { dir: string; cleanu
   const dir = mkdtempSync(path.join(os.tmpdir(), "eval-frozen-"));
   const cleanup = () => rmSync(dir, { recursive: true, force: true });
   process.on("exit", cleanup);
-  const tarball = execFileSync("git", ["-C", brainDir, "archive", "--format=tar", sha], {
+  const git = resolveTrustedExecutable("git");
+  const tar = resolveTrustedExecutable("tar");
+  const tarball = execFileSync(git, ["-C", brainDir, "archive", "--format=tar", sha], {
     maxBuffer: 200 * 1024 * 1024,
   });
-  execFileSync("tar", ["-x", "-C", dir], { input: tarball, maxBuffer: 200 * 1024 * 1024 });
+  execFileSync(tar, ["-x", "-C", dir], { input: tarball, maxBuffer: 200 * 1024 * 1024 });
   return { dir, cleanup };
 }
 
@@ -390,7 +393,7 @@ async function main(): Promise<void> {
   for (const r of [...offline, ...coaccess]) byKind.set(r.kind, (byKind.get(r.kind) ?? 0) + 1);
   console.log(
     `graph: ${offline.length + coaccess.length} edges — ` +
-      [...byKind.entries()].sort().map(([kind, n]) => `${kind} ${n}`).join(" · ") +
+      [...byKind.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([kind, n]) => `${kind} ${n}`).join(" · ") +
       ` (coaccess ${coaccess.length ? "fetched live from prod" : "absent"})\n`
   );
   const adjacency = buildAdjacency([...offline, ...coaccess]);

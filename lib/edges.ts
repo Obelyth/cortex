@@ -47,6 +47,7 @@ export function scrubEvidence(s: string): string {
   return clean || "(evidence redacted)";
 }
 const ev = scrubEvidence;
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** An explicit wiki-style reference. Newlines excluded so an unclosed bracket cannot swallow
  *  the rest of the note into one giant "ref". Exported for the inbox checks — one definition
@@ -141,7 +142,7 @@ function* tagSteps(files: Map<string, string>): Generator<EdgeRow | undefined> {
         dst: tagged[j].path,
         kind: "tag",
         weight: shared.length,
-        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort().join(", ")}`),
+        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort(byCodeUnit).join(", ")}`),
       };
     }
   }
@@ -446,7 +447,7 @@ export function groupEdges(rows: EdgeRow[], topK = PANEL_TOP_K): Record<string, 
       if (!perKind.has(e.kind)) perKind.set(e.kind, []);
       perKind.get(e.kind)!.push(e);
     }
-    for (const kind of [...perKind.keys()].sort()) {
+    for (const kind of [...perKind.keys()].sort(byCodeUnit)) {
       kept.push(
         ...perKind
           .get(kind)!

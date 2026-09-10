@@ -2,17 +2,20 @@
 // node --expose-gc scripts/benchmark-lexical.cjs SIZE [baseline-json]
 // The fixture/query sequence matches the controller's synthetic-2048-ascii-v1 baseline.
 const os = require('node:os');
-const { readFileSync } = require('node:fs');
+const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { performance } = require('node:perf_hooks');
 const { createServer } = require('vite');
+const { readRepositoryJson } = require('./benchmark-support.cjs');
+const { resolveTrustedExecutable } = require('./command-path.cjs');
 
 (async () => {
   const size = Number(process.argv[2]);
   if (![200, 2000, 10000].includes(size) || !global.gc) throw new Error('Use --expose-gc and size 200, 2000, or 10000');
   global.fetch = async () => { throw new Error('Synthetic benchmark must not use network fetch'); };
-  const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  const status = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim();
+  const git = resolveTrustedExecutable('git');
+  const head = execFileSync(git, ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const status = execFileSync(git, ['status', '--porcelain'], { encoding: 'utf8' }).trim();
   const dirty = status.split('\n').filter(Boolean).some(line => line !== '?? supabase/.temp/');
   const loader = await createServer({ root: process.cwd(), configFile: false, logLevel: 'silent', server: { middlewareMode: true, watch: null }, optimizeDeps: { noDiscovery: true, include: [] } });
   let narrowDetail, prepareLexical;
@@ -50,7 +53,9 @@ const { createServer } = require('vite');
   const median = values => { const sorted = [...values].sort((a, b) => a - b); return (sorted[5] + sorted[6]) / 2; };
   let selectionsMatchBaseline = null;
   if (process.argv[3]) {
-    const baseline = JSON.parse(readFileSync(process.argv[3], 'utf8')).find(row => row.size === size);
+    const parsed = readRepositoryJson(path.join(__dirname, '..'), process.argv[3]);
+    if (!Array.isArray(parsed)) throw new Error('Comparable baseline must be a JSON array');
+    const baseline = parsed.find(row => row && typeof row === 'object' && row.size === size);
     if (!baseline || baseline.fixtureVersion !== 'synthetic-2048-ascii-v1') throw new Error('Comparable baseline size/fixture missing');
     selectionsMatchBaseline = JSON.stringify(paths) === JSON.stringify(baseline.warmPaths);
     if (!selectionsMatchBaseline) process.exitCode = 1;
