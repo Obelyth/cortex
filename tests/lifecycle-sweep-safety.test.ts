@@ -78,6 +78,20 @@ describe("lifecycle sweep response boundary", () => {
     await expect(main()).rejects.toThrow("propose_deletions returned an invalid count");
   });
 
+  it("prints an accepted numeric RPC count without changing its value", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const body = String(input).includes("propose_deletions") ? 4 : [];
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((value) => logs.push(String(value)));
+    const { main } = await loadModule(["--propose"]);
+
+    await main();
+
+    expect(logs[0]).toBe("propose_deletions(180) nominated 4 new note(s)");
+  });
+
   it("keeps failed HTTP diagnostics but never carries the response body into the error", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("private\nFORGED\u001b[31m", { status: 503 })));
     const { main } = await loadModule();

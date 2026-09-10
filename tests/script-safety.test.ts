@@ -9,9 +9,13 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { delimiter, join, relative } from "node:path";
-import { safeLogValue } from "../scripts/safe-terminal.cjs";
 
 const require = createRequire(import.meta.url);
+const terminalSafety = require("../scripts/safe-terminal.cjs") as {
+  safeLogValue: (value: unknown) => string;
+  safeJsonLogRecord?: (value: unknown) => string;
+};
+const { safeLogValue } = terminalSafety;
 const { resolveTrustedExecutable } = require("../scripts/command-path.cjs") as {
   resolveTrustedExecutable: (name: string, searchPath?: string) => string;
 };
@@ -132,5 +136,23 @@ describe("terminal log fields", () => {
   it("renders CR, LF, and ANSI controls visibly without changing ordinary text", () => {
     expect(safeLogValue("alpha\r\nbeta\u001b[31mred\u001b[0m")).toBe("alpha\\r\\nbetared");
     expect(safeLogValue("ordinary/path.md")).toBe("ordinary/path.md");
+  });
+  it("serializes the complete eval record onto one inert line without dropping hostile provenance", () => {
+    expect(typeof terminalSafety.safeJsonLogRecord).toBe("function");
+    const summary = {
+      corpusCommit: "deadbeef\r\nFORGED\u001b[31m",
+      usable: { ok: 4, of: 7 },
+      notScored: {
+        staleDetail: [{
+          expected: "notes/a.md\nnext",
+          reason: "\u001b]0;title\u0007stale\u007f\u0085\u009b31m\u2028line\u2029paragraph",
+        }],
+      },
+    };
+
+    const record = terminalSafety.safeJsonLogRecord!(summary);
+
+    expect(record).not.toMatch(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/);
+    expect(JSON.parse(record)).toEqual(summary);
   });
 });

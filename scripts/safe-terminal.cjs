@@ -30,4 +30,13 @@ function safeLogValue(value) {
   return safe;
 }
 
-module.exports = { safeLogValue };
+function safeJsonLogRecord(value) {
+  const serialized = JSON.stringify(value);
+  if (serialized === undefined) throw new Error("Terminal JSON record is not serializable");
+  const escaped = serialized.replace(/[\u007f-\u009f\u2028\u2029]/g, (character) =>
+    `\\u${character.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`
+  );
+  return safeLogValue(escaped);
+}
+
+module.exports = { safeJsonLogRecord, safeLogValue };

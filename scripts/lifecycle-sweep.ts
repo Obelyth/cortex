@@ -54,7 +54,7 @@ export async function main(): Promise<void> {
     if (typeof rawN !== "number" || !Number.isSafeInteger(rawN) || rawN < 0) {
       throw new Error("propose_deletions returned an invalid count");
     }
-    const n = rawN;
+    const n = Number(rawN);
     console.log(`propose_deletions(${days}) nominated ${n} new note(s)`);
   }
 
