@@ -121,7 +121,9 @@ components:
 
 # Design System: Cortex Console
 
-*Revised 2026-09-01, after the depth and kinetic passes. The build is the source; where this file and older revisions disagree, the shipped stylesheets won.*
+*Dashboard structure updated 2026-09-10. The application stylesheets and components are authoritative for the implemented visual system.*
+
+The dashboard has five primary screens: Ops, Overview, Ask, Trends and Settings. Overview owns working context, including an explicit None project selection. Ask links to that single editor and stacks its corpus summary and browser vertically. Settings owns configuration and provider-readiness explanations. Ops presents diagnostics and confirmed operations. The Map canvas and public demo are removed; legacy authenticated Map addresses redirect to Ask without loading graph data.
 
 ## Overview
 
@@ -275,8 +277,8 @@ Two recurring geometries define the surface: the **construction grid** — dashe
 ### The Corpus Field (signature)
 A matrix of 6px marks, one per block of one note, hairline when live and full ink when retracted. It is an addressable index, not an illustration: hovering reads out the note and block number, and clicking opens the ledger filtered to that note. When its section reveals, the marks *pop* in sequence — each mark scaling up from zero on its own `--d` delay, staggered so the last lands under a second regardless of corpus size. It reads from the same `strip` the ledger renders, so the art cannot drift from the data.
 
-### The Live Board (signature)
-The map is the console's one instrument that is a canvas, and since the depth pass it lives in the same paper world: warm paper knock (`#f0efed`), true-ink labels, hairline ink edges, and signal orange only where the board runs hot — the search match and a selection's edges, because those are actions on the document. Liveness is a cyan chip carrying near-black, per the two-questions rule. Chrome is a solid raised-paper panel (no translucency), square everywhere, with ink shadows from the same vocabulary. Icons are drawn strokes — 16px grid, `currentColor`, 1.8px weight — never unicode glyphs; brand marks are real 24-unit paths rasterised once per size. Default physics are force layout with live springs; slider readouts are mono ink.
+### Working context
+One full-width region on Overview owns project selection, preview, queued context and general working notes. Choosing None is non-destructive: it does not delete saved notes or make an implicit model call. Ask uses a direct shortcut to this region rather than duplicating the editor. Empty, unavailable, pending and saved states remain distinct.
 
 ## Do's and Don'ts
 

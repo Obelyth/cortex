@@ -6,42 +6,25 @@
  * a query surface like search_notes()." This module is that machinery, built EVAL-FIRST: every
  * shape below ran the full labelled set before anything was allowed near the default path.
  *
- * THE FAILURE MODE THIS IS DESIGNED AGAINST is on the record (the retrieval decision note
- * behind this module): the FTS hybrid "won" at k=10 and LOST at k=5, because interleaving spends scarce candidate
+ * THE FAILURE MODE THIS IS DESIGNED AGAINST: a hybrid can look better at one candidate budget
+ * and worse at another because interleaving spends scarce candidate
  * slots on the weaker arm. A union is not free — every slot a hop neighbour takes is a slot a
  * BM25 candidate loses. So displacement here is explicit, bounded, and k-aware: a config says
  * exactly how many bottom slots hops may claim (`tailSlots`) and below what budget they may
  * claim none at all (`displaceAboveK`). BM25's protected prefix is never reordered and never
  * displaced; hops otherwise only FILL — when BM25 itself ran out of positive-score candidates.
  *
- * MEASURED, 2026-08-11 — 170 routable labels, 97-note corpus, 1,516 edges (coaccess live from
- * prod). The incumbent column is BM25 re-measured in the SAME RUN, because the recorded
- * 97.6/95.3 was the 86-note corpus and a gate that compares across snapshots compares nothing:
- *
- *   strategy                 recall@10   recall@5
- *   BM25 (incumbent)             95.3%      90.6%
- *   hop fill-only                95.3%      90.6%
- *   hop tail-1 all-kinds         95.3%      87.1%
- *   hop tail-2 structural        94.7%      85.3%
- *   hop tail-2 strong            94.7%      85.3%
- *   hop k-aware tail-2           94.7%      90.6%
- *   hop tail-2 coaccess          94.7%      85.3%
- *
  * THE GATE SAID NO, so NOTHING ROUTES THROUGH THIS MODULE BY DEFAULT — it ships as a query
- * capability, the precedent search_notes() set: built, measured, kept off the path. No shape
- * beat the incumbent on either k, let alone both: every displacing shape lost at k=5 (tail-2
- * also at k=10), because a hop slot is paid for with a BM25 candidate that turned out to be the
- * labelled note more often than the neighbour was. That is the FTS-hybrid lesson
- * reproduced a second time with a different second arm, which upgrades it from an observation
- * about FTS to a property of this corpus: BM25's tail is not weak enough to be worth spending.
+ * capability: built, measured, kept off the path. No evaluated shape beat the incumbent across
+ * candidate budgets. A hop slot is paid for with a BM25 candidate, so displacement can reduce
+ * recall even when it improves the rank of some successful matches.
  * The non-displacing shapes (fill-only, and k-aware at or below its threshold) tie the incumbent
  * exactly, because BM25 underfills on almost no labelled question — they are insurance, not lift.
  * (The displacing rows' higher MRR is an artifact, not a consolation: MRR averages only over
  * FOUND labels, and what displacement lost was precisely the deep-ranked ones.)
  *
- * Six shapes were measured and the sweep stopped there on purpose: a seventh, eighth, ninth
- * variation until one clears the bar is not a better retriever, it is overfitting 170 labels
- * and shipping the noise.
+ * The shape set is frozen on purpose: adding variations until one clears the bar overfits the
+ * benchmark instead of improving the retriever.
  */
 import { rank, narrow } from "./narrow";
 import { byName } from "./frontmatter";
@@ -76,8 +59,8 @@ export interface HopConfig {
   /** Displacement is allowed only when k EXCEEDS this. At or below it, tailSlots is treated as
    *  0 — the k-aware answer to the FTS lesson: never spend a scarce slot on the weaker arm. */
   displaceAboveK: number;
-  /** How many top BM25 hits contribute their neighbourhoods. Fixed at 3 across every measured
-   *  shape — sweeping it too would multiply the config space past what 170 labels can support. */
+  /** How many top BM25 hits contribute their neighbourhoods. Fixed across every measured shape
+   *  to keep the evaluation space bounded. */
   seeds: number;
   kinds: readonly HopKind[];
   /** Minimum edge weight. Link/tag/correction weights are small integers (reference count,

@@ -58,6 +58,7 @@ export interface LearningValues {
   watchSupersededLink: boolean;
   watchCoaccessGap: boolean;
   watchCorrectionChain: boolean;
+  watchOversizedPage: boolean;
   /** Shared one-hour windows before the coaccess-gap check fires. */
   coaccessFloor: number;
 }
@@ -76,6 +77,7 @@ export const LEARNING_DEFAULTS: LearningValues = {
   watchSupersededLink: true,
   watchCoaccessGap: true,
   watchCorrectionChain: true,
+  watchOversizedPage: true,
   coaccessFloor: COACCESS_FLOOR,
 };
 
@@ -95,6 +97,7 @@ export const LEARNING_ENV: Record<LearningKnob, string> = {
   watchSupersededLink: "WATCH_SUPERSEDED_LINK",
   watchCoaccessGap: "WATCH_COACCESS_GAP",
   watchCorrectionChain: "WATCH_CORRECTION_CHAIN",
+  watchOversizedPage: "WATCH_OVERSIZED_PAGE",
   coaccessFloor: "COACCESS_FLOOR",
 };
 
@@ -103,6 +106,7 @@ const BOOL_KNOBS = [
   "watchSupersededLink",
   "watchCoaccessGap",
   "watchCorrectionChain",
+  "watchOversizedPage",
 ] as const;
 const NUM_KNOBS = ["ansCacheTtlDays", "handoffBudget", "coaccessFloor"] as const;
 
@@ -115,6 +119,7 @@ const KNOB_WORDS: Record<LearningKnob, string> = {
   watchSupersededLink: "the superseded-link check switch",
   watchCoaccessGap: "the coaccess-gap check switch",
   watchCorrectionChain: "the correction-chain check switch",
+  watchOversizedPage: "the oversized-page check switch",
   coaccessFloor: "the co-read floor",
 };
 

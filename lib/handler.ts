@@ -18,8 +18,7 @@ import { registerTools } from "@/lib/tools";
  * diagnostics on a bad token, and buys every non-Claude orchestrator being able to connect —
  * which is the point of the whole door.
  *
- * Ported from the Cursor-authored fix on Obelyth/cortex#2, which is where it was written and
- * not where it belongs: this repo is upstream, and the same bug is here.
+ * The bearer contract is identical on both authenticated routes.
  */
 export function stripOAuthHints(res: Response): Response {
   if (res.status !== 401 && res.status !== 403) return res;

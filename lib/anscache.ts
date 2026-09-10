@@ -1,15 +1,16 @@
 import { createHash } from "node:crypto";
 import { after } from "next/server";
 import { kv, kvEnv } from "./kv";
+import { redact } from "./redact";
 
 /**
  * anscache — the answer cache. A repeat question at an unchanged corpus head costs zero model
  * calls.
  *
  * The key is what makes it honest: it carries the corpus head SHA, so the entry describes an
- * immutable object — the corpus at that commit — and can never go stale. Any brain write moves
- * the head, which changes every key; there is no invalidation code because there is nothing to
- * invalidate. The TTL below only bounds storage.
+ * immutable object — the corpus at that commit. Any brain write moves the head, which changes
+ * every key. The pipeline version invalidates answers when the code's answer policy changes
+ * at an unchanged head. The TTL below only bounds storage.
  *
  * The key also carries the FULL answer policy — door, scope, citations, model, k — because a
  * cached reply is the *rendered* reply. A guest's citation-stripped answer must never serve a
@@ -37,7 +38,7 @@ export interface AskShape {
   sha: string;
   /** The RESOLVED reader model, after console/env defaults applied. */
   model: string;
-  /** Effective pack size, or "full" for a whole-corpus read — both change the answer. */
+  /** Effective pack size, or "full" for corpus-order selection within the full-read budget. */
   k: number | "full";
 }
 
@@ -56,7 +57,7 @@ export interface CachedAnswer {
   ts: number;
 }
 
-/** Immutability does the invalidation (the SHA is in the key); the TTL only bounds storage.
+/** Revision and pipeline version do the invalidation; the TTL only bounds storage.
  *  Exported in DAYS because that is the unit the console's Learning knob steps in — one
  *  definition, so the knob's default and this default cannot drift apart. */
 export const ANSCACHE_TTL_DAYS = 7;
@@ -64,29 +65,33 @@ const TTL_SECONDS = ANSCACHE_TTL_DAYS * 86_400;
 /** A cache read must never make an ask slower than the model call it hopes to skip. */
 const READ_TIMEOUT_MS = 1500;
 
+/** Bump for changes to prompting, verification, retrieval policy, redaction or rendering.
+ * The corpus revision alone cannot invalidate answers produced by an older pipeline. */
+export const ANSWER_PIPELINE_VERSION = 4;
+
 /** Every entry lives under this prefix — what cacheKey() writes into and what the console's
  *  count and clear walk. One definition, or a renamed key space strands entries forever. */
 const prefix = () => `cortex:anscache:${kvEnv()}:`;
 
 /**
- * Whitespace and case folded before hashing, so "Is beacon live?" and "is beacon  live?" are
- * the same question to the cache. Deliberately nothing smarter: paraphrase detection would put
- * a similarity judgement in front of a system whose product is exact provenance.
+ * Normalize harmless whitespace and Unicode NFC, preserving case: paths and symbols may be
+ * case-sensitive. Paraphrase detection would put a similarity judgement ahead of provenance.
  */
 export function normaliseQuestion(q: string): string {
-  return q.normalize("NFC").replace(/\s+/g, " ").trim().toLowerCase();
+  return q.normalize("NFC").replace(/\s+/g, " ").trim();
 }
 
 export function cacheKey(shape: AskShape, policy: AnswerPolicy): string {
   // JSON over a fixed field order, then hashed — the scope is sorted because applyScope treats
   // it as a set, and two orderings of the same entries must not be two cache entries.
   const fingerprint = JSON.stringify({
+    pipeline: ANSWER_PIPELINE_VERSION,
     q: normaliseQuestion(shape.question),
     sha: shape.sha,
     model: shape.model,
     k: shape.k,
     door: policy.door,
-    scope: [...policy.scope].sort((a, b) => a.localeCompare(b)),
+    scope: [...policy.scope].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
     citations: policy.citations,
   });
   const hash = createHash("sha256").update(fingerprint).digest("hex");
@@ -109,9 +114,9 @@ function parseEntry(raw: unknown): CachedAnswer | null {
   if (typeof r.stamp !== "string" || typeof r.model !== "string") return null;
   if (typeof r.commit !== "string" || !/^[0-9a-f]{8,40}$/i.test(r.commit)) return null;
   return {
-    reply: r.reply,
-    stamp: r.stamp,
-    model: r.model,
+    reply: redact(r.reply),
+    stamp: redact(r.stamp),
+    model: redact(r.model),
     commit: r.commit,
     corpusTokens: typeof r.corpusTokens === "number" && r.corpusTokens >= 0 ? r.corpusTokens : 0,
     ts: typeof r.ts === "number" ? r.ts : 0,
@@ -147,7 +152,8 @@ export async function readAnswerCache(key: string): Promise<CachedAnswer | null>
 export function writeAnswerCache(key: string, entry: CachedAnswer, ttlSeconds = TTL_SECONDS): void {
   const r = kv();
   if (!r) return;
-  const write = r.set(key, JSON.stringify(entry), { ex: ttlSeconds }).catch(() => {
+  const safe = { ...entry, reply: redact(entry.reply), stamp: redact(entry.stamp), model: redact(entry.model), commit: redact(entry.commit) };
+  const write = r.set(key, JSON.stringify(safe), { ex: ttlSeconds }).catch(() => {
     /* the cache is an optimisation, never the product */
   });
   // Registered with the request lifecycle so a suspending instance flushes it; outside a
@@ -192,6 +198,33 @@ export async function countAnswerCache(): Promise<number | null> {
     return (await Promise.race([scanKeys(), timeout])).length;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** One bounded SCAN page for diagnostics. This reports store reachability and whether at least
+ * one cache entry is visible; it deliberately does not walk the keyspace to manufacture an
+ * exact count for a health probe. */
+export async function answerCacheStatus(): Promise<"off" | "empty" | "populated" | "no-match-sampled" | "unavailable"> {
+  const r = kv();
+  if (!r) return "off";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("kv scan timeout")), READ_TIMEOUT_MS);
+    });
+    const value = await Promise.race([r.scan(0, { match: `${prefix()}*`, count: 1 }), timeout]);
+    if (!Array.isArray(value) || value.length !== 2) return "unavailable";
+    const [cursor, keys] = value;
+    if ((typeof cursor !== "string" && typeof cursor !== "number")
+      || !/^\d+$/.test(String(cursor))
+      || !Array.isArray(keys)
+      || !keys.every((item) => typeof item === "string")) return "unavailable";
+    if (keys.length > 0) return "populated";
+    return String(cursor) === "0" ? "empty" : "no-match-sampled";
+  } catch {
+    return "unavailable";
   } finally {
     clearTimeout(timer);
   }

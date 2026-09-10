@@ -1,6 +1,7 @@
 "use client";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { submitProposalDecision, type ProposalAction } from "@/lib/proposal-result";
 import styles from "../console.module.css";
 
 /**
@@ -21,6 +22,7 @@ export interface ProposalVM {
   content: string;
   why?: string;
   client?: string;
+  state?: "pending" | "accepting";
 }
 
 function url(): string {
@@ -33,25 +35,18 @@ export function ProposalsClient({ proposals }: { proposals: ProposalVM[] }) {
   const [pending, start] = useTransition();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(proposals[0]?.id ?? null);
 
-  async function act(id: string, action: "accept" | "reject") {
+  async function act(id: string, action: ProposalAction) {
     setBusy(id);
     setError(null);
+    setResult(null);
     try {
-      const res = await fetch(url(), {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id, action }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(body?.error ?? `the request was refused (${res.status})`);
-        return;
-      }
+      const res = await submitProposalDecision(url(), id, action);
+      if (!res.success) { setError(res.message); start(() => router.refresh()); return; }
+      setResult(res.message);
       start(() => router.refresh());
-    } catch {
-      setError("the request did not reach the server");
     } finally {
       setBusy(null);
     }
@@ -70,6 +65,8 @@ export function ProposalsClient({ proposals }: { proposals: ProposalVM[] }) {
       </div>
 
       {error && <div className={styles.refused}>{error}</div>}
+      {/* Always mounted: a live region that appears with its text is not reliably announced. */}
+      <div role="status" className={result ? styles.footNote : "srOnly"}>{result ?? ""}</div>
 
       {proposals.length === 0 && (
         <div className={styles.footNote}>
@@ -104,14 +101,15 @@ export function ProposalsClient({ proposals }: { proposals: ProposalVM[] }) {
               )}
               <div className={styles.note}>proposed content — untrusted text, shown verbatim</div>
               <pre className={styles.propContent}>{p.content}</pre>
+              {p.state === "accepting" && <p className={styles.note}>Acceptance is running. Cancel acceptance leaves the target note unchanged if the cancel lands first; if the commit already landed, you get that commit's result instead.</p>}
               <div className={styles.propActions}>
                 <button
                   type="button"
                   className={styles.rdBtn}
                   disabled={working}
-                  onClick={() => act(p.id, "reject")}
+                  onClick={() => act(p.id, p.state === "accepting" ? "cancel" : "reject")}
                 >
-                  {busy === p.id ? "…" : "reject"}
+                  {busy === p.id ? "…" : p.state === "accepting" ? "Cancel acceptance" : "Reject"}
                 </button>
                 <button
                   type="button"

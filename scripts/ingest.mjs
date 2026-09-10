@@ -11,9 +11,14 @@
  *   npm run ingest -- --from ~/notes --commit           # do it
  *   npm run ingest -- --from ~/docs --into projects --commit
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, extname, basename } from "node:path";
+import commandPath from "./command-path.cjs";
+import terminalSafety from "./safe-terminal.cjs";
+
+const { resolveTrustedExecutable } = commandPath;
+const { safeLogValue } = terminalSafety;
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -37,8 +42,8 @@ if (!["notes", "projects"].includes(INTO)) {
   console.error(`--into must be notes or projects, got: ${INTO}`);
   process.exit(1);
 }
-if (!BRAIN) {
-  console.error("set BRAIN_REPO=owner/brain (env) or pass --repo owner/brain");
+if (typeof BRAIN !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(BRAIN)) {
+  console.error("set BRAIN_REPO to a valid owner/repository name (env) or pass --repo owner/brain");
   process.exit(1);
 }
 
@@ -66,13 +71,13 @@ let skipped = 0;
 const planned = [];
 for (const f of files) {
   if (f.size > MAX_BYTES) {
-    console.log(`  skip  ${f.name}  (${(f.size / 1024).toFixed(0)} KB > ${MAX_BYTES / 1024} KB cap — split it first)`);
+    console.log(`  skip  ${safeLogValue(f.name)}  (${(f.size / 1024).toFixed(0)} KB > ${MAX_BYTES / 1024} KB cap — split it first)`);
     skipped++;
     continue;
   }
   const dest = `${INTO}/${slug(f.name)}.md`;
   planned.push({ ...f, dest });
-  console.log(`  file  ${f.name}  →  ${dest}  (${(f.size / 1024).toFixed(1)} KB)`);
+  console.log(`  file  ${safeLogValue(f.name)}  →  ${dest}  (${(f.size / 1024).toFixed(1)} KB)`);
 }
 
 // Two sources slugging to one destination would half-fail on commit; a dry run that hides
@@ -80,7 +85,7 @@ for (const f of files) {
 const seen = new Map();
 for (const f of planned) {
   if (seen.has(f.dest)) {
-    console.error(`\n  COLLISION: "${seen.get(f.dest)}" and "${f.name}" both map to ${f.dest} — rename one and re-run.`);
+    console.error(`\n  COLLISION: "${safeLogValue(seen.get(f.dest))}" and "${safeLogValue(f.name)}" both map to ${f.dest} — rename one and re-run.`);
     process.exit(1);
   }
   seen.set(f.dest, f.name);
@@ -92,6 +97,7 @@ if (!COMMIT) {
 }
 
 let written = 0;
+const gh = resolveTrustedExecutable("gh");
 for (const f of planned) {
   const body =
     readFileSync(f.src, "utf8").trimEnd() +
@@ -101,14 +107,14 @@ for (const f of planned) {
   const b64 = Buffer.from(body, "utf8").toString("base64");
   const payload = JSON.stringify({ message: `brain: ingest ${f.dest}`, content: b64 });
   try {
-    execSync(
-      `gh api -X PUT repos/${BRAIN}/contents/${f.dest} --input -`,
+    execFileSync(
+      gh, ["api", "-X", "PUT", `repos/${BRAIN}/contents/${f.dest}`, "--input", "-"],
       { input: payload, stdio: ["pipe", "ignore", "pipe"] }
     );
     console.log(`  ok    ${f.dest}`);
     written++;
   } catch (e) {
-    const msg = String(e.stderr || e.message).slice(0, 120);
+    const msg = safeLogValue(e.stderr || e.message).slice(0, 120);
     console.log(`  FAIL  ${f.dest} — ${msg} (already exists? delete it in the repo or rename the source)`);
   }
 }

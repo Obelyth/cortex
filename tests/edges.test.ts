@@ -10,6 +10,7 @@ import {
   rebuildEdges,
   scheduleEdgeRebuild,
   edgesPulse,
+  edgesBuildStatus,
   MAX_EVIDENCE,
   LEXICAL_K,
   PANEL_TOP_K,
@@ -199,7 +200,7 @@ describe("deriveEdges — the builder's idempotence, at the derivation layer", (
 /* ── store plumbing ── */
 
 const jsonRes = (body: unknown, status = 200) =>
-  ({ ok: status < 400, status, headers: new Headers(), json: async () => body }) as unknown as Response;
+  Response.json(body,{status});
 
 describe("rebuildEdges", () => {
   const files = corpus({ "notes/a.md": "See [[b]].", "notes/b.md": "target" });
@@ -214,23 +215,25 @@ describe("rebuildEdges", () => {
     expect(await rebuildEdges(files, "head1")).toEqual({ state: "missing" });
   });
 
-  it("skips without deriving when built_head already equals the head", async () => {
-    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
-      if (String(url).includes("edges_state")) return jsonRes([{ built_head: "head1" }]);
+  const identity={state:"stale",structural:true,watermark:"clock",cutoff:"2026-09-08T12:00:00Z",policy:"coaccess-v2-90d-closed-utc-6-2",structure:"structural-v2-unicode-bm25-1.5-1",builtStructure:"structural-v2-unicode-bm25-1.5-1"};
+  it("skips without deriving when both input identities are current", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, init?:RequestInit) => {
+      if (String(url).includes("note_edges") && new Headers(init?.headers).get("range")!=="0-999") return jsonRes([]);
+      if (String(url).endsWith("edges_freshness")) return jsonRes({...identity,state:"current"});
       throw new Error(`unexpected fetch: ${String(url)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
     expect(await rebuildEdges(files, "head1")).toEqual({ state: "current", head: "head1" });
     // The skip is the common case after most reconciles; it must cost one read, zero writes.
-    expect(fetchMock.mock.calls.every(([u]) => !String(u).includes("rpc/"))).toBe(true);
+    expect(fetchMock.mock.calls.every(([u]) => String(u).endsWith("edges_freshness"))).toBe(true);
   });
 
   it("posts the derived edges to the RPC in one call, and two rebuilds post identical bodies", async () => {
     const bodies: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (String(url).includes("edges_state")) return jsonRes([{ built_head: "old" }]);
+      if (String(url).endsWith("edges_freshness")) return jsonRes(identity);
       bodies.push(String(init?.body));
-      return jsonRes(true);
+      return jsonRes("rebuilt");
     }));
     const r1 = await rebuildEdges(files, "head2");
     const r2 = await rebuildEdges(files, "head2");
@@ -242,22 +245,23 @@ describe("rebuildEdges", () => {
   });
 
   it("reports 'stale-head' when the RPC refuses — the mirror moved on and the graph must not regress", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
-      if (String(url).includes("edges_state")) return jsonRes([{ built_head: "old" }]);
-      return jsonRes(false);
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?:RequestInit) => {
+      if (String(url).includes("note_edges") && new Headers(init?.headers).get("range")!=="0-999") return jsonRes([]);
+      if (String(url).endsWith("edges_freshness")) return jsonRes(identity);
+      return jsonRes("stale-head");
     }));
     expect(await rebuildEdges(files, "head3")).toEqual({ state: "stale-head", head: "head3" });
   });
 
-  it("--force skips the currency check and rebuilds anyway", async () => {
+  it("--force rebuilds current inputs but still obtains the identity for atomic publication", async () => {
     const urls: string[] = [];
     vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
       urls.push(String(url));
-      return jsonRes(true);
+      return jsonRes(String(url).endsWith("edges_freshness")?{...identity,state:"current"}:"rebuilt");
     }));
     const r = await rebuildEdges(files, "head1", { force: true });
     expect(r.state).toBe("rebuilt");
-    expect(urls.some((u) => u.includes("edges_state"))).toBe(false);
+    expect(urls.some((u) => u.endsWith("edges_freshness"))).toBe(true);
   });
 });
 
@@ -293,6 +297,11 @@ describe("groupEdges — the panel's data, held still", () => {
 });
 
 describe("edgesPulse — the console's read, every degraded state named", () => {
+  it("reads bounded build status without paging relationship rows",async()=>{
+    const calls:string[]=[];
+    vi.stubGlobal("fetch",vi.fn(async(url:RequestInfo|URL)=>{calls.push(String(url));if(String(url).endsWith("edges_freshness"))return jsonRes({state:"current",policy:"coaccess-v2-90d-closed-utc-6-2",structure:"structural-v2-unicode-bm25-1.5-1",builtStructure:"structural-v2-unicode-bm25-1.5-1",builtAt:"2026-08-11T20:00:00Z"});return jsonRes([{built_head:"abcdef1234567890",built_at:"2026-08-11T20:00:00Z"}]);}));
+    expect(await edgesBuildStatus()).toBe("current");expect(calls).toHaveLength(2);expect(calls.some(url=>url.includes("note_edges"))).toBe(false);
+  });
   it("is 'off' with no env — the opt-in law: the panel must not render at all", async () => {
     vi.stubEnv("SUPABASE_URL", "");
     expect(await edgesPulse()).toEqual({ state: "off" });
@@ -316,7 +325,9 @@ describe("edgesPulse — the console's read, every degraded state named", () => 
   });
 
   it("returns the build stamp and grouped edges when built", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?:RequestInit) => {
+      if (String(url).includes("note_edges") && new Headers(init?.headers).get("range")!=="0-999") return jsonRes([]);
+      if (String(url).endsWith("edges_freshness")) return jsonRes({state:"current",policy:"coaccess-v2-90d-closed-utc-6-2",structure:"structural-v2-unicode-bm25-1.5-1",builtStructure:"structural-v2-unicode-bm25-1.5-1",builtAt:"2026-08-11T20:00:00Z"});
       if (String(url).includes("edges_state")) {
         return jsonRes([{ built_head: "abcdef1234567890", built_at: "2026-08-11T20:00:00Z" }]);
       }
@@ -332,7 +343,9 @@ describe("edgesPulse — the console's read, every degraded state named", () => 
   });
 
   it("re-scrubs evidence on the way out — the console is an egress, whatever an older builder stored", async () => {
-    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL, init?:RequestInit) => {
+      if (String(url).includes("note_edges") && new Headers(init?.headers).get("range")!=="0-999") return jsonRes([]);
+      if (String(url).endsWith("edges_freshness")) return jsonRes({state:"current",policy:"coaccess-v2-90d-closed-utc-6-2",structure:"structural-v2-unicode-bm25-1.5-1",builtStructure:"structural-v2-unicode-bm25-1.5-1",builtAt:"x"});
       if (String(url).includes("edges_state")) return jsonRes([{ built_head: "h", built_at: "x" }]);
       return jsonRes([
         { src: "notes/a.md", dst: "notes/b.md", kind: "link", weight: 1, evidence: `raw ghp_${"a".repeat(24)} token` },
@@ -351,7 +364,7 @@ describe("edgesPulse — the console's read, every degraded state named", () => 
  * to say WHICH dark it went. These tests pin the two formerly-silent paths to a line each.
  */
 describe("scheduleEdgeRebuild — the formerly silent outcomes say their names", () => {
-  it("logs when the RPC refuses the rebuild (stale-head) instead of nothing", async () => {
+  it("does not start unanchored work when there is no request lifecycle", async () => {
     vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
       if (String(url).includes("edges_state")) return jsonRes([{ built_head: "old" }]);
       return jsonRes(false);
@@ -360,9 +373,8 @@ describe("scheduleEdgeRebuild — the formerly silent outcomes say their names",
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       scheduleEdgeRebuild(corpus({ "notes/a.md": "See [[b]].", "notes/b.md": "target" }), "head9999");
-      await vi.waitFor(() =>
-        expect(log).toHaveBeenCalledWith(expect.stringContaining("refused — the mirror had already moved past it"))
-      );
+      expect(err).toHaveBeenCalledWith(expect.stringContaining("refresh not started"));
+      expect(fetch).not.toHaveBeenCalled();
     } finally {
       log.mockRestore();
       err.mockRestore();

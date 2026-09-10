@@ -1,5 +1,6 @@
 "use client";
 import { useState, type ReactNode } from "react";
+import { Glyph } from "./glyph";
 
 /**
  * The console's one disclosure primitive.
@@ -31,7 +32,9 @@ export function Reveal({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <span className="revCaret" aria-hidden />
+        <span className="revCaret" aria-hidden>
+          <Glyph name="fold-closed" size={16} />
+        </span>
         {label}
       </button>
       {open && <span className="revBody">{children}</span>}

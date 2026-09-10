@@ -1,0 +1,2 @@
+-- Public installations start without operator routines. Run-now targets are configured only
+-- after the owner creates the corresponding provider automation.

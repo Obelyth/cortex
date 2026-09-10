@@ -21,6 +21,7 @@
  */
 import { narrow } from "./narrow";
 import { byName } from "./frontmatter";
+import { utf8Bytes } from "./utf8";
 
 export interface Selection {
   /** Notes to return, in order. */
@@ -29,10 +30,17 @@ export interface Selection {
   dropped: number;
   /** Explicitly requested and not in the corpus. Reported, never silently skipped. */
   missing: string[];
+  /** Selected notes that can never fit this per-call budget. Open them with brain_read. */
+  oversized: string[];
+  /** Notes skipped to keep an exact, progressing page bounded. Open them with brain_read. */
+  recoverable: string[];
   bytes: number;
-  /** Pass as `after` to continue. Null when nothing remains. */
+  /** Pass as `after` to continue. Null when nothing remains — and never null while `dropped` is
+   *  positive: a page that withholds notes always names the coordinate to resume from. */
   cursor: string | null;
 }
+
+export type SelectionDraft = Selection;
 
 export interface SelectOptions {
   /** Exact notes, by path. Most precise, and the one the router makes possible. */
@@ -44,6 +52,14 @@ export interface SelectOptions {
   after?: string;
   budgetBytes: number;
   defaultK: number;
+  /** Fixed bytes reserved for the response header, coverage and omission notices. */
+  envelopeBytes?: number;
+  /** Cost of rendering one admitted note, including its boundary. */
+  measureBytes?: (path: string, text: string, index: number) => number;
+  /** Maximum candidates classified on one page, including permanent oversize omissions. */
+  maxExamined?: number;
+  /** Exact final-envelope admission check. When present it is authoritative over arithmetic. */
+  fits?: (draft: SelectionDraft) => boolean;
 }
 
 export function selectNotes(files: Map<string, string>, opts: SelectOptions): Selection {
@@ -58,8 +74,9 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
   // budget: the largest, most expensive, highest-exposure reply this tool can produce, in
   // answer to a request for nothing.
   if (opts.paths !== undefined) {
-    chosen = opts.paths.filter((p) => files.has(p));
-    missing = opts.paths.filter((p) => !files.has(p));
+    const unique = [...new Set(opts.paths)];
+    chosen = unique.filter((p) => files.has(p));
+    missing = unique.filter((p) => !files.has(p));
   } else if (opts.question) {
     chosen = narrow(files, opts.question, opts.k ?? opts.defaultK);
   } else {
@@ -98,22 +115,91 @@ export function selectNotes(files: Map<string, string>, opts: SelectOptions): Se
   }
 
   const paths: string[] = [];
+  const oversized: string[] = [];
+  const recoverable: string[] = [];
   let bytes = 0;
-  for (const p of chosen) {
-    const len = files.get(p)?.length ?? 0;
-    // Always yield at least one note. Otherwise a single note larger than the budget returns
-    // nothing, the cursor never advances past it, and paging is stuck forever on one file.
-    if (paths.length > 0 && bytes + len > opts.budgetBytes) break;
+  let renderedBytes = opts.envelopeBytes ?? 0;
+  let examined = 0;
+  const examinationLimit = Math.min(chosen.length, opts.maxExamined ?? chosen.length);
+  const draft = (
+    nextPaths: string[],
+    nextOversized: string[],
+    nextRecoverable: string[],
+    nextBytes: number,
+    nextExamined: number
+  ): SelectionDraft => {
+    const dropped = chosen.length - nextExamined;
+    return {
+      paths: nextPaths,
+      oversized: nextOversized,
+      recoverable: nextRecoverable,
+      missing,
+      bytes: nextBytes,
+      dropped,
+      cursor: dropped > 0 ? chosen[nextExamined - 1] ?? null : null,
+    };
+  };
+  for (let i = 0; i < examinationLimit; i++) {
+    const p = chosen[i];
+    const text = files.get(p) ?? "";
+    const len = utf8Bytes(text);
+    const cost = opts.measureBytes?.(p, text, i) ?? len;
+    if (opts.fits) {
+      // Permanent means it cannot fit even on an otherwise empty response. If it can fit alone
+      // but not after earlier omission metadata, leave it for the next precise continuation.
+      const fitsAlone = opts.fits(draft([p], [], [], len, chosen.length));
+      if (!fitsAlone) {
+        const next = draft(paths, [...oversized, p], recoverable, bytes, i + 1);
+        if (!opts.fits(next)) {
+          if (examined > 0) break;
+          // Nothing examined yet, so there is no coordinate to hand back. Breaking here would
+          // report every note as dropped with a null cursor, and the reply prints its
+          // continuation only when there is a cursor — silent loss, the failure this module
+          // exists to prevent. A budget that cannot hold one omission receipt is a caller error.
+          throw new RangeError(
+            `selection cannot fit the omission receipt for ${p}` +
+              (missing.length ? ` alongside ${missing.length} missing path${missing.length === 1 ? "" : "s"} already named in the envelope` : "")
+          );
+        }
+        oversized.push(p);
+        examined = i + 1;
+        continue;
+      }
+      const next = draft([...paths, p], oversized, recoverable, bytes + len, i + 1);
+      if (!opts.fits(next)) {
+        if (examined > 0) break;
+        // At the first candidate there is no prior coordinate to return. A near-ceiling body can
+        // fit by itself yet fail only when the exact cursor needed to reach later notes is added.
+        // Replace that body with a direct-read receipt: this advances the coordinate, preserves a
+        // bounded continuation if a later candidate also fails, and lets later small notes compete.
+        const recovery = draft(paths, oversized, [...recoverable, p], bytes, i + 1);
+        if (!opts.fits(recovery)) {
+          throw new RangeError(`selection cannot fit exact recovery metadata for ${p}`);
+        }
+        recoverable.push(p);
+        examined = i + 1;
+        continue;
+      }
+      paths.push(p);
+      bytes += len;
+      examined = i + 1;
+      continue;
+    }
+    // A permanently oversized note is not a continuation: no later call with this same budget
+    // can admit it. Name it, keep walking, and leave the cursor for genuinely resumable rows.
+    if ((opts.envelopeBytes ?? 0) + cost > opts.budgetBytes) {
+      oversized.push(p);
+      examined = i + 1;
+      continue;
+    }
+    if (renderedBytes + cost > opts.budgetBytes) {
+      break;
+    }
     paths.push(p);
     bytes += len;
+    renderedBytes += cost;
+    examined = i + 1;
   }
 
-  const dropped = chosen.length - paths.length;
-  return {
-    paths,
-    dropped,
-    missing,
-    bytes,
-    cursor: dropped > 0 ? paths.at(-1)! : null,
-  };
+  return draft(paths, oversized, recoverable, bytes, examined);
 }

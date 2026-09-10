@@ -41,6 +41,7 @@ import { loadCorpus } from "./corpus";
 import { splitBlocks, retraction } from "./verify";
 import { parseFrontmatter, byName } from "./frontmatter";
 import { DATED_ENTRY, DATED_HEADING, type TriageItem } from "./health";
+import { MAX_PAGE_BYTES } from "./digest";
 import { COACCESS_FLOOR, effectiveLearning, type EffectiveLearning } from "./learning";
 import {
   WIKILINK,
@@ -228,9 +229,8 @@ export const COACCESS_TOP_K = 3;
  *
  * RAW WEIGHT CANNOT TELL AFFINITY FROM POPULARITY, and here is the measurement that taught it
  * (live note_edges, 2026-08-11): sixteen unlinked pairs stood at the floor, and every single one
- * involved a hub — the main project page with 48 co-access partners after one marathon session,
- * a workstation page with 38, day-logs co-read in bulk by groundskeeper absorb runs, the
- * boot profile polluted by reconcile-trigger reads. Three mechanical filters follow, each doing
+ * involved hub pages and day logs co-read in bulk, as well as the
+ * boot profile affected by reconcile-trigger reads. Three mechanical filters follow, each doing
  * one job:
  *
  *   1. DIARY ENDPOINTS ARE OUT. Day-logs and profile.md cannot be endpoints of this item — the
@@ -241,7 +241,7 @@ export const COACCESS_TOP_K = 3;
  *      candidate out of a note's top-K either (bulk absorb runs co-read every day-log; letting
  *      those edges rank would re-import the popularity noise this filter exists to remove).
  *   2. A PROSE MENTION COUNTS AS NAMING. The item's premise is "no reader can follow it" — and
- *      that premise was FALSE for pairs like a setup page ↔ the server's own page, where the
+ *      that premise can be false for pairs of related pages where the
  *      prose names the other note without brackets. So before a pair surfaces, each side's LIVE
  *      text (check 1's machinery, reused: banner-retracted blocks dropped, `(was: …)` spans
  *      blanked) is scanned for the other's name — its slug, its filename base, or its
@@ -306,7 +306,7 @@ export function coaccessGapItems(
 
   // The names a note answers to in prose: its slug (path minus .md), its filename base, and its
   // declared frontmatter name when it carries one. Boundary-guarded like the path form — a name
-  // inside a longer hyphenated token ("cortex" in "cortex-lite-tools") is a different
+  // inside a longer hyphenated token ("cortex" in "cortex-example-service") is a different
   // identifier, not a mention — and case-insensitive, because prose capitalises.
   const nameCache = new Map<string, RegExp[]>();
   const namesOf = (path: string): RegExp[] => {
@@ -452,6 +452,52 @@ export function correctionChainItems(files: Map<string, string>): TriageItem[] {
  * skipped entirely when its check is off: no reason to pay a Postgres round-trip for items that
  * would be discarded.
  */
+/**
+ * A page that has outgrown the boot call.
+ *
+ * THE CAPABILITY EXISTED AND NOTHING POINTED AT IT. scripts/split-project-page.ts has cut a
+ * quarter-megabyte page into a status page plus monthly history since 2026-09-02, byte for byte,
+ * with a test suite behind it — and nothing anywhere told anyone a page had got large enough to
+ * need it. the largest project page reached 274,453 B, 97% of the brain's own 256 KB safety line and a
+ * quarter of the 1 MB GitHub cliff that makes a note permanently unreadable AND unwritable, and
+ * it was found by a person reading a file listing. That is the same shape as the export gate that
+ * never ran and the migrations pending for three weeks: the tool was built, the trigger was not.
+ *
+ * DAY LOGS ARE EXEMPT, and not as a convenience. A log is a dated record that is never split —
+ * the router already collapses the whole of log/ into one row per month, so its size costs the
+ * boot call nothing, and DATED_ENTRY is the same constant the stale-stamp check uses to say so.
+ *
+ * The threshold is MAX_PAGE_BYTES, imported rather than restated, so the number that raises this
+ * item and the number the splitter cuts to are the same number.
+ */
+export function oversizedPageItems(files: Map<string, string>): TriageItem[] {
+  const items: TriageItem[] = [];
+  for (const [path, text] of files) {
+    if (DATED_ENTRY.test(path)) continue;
+    // history/ is the splitter's OUTPUT, not its input. Those parts are written once, never
+    // appended to — the status page is what grows — and their size is governed by the tool's own
+    // --max-history-bytes. A part can land a few bytes over because the splitter will not cut a
+    // section in half, and the first run of this check found exactly that: one file 25 bytes past
+    // the bound, irreducible, which would have nagged forever. An item nobody can act on is how a
+    // queue teaches people to stop reading it.
+    if (path.startsWith("history/")) continue;
+    const bytes = Buffer.byteLength(text, "utf8");
+    if (bytes <= MAX_PAGE_BYTES) continue;
+    const kb = (bytes / 1000).toFixed(0);
+    const over = ((bytes / MAX_PAGE_BYTES - 1) * 100).toFixed(0);
+    items.push({
+      sev: "watch",
+      kind: "oversized-page",
+      title: "Page has outgrown the boot call",
+      loc: path,
+      evidence: ev(`${kb} KB — ${over}% over the ${MAX_PAGE_BYTES / 1000} KB split threshold`),
+      why: "One router line cannot describe a page this long, and any retrieval that opens it spends most of its pack on a single file. Left alone a page written by appending only grows, and at 1 MB the GitHub Contents API stops returning it — the one failure in this system with no way back.",
+      action: `Split it: npx tsx scripts/split-project-page.ts ${path} --write — a status page plus monthly history/ notes, byte-preserving. The item leaves when the page is back under ${MAX_PAGE_BYTES / 1000} KB.`,
+    });
+  }
+  return items.sort((a, b) => (a.loc < b.loc ? -1 : a.loc > b.loc ? 1 : 0));
+}
+
 export async function watchItems(
   corpus?: { files: Map<string, string> },
   learning?: EffectiveLearning
@@ -465,6 +511,7 @@ export async function watchItems(
     if (co) items.push(...coaccessGapItems(files, co, eff.coaccessFloor));
   }
   if (eff.watchCorrectionChain) items.push(...correctionChainItems(files));
+  if (eff.watchOversizedPage) items.push(...oversizedPageItems(files));
   return items.filter((i) => !onSettledNote(i.loc, files));
 }
 

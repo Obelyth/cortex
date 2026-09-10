@@ -1,100 +1,114 @@
 "use client";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
+import { MAX_BAND, type DotField } from "@/lib/overview";
+import { useLens } from "../lens";
+import { noteLens } from "./lens-bodies";
 
 /**
- * The corpus as a working surface, not a picture of one.
+ * The corpus as a working surface, not a picture of one (W08): one mark per block of every note,
+ * solid where the passage was retracted, capped at MARK_CAP with the cap stated in the caption.
+ * Hover reads the block out; click opens the note in the lens (L1); the arrow keys walk the
+ * field and Enter opens.
  *
- * The first version of this band was art that stated a fact and did nothing — a decorative
- * halftone made of real data, which is still decoration. Every mark here is one block of one
- * note, so the field is already an index; it just was not addressable. Now it is: hover reads
- * the block out, click opens that note in the ledger with the path filtered in.
+ * Events are delegated to the container. Fourteen hundred marks with their own listeners is
+ * fourteen hundred listeners; one listener and a data attribute is the same interaction at a
+ * fraction of the cost, and it keeps the marks as bare <i> elements so the field renders the
+ * same with JavaScript off. The stagger on entry is a class band (ovD0…ovD12), never an inline
+ * delay per mark.
  *
- * Events are delegated to the container. 1,800 marks with their own listeners is 1,800
- * listeners; one listener and a data-index attribute is the same interaction at a fraction of
- * the cost, and it keeps the marks as bare <i> elements so the field still renders identically
- * with JavaScript off.
+ * The field is a wrapping flex row, so how many marks make a row is a function of the rendered
+ * width — around 130 on a desktop panel and under 40 on a phone. ArrowUp/Down therefore measure
+ * the stride from the laid-out marks rather than assuming one, or the vertical keys would land
+ * somewhere in the middle of a distant row at every width but one.
  */
-export type Mark = {
-  /** note path */ p: string;
-  /** block number within the note, 1-based */ b: number;
-  /** retracted */ x: boolean;
-};
+const IDLE = "hover or tab in and use the arrow keys · click or press Enter to open a note";
 
-export function CorpusField({
-  marks,
-  total,
-  shown,
-}: Readonly<{ marks: Mark[]; total: number; shown: number }>) {
-  const [hover, setHover] = useState<number | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
+export function CorpusField({ field, sha }: Readonly<{ field: DotField; sha: string }>) {
+  const lens = useLens();
+  const [hot, setHot] = useState<number | null>(null);
+  // Which mark the KEYBOARD is on, kept apart from `hot`. The pointer highlight is already a CSS
+  // rule (.ovMark:hover in overview.css shares its declarations with .ovMarkHot), so baking
+  // `hot === i` into every mark's className made a pointer crossing re-create all 1,400 marks
+  // for a highlight the browser had already painted — ~2 ms per crossing, and a sweep crosses
+  // dozens a second. Only the keyboard needs the class, and only the keyboard invalidates the
+  // memo below; the pointer path now costs one repaint and a readout.
+  const [keyHot, setKeyHot] = useState<number | null>(null);
+  const fieldEl = useRef<HTMLDivElement>(null);
 
-  const idxFrom = (e: React.MouseEvent) => {
-    const el = (e.target as HTMLElement).closest("i[data-i]");
+  /** Marks per rendered row: the index of the first mark that wraps onto a second line. Measured
+   *  on the keypress, so a resize between renders cannot leave a stale stride behind. */
+  const rowStride = (): number => {
+    const marks = fieldEl.current?.children;
+    if (!marks || marks.length < 2) return 1;
+    const top = (marks[0] as HTMLElement).offsetTop;
+    for (let i = 1; i < marks.length; i++) {
+      if ((marks[i] as HTMLElement).offsetTop !== top) return i;
+    }
+    return marks.length;   // one row holds the whole field
+  };
+
+  // Flat index → (note, block, mark). One walk, and the marks are rendered from it, so the
+  // index the hover reads and the mark the cursor is over cannot come apart: they are the same
+  // array. Memoised on the field, which is the only thing it depends on.
+  const at = useMemo(
+    () => field.notes.flatMap((n, ni) => Array.from(n.strip, (c, b) => ({ n: ni, b, c }))),
+    [field]
+  );
+
+  const from = (e: MouseEvent): number | null => {
+    const el = (e.target as HTMLElement).closest("i[data-k]");
     if (!el) return null;
-    const n = Number(el.getAttribute("data-i"));
-    return Number.isFinite(n) ? n : null;
+    const k = Number(el.getAttribute("data-k"));
+    return Number.isFinite(k) ? k : null;
+  };
+  const open = (k: number) => lens.open(noteLens(field.notes[at[k].n], sha));
+  const onKey = (e: KeyboardEvent) => {
+    if (!at.length) return;
+    const cur = hot ?? 0;
+    const vertical = e.key === "ArrowDown" || e.key === "ArrowUp";
+    const row = vertical ? rowStride() : 0;
+    const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: row, ArrowUp: -row };
+    if (e.key in step) {
+      e.preventDefault();
+      const next = Math.max(0, Math.min(at.length - 1, cur + step[e.key]));
+      setHot(next);
+      setKeyHot(next);
+    }
+    else if ((e.key === "Enter" || e.key === " ") && hot !== null) { e.preventDefault(); open(hot); }
   };
 
-  const m = hover === null ? null : marks[hover];
+  const marks = useMemo(
+    () => at.map((m, i) => {
+      const band = Math.min(MAX_BAND, Math.floor((i * 0.6) / 70));
+      return <i key={`${m.n}-${m.b}`} data-k={i} className={`ovMark${m.c === "x" ? " ovMarkX" : ""}${keyHot === i ? " ovMarkHot" : ""} ovD${band}`} />;
+    }),
+    [at, keyHot]
+  );
 
-  // Relative, so the secret comes from the address bar and never from markup.
-  const open = (i: number) => {
-    window.location.href = `corpus?note=${encodeURIComponent(marks[i].p)}`;
-  };
-
+  const h = hot === null ? null : at[hot];
+  const note = h ? field.notes[h.n] : null;
+  const retracted = h ? h.c === "x" : false;
   return (
     <>
       <div
-        ref={ref}
-        className="dotField dotFieldLive"
-        onMouseMove={(e) => setHover(idxFrom(e))}
-        onMouseLeave={() => setHover(null)}
-        onClick={(e) => {
-          const i = idxFrom(e);
-          if (i !== null) open(i);
-        }}
-        // The pointer picks a mark by position; the keyboard opens whichever mark is lit.
-        role="button"
+        className="ovField"
+        ref={fieldEl}
+        role="group"
         tabIndex={0}
-        aria-label="Corpus field: hover a mark, press Enter to open the note"
-        onKeyDown={(e) => {
-          if (hover === null || (e.key !== "Enter" && e.key !== " ")) return;
-          e.preventDefault();
-          open(hover);
-        }}
+        aria-label={`the corpus: ${field.shown.toLocaleString()} of ${field.total.toLocaleString()} blocks as marks, one per block, solid where retracted`}
+        onMouseMove={(e) => { setHot(from(e)); setKeyHot(null); }}
+        onMouseLeave={() => setHot(null)}
+        onBlur={() => { setHot(null); setKeyHot(null); }}
+        onKeyDown={onKey}
+        onClick={(e) => { const i = from(e); if (i !== null) open(i); }}
       >
-        {marks.map((mk, i) => (
-          <i
-            key={i}
-            data-i={i}
-            className={`${mk.x ? "on" : ""}${hover === i ? " hot" : ""}`}
-            style={{ ["--d" as string]: `${Math.min(i, 600) * 1.1}ms` }}
-          />
-        ))}
+        {marks}
       </div>
-
-      {/* The readout is always present so the field never reflows under the cursor — the row
-          holds its height and only its content changes. A layout that jumps while you are
-          pointing at something is the fastest way to make a surface feel cheap. */}
-      <div className="fieldRead" aria-live="polite">
-        {m ? (
-          <>
-            <span className="fieldReadPath">{m.p}</span>
-            <span className="fieldReadSep">·</span>
-            <span>block {m.b}</span>
-            <span className="fieldReadSep">·</span>
-            <span className={m.x ? "fieldReadRet" : undefined}>
-              {m.x ? "retracted — kept on the page" : "live"}
-            </span>
-            <span className="fieldReadGo">open in the ledger →</span>
-          </>
-        ) : (
-          <span className="fieldReadIdle">
-            {shown < total
-              ? `${shown.toLocaleString()} of ${total.toLocaleString()} blocks — point at one`
-              : `${total.toLocaleString()} blocks — point at one`}
-          </span>
-        )}
+      {/* Always present so the field never reflows under the cursor. */}
+      <div className="ovFieldRead" aria-live="polite">
+        {note && h
+          ? `${note.path} · block ${h.b + 1} of ${note.blocks}${retracted ? " · retracted — kept on the page" : ""} · ~${note.tokens.toLocaleString()} estimated body tokens`
+          : IDLE}
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import zlib from "node:zlib";
-import { untar, isLive, isSidecar, loadCorpus, __setCache } from "../lib/corpus";
+import { untar, isLive, loadCorpus, __setCache } from "../lib/corpus";
 import { normalise, verifyQuote, checkCitation, MIN_QUOTE } from "../lib/verify";
 import { rank, narrow, tokenize } from "../lib/narrow";
 
@@ -56,7 +56,7 @@ describe("untar", () => {
     // Regression: any path over 100 chars is split across a `prefix` field at offset 345.
     // Reading only `name` dropped 49 entries of the real repo silently — 7 of them live
     // notes, which the reader would then have answered "not in brain" for.
-    const deep = "fixtures-2026-01/dir1--project-aurora-lattice-evolution-with-a-very-long-name.md";
+    const deep = "memory-2026-07/dir1--project-sample-collection-evolution-with-a-long-name.md";
     const header = Buffer.alloc(512);
     header.write(deep.split("/").pop()!, 0, 100, "utf8");            // name field
     header.write("0".padStart(11, "0") + "\0", 124, 12, "ascii");    // size 0
@@ -65,7 +65,7 @@ describe("untar", () => {
     const tar = Buffer.concat([seal(header), Buffer.alloc(1024)]);
     const got = untar(tar);
     expect(got).toHaveLength(1);
-    expect(got[0][0]).toBe(`archive/fixtures-2026-01/${deep.split("/").pop()}`);
+    expect(got[0][0]).toBe(`archive/memory-2026-07/${deep.split("/").pop()}`);
   });
 });
 
@@ -107,9 +107,10 @@ describe("loadCorpus", () => {
   beforeEach(() => __setCache(null));
 
   it("fetches, unpacks, filters and caches on the commit sha", async () => {
-    process.env.BRAIN_REPO = "acme/brain";
+    process.env.BRAIN_REPO = "example-owner/brain";
     process.env.GITHUB_TOKEN = "t";
     const tarball = makeTarball({
+      "tools/atlas-snapshot.json": "{\"capturedAt\":\"retired\"}",
       "profile.md": "operator",
       "projects/beacon.md": "production is dark",
       "archive/old.md": "superseded",
@@ -129,6 +130,7 @@ describe("loadCorpus", () => {
       const c = await loadCorpus();
       expect(c.sha).toBe("deadbeef");
       expect([...c.files.keys()].sort()).toEqual(["profile.md", "projects/beacon.md"]);
+      expect(Object.hasOwn(c, "sidecar")).toBe(false);
       expect(calls).toBe(2); // head + tarball. The old path cost ~128 per write.
 
       // A second call at the same sha must not refetch the tarball.
@@ -142,7 +144,7 @@ describe("loadCorpus", () => {
   });
 
   it("refuses to serve an empty corpus instead of answering from half a brain", async () => {
-    process.env.BRAIN_REPO = "acme/brain";
+    process.env.BRAIN_REPO = "example-owner/brain";
     process.env.GITHUB_TOKEN = "t";
     const orig = globalThis.fetch;
     globalThis.fetch = (async (url: string) =>
@@ -241,32 +243,7 @@ describe("narrow", () => {
   });
 });
 
-describe("isSidecar — the atlas snapshot rides the tarball but is not the corpus", () => {
-  it("matches the one known sidecar and nothing else", () => {
-    expect(isSidecar("tools/atlas-snapshot.json")).toBe(true);
-    expect(isSidecar("notes/a.md")).toBe(false);
-    expect(isSidecar("tools/other.json")).toBe(false);
-  });
-
-  it("is an exact-path test, so the traversal bypasses isLive has cannot reach it", () => {
-    // isLive("./tools/foo.md") is a known bypass; the sidecar list must not inherit it.
-    for (const p of [
-      "./tools/atlas-snapshot.json",
-      "notes/../tools/atlas-snapshot.json",
-      "TOOLS/atlas-snapshot.json",
-      "tools//atlas-snapshot.json",
-    ]) {
-      expect(isSidecar(p), p).toBe(false);
-    }
-  });
-
-  it("is excluded from the corpus the reader is handed", () => {
-    // Belt and braces: the sidecar path must also fail isLive, so neither route admits it.
-    expect(isLive("tools/atlas-snapshot.json")).toBe(false);
-  });
-});
-
-describe("a symlinked sidecar degrades instead of killing the brain", () => {
+describe("a symlinked retired map snapshot is ignored", () => {
   function linkEntry(name: string): Buffer {
     const header = Buffer.alloc(512);
     header.write(name, 0, 100, "utf8");
@@ -290,8 +267,8 @@ describe("a symlinked sidecar degrades instead of killing the brain", () => {
       linkEntry("repo-x/tools/atlas-snapshot.json"),
       Buffer.alloc(1024),
     ]);
-    // The sidecar's contract is "absence is a non-event"; a link at its path must not be fatal.
-    const out = untar(buf, (p) => isLive(p) || isSidecar(p));
+    // The retired snapshot is outside the live-note predicate, so it is never materialised.
+    const out = untar(buf, isLive);
     expect(out.map(([p]) => p)).toEqual(["notes/a.md"]);
   });
 

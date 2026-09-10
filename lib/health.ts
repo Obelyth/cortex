@@ -10,6 +10,7 @@ import { loadCorpus } from "./corpus";
 import { splitBlocks, retracted, normalise } from "./verify";
 import { hasSecret, redact } from "./redact";
 import { parseFrontmatter } from "./frontmatter";
+import { pendingMigrationTriage } from "./migrations";
 
 /**
  * A note's own claim about its freshness. Cold stamps are how a brain rots quietly.
@@ -101,6 +102,12 @@ export interface NoteRow {
   title: string;
   desc: string;
   headings: Array<{ h: string; line: number }>;
+  /**
+   * Whether the note's stamp can go stale — `decays: false` in its frontmatter says no. The
+   * stale queue already honours it above; exposed here so the explorer can dim a settled note's
+   * stamp instead of painting it amber (v2, 2026-09-05). True when the note does not say.
+   */
+  decays: boolean;
 }
 
 export interface Retracted {
@@ -134,7 +141,7 @@ export interface Health {
      * What KIND of finding this is, so the console can offer the actions that fit it without
      * matching on display text. A title is copy; changing it should not silently remove a button.
      */
-    kind?: "stale-stamp" | "superseded-link" | "coaccess-gap" | "correction-chain";
+    kind?: "stale-stamp" | "superseded-link" | "coaccess-gap" | "correction-chain" | "oversized-page" | "pending-migration";
     title: string;
     loc: string;
     evidence: string;
@@ -280,6 +287,9 @@ export async function health(now = new Date()): Promise<Health> {
 
     let age: number | null = null;
     const stamp = lastVerified(text);
+    // Parsed once per note: the stale check reads `decays` and `reverify`, the row carries
+    // `decays` — one parse so the two cannot read the frontmatter differently.
+    const fm = parseFrontmatter(text);
     if (stamp) {
       const d = new Date(`${stamp}T00:00:00Z`);
       if (!Number.isNaN(d.getTime())) {
@@ -295,7 +305,6 @@ export async function health(now = new Date()): Promise<Health> {
         // them arriving within two days of each other because the threshold is a clock. An inbox
         // that is mostly noise is one you stop reading, and the item it buried here was the
         // recovery runbook with an unmitigated risk in it.
-        const fm = parseFrontmatter(text);
         // `!dated`: a note whose filename is a date is a record OF that date, not a standing
         // claim (the DATED_ENTRY doctrine above, already applied to the retired-tool check).
         // Its stamp cannot go stale, so it never rides the re-verify queue — otherwise a day
@@ -368,6 +377,7 @@ export async function health(now = new Date()): Promise<Health> {
       retracted: n,
       strip: strip.join(""),
       age,
+      decays: fm.decays !== false,
     });
   }
 
@@ -387,9 +397,16 @@ export async function health(now = new Date()): Promise<Health> {
     dirs.set(n.dir, d);
   }
 
+  // Merged-but-unapplied migrations (lib/migrations.ts). Read here, alongside the corpus
+  // findings, because the console is the one place that both holds the ledger's credential and
+  // gets looked at — CI holds neither. One small PostgREST read; a failure is logged there and
+  // contributes nothing, never a false "all applied".
+  const pendingMigration = await pendingMigrationTriage();
+
   // The triage queue: every finding the console already computes, as one prioritised list.
   // Assembled here so the page and any future surface share one opinion of "needs attention".
   const triage: Health["triage"] = [
+    ...(pendingMigration ? [pendingMigration] : []),
     ...secrets.map((s) => ({
       sev: "crit" as const,
       title: "Credential-shaped line",

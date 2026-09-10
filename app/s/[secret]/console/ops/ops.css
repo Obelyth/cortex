@@ -1,0 +1,242 @@
+/*
+ * ops.css — the Ops screen, v2 (from the Claude Design canvas "Cortex
+ * Console v2"). Every value here is the canvas's own inline style, ported to a class; the
+ * tokens come from theme.css and nothing else, so the same rules read on ink and on paper.
+ *
+ * The anatomy, top to bottom: the strip on the band (four figures, the question this screen
+ * answers first), the register as one full-width instrument panel, then Decisions (the inbox,
+ * inverted) beside the Timeline (thirty days of receipts). A unit, a receipt, an inbox item and
+ * a proposal each open in the shared lens; the lens bodies' classes live at the foot.
+ *
+ * Prefix: ops*. tests/ops-classes.test.ts holds every class the markup names to a rule here.
+ */
+
+/* ── The strip: four figures on the band, flush under the masthead ─────────── */
+/* Full-bleed like the console's bands (the 50% − 50vw breakout; .conRoot clips the scrollbar's
+   share). The −44px lifts it into .conBody's top air: on this screen the first instrument IS the
+   band, and the canvas draws it touching the masthead. */
+.opsStrip { position: relative; margin: -44px calc(50% - 50vw) 0; width: 100vw; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-bottom: 1px solid var(--line); box-shadow: var(--well), inset 0 1px 0 rgba(255, 255, 255, 0.04); }
+.opsStripIn { max-width: 1440px; margin: 0 auto; padding: 0 28px; box-sizing: border-box; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.opsCell { padding: 22px 18px 18px 0; margin-right: 18px; border-right: 1px solid var(--line); min-width: 0; }
+.opsCell:last-child { border-right: 0; }
+.opsCellLabel { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.opsCellFig { margin: 10px 0 0; font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: clamp(30px, 3vw, 44px); line-height: 1; white-space: nowrap; color: var(--bright); font-variant-numeric: tabular-nums; }
+/* Needs you is red only when it is non-zero: the one place the strip raises its voice. */
+.opsCellCrit .opsCellFig { color: var(--crit); }
+/* A degraded board counted nothing; its dashes print in the faint ink, never as a figure. */
+.opsStripOff .opsCellFig { color: var(--faint); }
+.opsCellMeta { margin: 8px 0 0; font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opsDegrade { margin: 0; padding: 12px 0 0; font-family: var(--mono); font-size: 12px; color: var(--warn); }
+
+/* ── The column ─────────────────────────────────────────────────────────────── */
+.opsScreen { min-width: 0; }
+.opsCommands { position: relative; min-width: 0; padding: 18px 20px 12px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-radius: var(--r); box-shadow: var(--well); }
+.opsCommandControls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 0 4px; }
+.opsJobList,.opsJobChecks { list-style: none; margin: 0; padding: 0; }
+/* The status line is always in the flow and holds one line's height while it says nothing, so the
+   list beneath never moves when the sentence arrives or leaves. */
+.opsCommandStatus { margin: 8px 0 0; min-height: 18px; }
+/* Six rows of receipts, fixed: the panel is the same height empty, loading and full, and a page
+   of twenty-five scrolls inside it rather than pushing the panels beneath down the screen. */
+.opsJobScroll { max-height: 312px; margin-top: 8px; overflow-y: auto; }
+.opsJobScroll-pending { min-height: 312px; }
+.opsJobRow { width: 100%; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 8px 0; border: 0; border-top: 1px solid var(--hair); background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+.opsJobRow b,.opsJobRow small,.opsJobCheck span,.opsJobCheck small { display: block; }
+.opsJobRow b,.opsJobCheck span { font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.opsJobRow small,.opsJobCheck small { margin-top: 3px; color: var(--faint); font-family: var(--mono); font-size: 11px; line-height: 1.5; }
+.opsJobCheck { padding: 9px 0; border-top: 1px solid var(--hair); }
+.opsJobCheck-passed span { color: var(--ok); }.opsJobCheck-failed span { color: var(--crit); }.opsJobCheck-unavailable span { color: var(--warn); }
+.opsBody { max-width: 1384px; margin: 28px auto 0; display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+
+/* ── Instrument panels: the register and the timeline sit on the band ───────── */
+.opsRegister { position: relative; min-width: 0; padding: 18px 26px 12px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border: 0; border-radius: var(--r); box-shadow: var(--bezel); animation: cx-rise 460ms var(--ease) 70ms backwards; }
+.opsPanelHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 0 0 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.opsHeadLead { display: inline-flex; align-items: center; gap: 12px; flex: none; }
+.opsHeadMeta { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+/* The numbered tag: the signal block and the label, printed once. */
+.opsTag { display: inline-flex; flex: none; animation: cx-pop 360ms var(--ease) 120ms backwards; }
+.opsTagN { background: var(--signal); color: var(--signal-on); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
+.opsTagLabel { margin: 0; background: var(--surface2); color: var(--bright); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; flex: none; }
+
+/* ── The register ───────────────────────────────────────────────────────────── */
+.opsTable { min-width: 0; }
+.opsCols, .opsRow { display: grid; grid-template-columns: 28px minmax(0, 1.4fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(96px, auto) 36px; gap: 14px; }
+.opsCols { padding: 8px 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.opsGroup { min-width: 0; }
+.opsGroupHead { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0 6px; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.opsReserved { color: var(--disabled); text-transform: none; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A row is one target — the whole line opens the unit — with a left rule that carries its
+   state: red when it needs you, the accent when it is the one the lens is showing. The name is
+   the accessible control; the chevron is the hint. */
+.opsRow { position: relative; align-items: center; padding: 12px 8px 12px 10px; margin: 2px -8px 2px -13px; border-left: 3px solid transparent; border-radius: 0 var(--r) var(--r) 0; background: transparent; cursor: pointer; scroll-margin-top: 76px; transition: background-color 160ms var(--ease), box-shadow 220ms var(--ease), transform 220ms var(--ease); }
+.opsRow:hover { background: var(--glass); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.06); transform: translateY(-1px); }
+.opsRowCrit { border-left-color: var(--crit); }
+.opsRowOn { background: var(--surface2); border-left-color: var(--accent); }
+.opsNo { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+.opsUnit { min-width: 0; }
+.opsName { display: block; width: 100%; padding: 0; border: 0; background: none; color: var(--bright); cursor: pointer; font-family: var(--sans); font-size: 14px; font-weight: 500; line-height: 1.3; text-align: left; overflow-wrap: anywhere; }
+.opsName::after { content: ""; position: absolute; z-index: 1; inset: 0; }
+/* Transforming the button on press would make it the stretched target's containing block,
+   shrinking that target between pointerdown and pointerup and losing the row-edge click. */
+.opsRow .opsName:active { transform: none; }
+.opsKind { display: block; margin-top: 2px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.opsSched { font-family: var(--mono); font-size: 11px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opsLast { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--ink); }
+.opsLastRun { white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* Evidence: a SHA on the raised surface, never a colour. */
+.opsEv { padding: 1px 6px; background: var(--surface2); color: var(--ink); white-space: nowrap; }
+.opsState { justify-self: start; }
+/* State chips are outlined mono, the colour on the word, the border on currentColor. Each one
+   prints in sequence when the register arrives; a running unit's breathes instead. */
+.opsChip { display: inline-block; padding: 2px 7px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); white-space: nowrap; animation: cx-pop 360ms var(--ease) 200ms backwards; }
+.opsChip-ok { color: var(--ok); }
+.opsChip-warn { color: var(--warn); }
+.opsChip-crit { color: var(--crit); }
+.opsChip-live { color: var(--accent); }
+.opsChip-paper { color: var(--muted); }
+.opsChip-dashed { color: var(--faint); border-style: dashed; }
+.opsChipLive { animation: cx-breathe 2.4s ease-in-out infinite; }
+.opsGroup > .opsRow:nth-child(3) .opsChip { animation-delay: 260ms; }
+.opsGroup > .opsRow:nth-child(4) .opsChip { animation-delay: 320ms; }
+.opsGroup > .opsRow:nth-child(5) .opsChip { animation-delay: 380ms; }
+.opsGroup > .opsRow:nth-child(6) .opsChip { animation-delay: 440ms; }
+.opsGroup > .opsRow:nth-child(7) .opsChip { animation-delay: 500ms; }
+.opsGroup > .opsRow:nth-child(8) .opsChip { animation-delay: 560ms; }
+.opsGroup > .opsRow:nth-child(n + 9) .opsChip { animation-delay: 620ms; }
+/* The chevron: an outlined square that lights on the row's hover. Decorative — the row is the
+   target and the name is the control — so it takes no focus of its own. */
+.opsGo { justify-self: end; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--hair); border-radius: var(--r-chip); color: var(--muted); font-family: var(--mono); font-size: 14px; transition: border-color 140ms var(--ease), color 140ms var(--ease), background-color 140ms var(--ease); }
+.opsRow:hover .opsGo, .opsRow:focus-within .opsGo { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+/* ── Beneath the register: Decisions beside the Timeline ────────────────────── */
+.opsBeneath { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; min-width: 0; }
+/* The static wrapper the streamed panel arrives inside. */
+.opsDecisionsWrap { min-width: 0; }
+
+/* The inverted panel: the inbox as the one region that reverses the ground, because it is the
+   one region asking a person for something. Every colour inside is an --inv-* token. */
+.opsDecisions { position: relative; min-width: 0; padding: 18px 20px 8px; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px; box-shadow: var(--cast); animation: cx-rise 460ms var(--ease) 210ms backwards; }
+.opsDecisionsHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--inv-line); flex-wrap: wrap; }
+.opsDecisions .opsTagLabel { background: var(--inv-chip); color: var(--inv-fg); }
+.opsDecisionsMeta { font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
+.opsDecisionsBody { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 16px 40px; align-items: start; margin-top: 14px; }
+.opsDecisionsN { font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: 72px; line-height: 0.9; color: var(--inv-fg); font-variant-numeric: tabular-nums; }
+.opsDecisionsCap { margin-top: 10px; font-family: var(--mono); font-size: 11px; line-height: 1.7; color: var(--inv-faint); }
+.opsDecisionsList { list-style: none; margin: 0; padding: 0; min-width: 0; }
+/* A decision is a line that steps forward on hover — the signal rule at its left, the whole
+   line shifting six pixels — and opens in the lens. The rule is a pseudo-element in the line's
+   own 8px gutter rather than a border the hover pads open: only transform and colour move, so
+   nothing re-lays out under the pointer. */
+.opsDecision { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; width: calc(100% + 8px); text-align: left; padding: 12px 0 12px 8px; margin-left: -8px; border: 0; border-bottom: 1px solid var(--inv-hair); border-radius: 0 var(--r-chip) var(--r-chip) 0; background: transparent; color: var(--inv-fg); cursor: pointer; font: inherit; transition: transform 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease); }
+.opsDecision::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: transparent; transition: background-color 200ms var(--ease); }
+.opsDecision:hover { transform: translateX(6px) translateY(-1px); background: var(--glass); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14); }
+.opsDecision:hover::before { background: var(--signal); }
+.opsSev { display: inline-block; margin-top: 2px; padding: 2px 7px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); white-space: nowrap; }
+.opsSev-crit { color: var(--inv-crit); }
+.opsSev-warn { color: var(--inv-warn); }
+.opsSev-watch { color: var(--inv-muted); }
+.opsSev-proposal { color: var(--inv-accent); }
+.opsDecisionText { min-width: 0; }
+.opsDecisionTitle { display: block; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.opsDecisionLoc { display: block; margin-top: 3px; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opsQuiet { padding: 12px 0; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
+
+/* The timeline: receipts newest first, a rule with the date opening each day. */
+.opsTimeline { position: relative; min-width: 0; padding: 18px 20px 8px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; box-shadow: var(--well); animation: cx-rise 460ms var(--ease) 280ms backwards; }
+.opsReceipts { list-style: none; margin: 0; padding: 0; min-width: 0; }
+.opsDay { padding: 14px 0 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); }
+.opsReceipt { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: baseline; width: calc(100% + 8px); text-align: left; padding: 10px 0 10px 8px; margin-left: -8px; border: 0; border-bottom: 1px solid var(--hair); border-radius: 0 var(--r-chip) var(--r-chip) 0; background: transparent; color: var(--ink); cursor: pointer; font: inherit; transition: transform 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease); }
+.opsReceipt::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: transparent; transition: background-color 200ms var(--ease); }
+.opsReceipt:hover { transform: translateX(6px) translateY(-1px); background: var(--glass); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14); }
+.opsReceipt:hover::before { background: var(--signal); }
+.opsWhen { font-family: var(--mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.opsLine { font-size: 13px; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+/* The outcome, in words and in the state's colour: a SHA in ok, "mail failed" in crit, "until
+   recovery" in warn, "running" in the accent. */
+.opsMark { margin-left: 6px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.opsMark-ok { color: var(--ok); }
+.opsMark-warn { color: var(--warn); }
+.opsMark-crit { color: var(--crit); }
+.opsMark-live { color: var(--accent); }
+.opsMark-paper { color: var(--muted); }
+.opsEmpty { padding: 12px 0; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+
+/* ── The lens bodies ────────────────────────────────────────────────────────── */
+/* The drawer itself is the foundation's (lens.tsx, console.css). These are the parts a body is
+   built from: the id line, the description, the key–value ledger, the ties, the actions. */
+.opsLensId { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
+.opsLensDesc { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); text-wrap: pretty; }
+.opsLensKv { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; }
+.opsLensKv dt { padding: 8px 0; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.opsLensKv dd { margin: 0; padding: 8px 0; border-top: 1px solid var(--hair); font-family: var(--mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.opsLensKv .opsErr { font-size: 12px; }
+.opsLensTies { padding-bottom: 8px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.opsTies { list-style: none; margin: 0; padding: 0; }
+.opsTie { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: baseline; width: 100%; text-align: left; padding: 9px 0; border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: var(--ink); cursor: pointer; font: inherit; min-height: 44px; }
+.opsTie:hover { color: var(--bright); }
+.opsTieKind { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.opsTieText { min-width: 0; }
+.opsTieLabel { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.opsTieWhy { display: block; margin-top: 2px; font-family: var(--mono); font-size: 11px; color: var(--faint); }
+/* Proposal text: untrusted, verbatim, in a trough. */
+.opsPre { margin: 0; padding: 12px; max-height: 40vh; overflow: auto; background: var(--sunk); border-radius: var(--r); box-shadow: var(--trough); font-family: var(--mono); font-size: 12px; line-height: 1.55; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The actions: outlined chips, the primary filled with the accent. 44px tall — the console's
+   floor for a target — where the canvas drew 38. The receipt grammar (lib/receipt-state.ts)
+   paints the pressed one: working carries the load line, done goes ok, failed goes crit. */
+.opsLensActs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.opsAct, .conRoot a.opsAct { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; max-width: 100%; padding: 8px 14px; box-sizing: border-box; border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; line-height: 1.3; letter-spacing: 0.1em; text-transform: uppercase; text-align: left; text-decoration: none; overflow: hidden; transition: transform 140ms var(--ease), background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease); }
+.opsAct:hover, .conRoot a.opsAct:hover { transform: translateY(-1px); text-decoration: none; color: var(--bright); }
+.opsAct:active { transform: translateY(1px); }
+.opsActPrimary, .opsActPrimary:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.opsAct-working { background: var(--surface2); border-color: var(--line); color: var(--muted); }
+.opsAct-working::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--accent); animation: cx-load 700ms var(--ease) forwards; }
+.opsAct-done, .opsAct-done:hover { background: var(--ok); border-color: var(--ok); color: var(--accent-on); }
+.opsAct-failed, .opsAct-failed:hover { background: var(--crit); border-color: var(--crit); color: var(--accent-on); }
+/* Inert says so in the inert ink, never in opacity; aria-disabled keeps the focus where it was. */
+.opsAct[aria-disabled="true"], .opsAct:disabled { color: var(--disabled); border-color: var(--hair); background: transparent; cursor: default; transform: none; }
+.opsReceiptChip { padding: 6px 10px; background: var(--surface2); font-family: var(--mono); font-size: 11px; color: var(--ok); white-space: nowrap; animation: cx-pop 300ms var(--ease); }
+.opsErr { font-family: var(--mono); font-size: 11px; color: var(--crit); overflow-wrap: anywhere; }
+.opsLensNote { font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--faint); }
+.opsQueued { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px dashed var(--line); border-radius: var(--r-chip); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+
+/* ── Motion off ─────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .opsRegister, .opsDecisions, .opsTimeline, .opsTag, .opsChip, .opsChipLive, .opsAct-working::after, .opsReceiptChip { animation: none; }
+  .opsRow, .opsGo, .opsDecision, .opsDecision::before, .opsReceipt, .opsReceipt::before, .opsAct { transition: none; }
+  .opsRow:hover, .opsDecision:hover, .opsReceipt:hover, .opsAct:hover, .opsAct:active { transform: none; }
+}
+
+/* ── Narrower ───────────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .opsBeneath { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .opsStripIn { padding: 0 14px; }
+  .opsCell { padding: 16px 12px 14px 0; margin-right: 12px; }
+  /* The window a figure states is never cut short on a phone; it wraps. */
+  .opsCellMeta { white-space: normal; }
+  /* Two cells a row on a phone: a hairline opens the second row. */
+  .opsCell:nth-child(n + 3) { border-top: 1px solid var(--hair); }
+  .opsCell:nth-child(2n) { border-right: 0; margin-right: 0; }
+  .opsGroupHead { flex-direction: column; align-items: flex-start; gap: 2px; white-space: normal; }
+  .opsReserved { white-space: normal; overflow: visible; }
+  .opsRegister { padding: 14px 16px 10px; }
+  .opsDecisions, .opsTimeline { padding: 14px 16px 8px; }
+  /* The column header goes; every cell carries its own label. The chevron spans the two lines. */
+  .opsCols { display: none; }
+  .opsRow { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "no unit state" "no sched go" "no last go"; gap: 6px 12px; align-items: start; padding: 12px 6px 12px 8px; margin: 2px -6px 2px -11px; }
+  .opsNo { grid-area: no; }
+  .opsUnit { grid-area: unit; }
+  .opsState { grid-area: state; }
+  .opsSched { grid-area: sched; white-space: normal; }
+  .opsLast { grid-area: last; }
+  .opsGo { grid-area: go; align-self: center; }
+  .opsSched::before, .opsLast::before { content: attr(data-col) " · "; color: var(--faint); }
+  .opsDecisionsBody { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .opsDecisionsN { font-size: 56px; }
+  .opsPanelHead .opsHeadMeta:last-child, .opsDecisionsHead .opsDecisionsMeta { white-space: normal; }
+}
+.opsProviderControls{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.opsProviderControls>div{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.opsJobOutput{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font-size:12px}

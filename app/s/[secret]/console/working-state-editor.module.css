@@ -1,0 +1,15 @@
+/* The working-state editor (in the shared lens) and the Overview panel's tools. Tokens only:
+   inputs sit in the sunk well at --r, buttons are chips at --r-chip, and inert says so in the
+   inert ink plus a hairline — never in opacity. */
+.form { display:grid; gap:16px; color:var(--ink); }
+.field { display:grid; gap:6px; font-family:var(--mono); font-size:11px; color:var(--muted); }
+.field input,.field select,.field textarea { width:100%; min-height:44px; box-sizing:border-box; padding:10px; border:1px solid var(--line); border-radius:var(--r); background:var(--sunk); color:var(--ink); box-shadow:var(--well); font-family:var(--mono); font-size:12px; }
+.field textarea { min-height:160px; resize:vertical; line-height:1.6; }
+.actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.button { min-height:44px; max-width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-chip); background:transparent; color:var(--ink); font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; text-align:left; cursor:pointer; }
+.primary { background:var(--accent); border-color:var(--accent); color:var(--accent-on); }
+.button:disabled { background:transparent; border-color:var(--hair); color:var(--disabled); cursor:default; }
+.note { font-size:12px; line-height:1.6; color:var(--muted); }
+.current { white-space:pre-wrap; overflow-wrap:anywhere; font:inherit; padding:12px; border:1px solid var(--line); border-radius:var(--r); background:var(--sunk); box-shadow:var(--well); }
+.tools { display:flex; flex-wrap:wrap; gap:8px; padding:12px 0; align-items:end; }
+.tools .field { flex:1 1 120px; min-width:0; }

@@ -11,7 +11,7 @@ import { normaliseProject, mentionsProject } from "../lib/project";
 describe("normaliseProject", () => {
   it("bares and lowercases a name", () => {
     expect(normaliseProject("Cortex")).toBe("cortex");
-    expect(normaliseProject("  dock-collection-ops  ")).toBe("dock-collection-ops");
+    expect(normaliseProject("  sample-collection-ops  ")).toBe("sample-collection-ops");
   });
   it("strips the projects/ prefix and the .md suffix", () => {
     expect(normaliseProject("projects/harbor.md")).toBe("harbor");

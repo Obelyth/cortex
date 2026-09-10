@@ -1,4 +1,5 @@
-import { acceptProposal, dropProposal } from "@/lib/proposals";
+import { acceptProposal, cancelProposal, dropProposal } from "@/lib/proposals";
+import { ProposalOutcomeUncertain } from "@/lib/proposal-git";
 import { bad, gateConsolePost } from "../post-gate";
 
 /**
@@ -11,28 +12,30 @@ import { bad, gateConsolePost } from "../post-gate";
  */
 export const dynamic = "force-dynamic";
 
+const privateResponse = (res: Response) => { res.headers.set("Cache-Control", "no-store"); return res; };
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ secret: string }> }
 ): Promise<Response> {
   const gate = await gateConsolePost(req, ctx.params);
-  if ("deny" in gate) return gate.deny;
+  if ("deny" in gate) return privateResponse(gate.deny);
   const b = gate.body;
-  if (typeof b.id !== "string" || !b.id) return bad("id is required");
-  if (b.action !== "accept" && b.action !== "reject") {
-    return bad('action must be "accept" or "reject"');
+  if (typeof b.id !== "string" || !b.id) return privateResponse(bad("id is required"));
+  if (b.action !== "accept" && b.action !== "reject" && b.action !== "cancel") {
+    return privateResponse(bad('action must be "accept", "reject", or "cancel"'));
   }
 
   try {
     if (b.action === "reject") {
       const gone = await dropProposal(b.id);
-      return Response.json({ ok: true, action: "reject", found: gone });
+      return privateResponse(Response.json({ ok: true, action: "reject", found: gone }));
     }
-    const res = await acceptProposal(b.id);
-    return Response.json({ ok: true, action: "accept", path: res.path, commitSha: res.commitSha });
+    const res = await (b.action === "cancel" ? cancelProposal(b.id) : acceptProposal(b.id));
+    return privateResponse(Response.json({ ok: true, action: b.action, ...res }));
   } catch (e) {
-    // A failed accept leaves the proposal pending on purpose — the message says what went
-    // wrong, and the row is still there to try again.
-    return bad(e instanceof Error ? e.message : String(e), 409);
+    const uncertain = e instanceof ProposalOutcomeUncertain;
+    return privateResponse(Response.json({ error: e instanceof Error ? e.message : String(e),
+      ...(uncertain ? { outcome: "uncertain" } : {}) }, { status: uncertain ? 503 : 409 }));
   }
 }

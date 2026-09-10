@@ -106,8 +106,8 @@ describe("candidateScores — the blend the eval measures", () => {
     expect(s.get("notes/soundings.md")!).toBeGreaterThan(0);
   });
 
-  it("weighs the kinds per KIND_BLEND — a coaccess hour outranks a shared tag", () => {
-    const prior = [ev("2026-08-10T14:00:00Z", "notes/seed.md"), ev("2026-08-10T14:30:00Z", "notes/co.md")];
+  it("weighs the kinds per KIND_BLEND — an evidenced coaccess pair outranks a shared tag", () => {
+    const prior = [ev("2026-08-10T13:00:00Z", "notes/seed.md"), ev("2026-08-10T13:30:00Z", "notes/co.md"), ev("2026-08-10T14:00:00Z", "notes/seed.md"), ev("2026-08-10T14:30:00Z", "notes/co.md")];
     const structure: StructuralEdges = { links: new Set(), tags: new Map([[pairKey("notes/seed.md", "notes/tagged.md"), 1]]) };
     const s = candidateScores(prior, sessionize(prior), structure, now);
     // co.md has baseline + coaccess pull; strip the baseline to compare pulls alone.

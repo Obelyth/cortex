@@ -14,8 +14,14 @@
  */
 import { safeText, MAX_DESCRIPTION } from "./frontmatter";
 import { normaliseProject } from "./project";
+import { utf8Bytes } from "./utf8";
+import { BUBBLE_KINDS } from "./bubble-fields";
+import type { WorkingCommand, WorkingQuery } from "./working-state-contract";
 
-export type BubbleKind = "focus" | "decision" | "question" | "handoff";
+/** The four kinds, as a value: the console composes a class per kind (`ovWsKind-<kind>`) and its
+ *  classes test must be able to enumerate them rather than keep a second hand-written list. */
+export { BUBBLE_KINDS } from "./bubble-fields";
+export type BubbleKind = (typeof BUBBLE_KINDS)[number];
 
 export interface BubbleItem {
   id: number;
@@ -37,9 +43,12 @@ export interface BubbleRead {
 }
 
 export interface BubbleStore {
+  /** Separate management contract; never silently falls back to unversioned table writes. */
+  manage?(query: WorkingQuery | { id: number }): Promise<unknown>;
+  change?(command: WorkingCommand): Promise<unknown>;
   /** Open items, freshest touch first — one RPC that sweeps, counts and returns together, so
    *  the numbers a render states are exact rather than page-local. */
-  open(): Promise<BubbleRead>;
+  open(scope?: { project: string; includeGeneral: boolean }): Promise<BubbleRead>;
   add(kind: BubbleKind, body: string, project: string, surface: string): Promise<BubbleItem>;
   /** Update body/kind/project in place; bumps touched_at. Returns null when the id is not open. */
   update(id: number, patch: { body?: string; kind?: BubbleKind; project?: string }): Promise<BubbleItem | null>;
@@ -51,6 +60,10 @@ export interface BubbleStore {
 
 const REQUEST_TIMEOUT_MS = 10_000;
 export const MAX_AGE_DAYS = 14;
+
+export class BubbleManagementError extends Error {
+  constructor(readonly migrationRequired: boolean) { super("working-state store unavailable"); }
+}
 
 /** Test seam, same contract as mirror.ts's __setStore. */
 let overridden: BubbleStore | null | undefined;
@@ -81,6 +94,10 @@ function pgrstBubble(base: string, key: string): BubbleStore {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
+      if (path.startsWith("rpc/bubble_console_")) {
+        const data = await res.json().catch(() => null) as { code?: unknown } | null;
+        throw new BubbleManagementError(res.status === 404 || data?.code === "42703" || data?.code === "42883" || data?.code === "PGRST202");
+      }
       // Status only — tools.ts hands e.message to callers, and a PostgREST body is an
       // uncontrolled upstream channel.
       throw new Error(`bubble: ${init.method ?? "GET"} ${path.split("?")[0]} ${res.status}`);
@@ -94,13 +111,31 @@ function pgrstBubble(base: string, key: string): BubbleStore {
   }
 
   return {
-    async open() {
+    async manage(query) {
+      const path = "id" in query ? "rpc/bubble_console_item" : "rpc/bubble_console_list";
+      const body = "id" in query ? {item_id:query.id} : {
+        project_name:query.project,before_touched:query.before?.touched_at??null,before_id:query.before?.id??null,page_size:20,
+      };
+      return (await call(path,{method:"POST",body:JSON.stringify(body)})).json();
+    },
+    async change(command) {
+      const add = command.action === "add";
+      const body = add ? {request_key:command.requestKey,item_kind:command.kind,item_body:command.body,project_name:command.project} : {
+        item_id:command.id,expected_version:command.version,item_kind:command.action==="edit"?command.kind??null:null,
+        item_body:command.action==="edit"?command.body??null:null,project_name:command.action==="edit"?command.project??null:null,age_out:command.action==="drop",
+      };
+      return (await call(add?"rpc/bubble_console_add":"rpc/bubble_console_edit",{method:"POST",body:JSON.stringify(body)})).json();
+    },
+    async open(scope) {
       // One transaction: sweep (so "open" means what it says without a scheduled job), the true
       // total, and the page. Two calls here once meant two 10s exposures on the boot path and a
       // page presented as the universe.
-      const res = await call("rpc/bubble_open", {
+      const project = scope ? normaliseProject(scope.project) : "";
+      const res = await call(scope ? "rpc/bubble_open_scoped" : "rpc/bubble_open", {
         method: "POST",
-        body: JSON.stringify({ max_age_days: MAX_AGE_DAYS, max_items: 200 }),
+        body: JSON.stringify(scope
+          ? { max_age_days: MAX_AGE_DAYS, max_items: 200, project_name: project, include_general: scope.includeGeneral }
+          : { max_age_days: MAX_AGE_DAYS, max_items: 200 }),
       });
       return (await res.json()) as BubbleRead;
     },
@@ -175,7 +210,7 @@ function age(touched: string): string {
  * scoped section names the filter and points at `brain_bubble list` for the global total rather
  * than quoting a subtraction that would read as "12 more cortex items" when they are ego ones.
  */
-export function renderBubble(read: BubbleRead, project?: string): string {
+export function bubbleView(read: BubbleRead, project?: string): { text: string; usableItems: number; renderedItems: number } {
   const { total, swept } = read;
   const scope = project ? normaliseProject(project) : "";
   const items = scope
@@ -187,27 +222,41 @@ export function renderBubble(read: BubbleRead, project?: string): string {
   if (items.length === 0 && swept === 0) {
     // A scoped view with nothing for this project still says so, so the reader can tell "no
     // working state here" apart from "the bubble is off" (which degrades to logs upstream).
-    return scope ? `# BUBBLE (working state — update with brain_bubble)\n\n(no open items for ${safeText(scope, 40)} · brain_bubble list for all open items)` : "";
+    const text = scope ? `# BUBBLE (working state — update with brain_bubble)\n\n(no open items for ${safeText(scope, 40)} · brain_bubble list for all open items)` : "";
+    return { text, usableItems: 0, renderedItems: 0 };
   }
   const lines: string[] = [];
-  let spent = 0;
   let rendered = 0;
   for (const it of items) {
     // Through safeText, the same gate every note-derived string passes before a rendered
     // surface: no control characters (a newline in a body must not forge a second row), no
     // field separator, and a length bound so one chatty item cannot eat the whole section.
     const line = `- [#${it.id} ${KIND_LABEL[it.kind]}${safeText(it.project, 40) ? ` · ${safeText(it.project, 40)}` : ""} · ${age(it.touched_at)}] ${safeText(it.body, 300)}`;
-    if (spent + line.length > BUBBLE_BUDGET_BYTES) continue;
+    const candidate = [...lines, line];
+    const candidateRendered = rendered + 1;
+    const notes: string[] = [];
+    if (scope) {
+      const notShown = Math.max(0, total - candidateRendered);
+      if (notShown > 0) notes.push(`${notShown} more ${safeText(scope, 40)}/general item${notShown === 1 ? "" : "s"} not shown — brain_bubble list for all`);
+      else notes.push(`scoped to ${safeText(scope, 40)} + general · brain_bubble list for all open items`);
+    } else if (total - candidateRendered > 0) {
+      const notShown = total - candidateRendered;
+      notes.push(`${notShown} more open item${notShown === 1 ? "" : "s"} not shown — brain_bubble list for all`);
+    }
+    if (swept > 0) notes.push(`${swept} item${swept === 1 ? "" : "s"} just aged out (untouched ${MAX_AGE_DAYS}+ days)`);
+    const tail = notes.length ? `\n(${notes.join(" · ")})` : "";
+    const doc = `# BUBBLE (working state — update with brain_bubble)\n\n${candidate.join("\n")}${tail}`;
+    if (utf8Bytes(doc) > BUBBLE_BUDGET_BYTES) continue;
     lines.push(line);
-    spent += line.length;
-    rendered++;
+    rendered = candidateRendered;
   }
   const notes: string[] = [];
   if (scope) {
-    // Scoped: report what THIS view dropped for budget against its own filtered set, and hand the
-    // global count to the tool that owns it rather than doing project-blind arithmetic here.
-    const droppedForBudget = items.length - rendered;
-    if (droppedForBudget > 0) notes.push(`${droppedForBudget} more ${safeText(scope, 40)}/general item${droppedForBudget === 1 ? "" : "s"} did not fit — brain_bubble list for all`);
+    // The scoped RPC's total is already filtered before its database page limit. Subtract what
+    // this section genuinely rendered so both rows beyond that page and fetched rows refused by
+    // this render budget remain visible in one exact count.
+    const notShown = Math.max(0, total - rendered);
+    if (notShown > 0) notes.push(`${notShown} more ${safeText(scope, 40)}/general item${notShown === 1 ? "" : "s"} not shown — brain_bubble list for all`);
     else notes.push(`scoped to ${safeText(scope, 40)} + general · brain_bubble list for all open items`);
   } else {
     const notShown = total - rendered;
@@ -215,8 +264,16 @@ export function renderBubble(read: BubbleRead, project?: string): string {
   }
   if (swept > 0) notes.push(`${swept} item${swept === 1 ? "" : "s"} just aged out (untouched ${MAX_AGE_DAYS}+ days)`);
   const tail = notes.length ? `\n(${notes.join(" · ")})` : "";
-  if (lines.length === 0) return tail ? `# BUBBLE (working state — update with brain_bubble)\n${tail}` : "";
-  return `# BUBBLE (working state — update with brain_bubble)\n\n${lines.join("\n")}${tail}`;
+  const text = lines.length === 0
+    ? tail ? `# BUBBLE (working state — update with brain_bubble)\n${tail}` : ""
+    : `# BUBBLE (working state — update with brain_bubble)\n\n${lines.join("\n")}${tail}`;
+  // Only rows genuinely present in `text` are usable boot memory. Filter/expiry notices and
+  // open rows that the section budget refused must not suppress the bounded recent-log fallback.
+  return { text, usableItems: rendered, renderedItems: rendered };
+}
+
+export function renderBubble(read: BubbleRead, project?: string): string {
+  return bubbleView(read, project).text;
 }
 
 /** The full listing brain_bubble returns for `list` — no byte budget, but the page is finite and

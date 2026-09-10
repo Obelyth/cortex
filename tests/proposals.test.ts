@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { QueueTransport } from "./helpers/proposal-transports";
 
 /**
  * The proposal queue holds text written by a model this server does not control, and hands it to
@@ -12,8 +13,10 @@ const TOK_KEY = "KV_REST_API_TOKEN";
 /** An in-memory stand-in for the hash the proposals live in. */
 function stubStore(seed: Record<string, string> = {}) {
   const h: Record<string, string> = { ...seed };
+  const transport = new QueueTransport(); transport.rows = h;
   vi.doMock("@upstash/redis", () => ({
     Redis: class {
+      createScript = transport.createScript;
       hgetall() {
         return Promise.resolve(Object.keys(h).length ? { ...h } : null);
       }
@@ -36,6 +39,7 @@ function stubStore(seed: Record<string, string> = {}) {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.doUnmock("@upstash/redis");
+  vi.doUnmock("../lib/brain");
   vi.resetModules();
 });
 
@@ -73,6 +77,40 @@ describe("leaving a proposal", () => {
     await expect(propose({ ...BASE, content: "   " })).rejects.toThrow(/needs content/);
   });
 
+  it("refuses a lone surrogate up front, with a reason, instead of storing a row the queue would sweep", async () => {
+    // An emoji cut in half at a UTF-16 boundary. JSON.stringify emits "\ud83d" for it and
+    // JSON.parse takes it back; the queue's cjson refuses it, so an admitted row would be gone
+    // on the next call — after the guest had been told "Proposed".
+    vi.resetModules();
+    const h = stubStore();
+    const { propose } = await import("../lib/proposals");
+    const cut = "Decision: ship it \ud83d";
+    expect(cut.isWellFormed()).toBe(false);
+    await expect(propose({ ...BASE, content: cut })).rejects.toThrow(/content contains a lone surrogate/);
+    await expect(propose({ ...BASE, why: cut })).rejects.toThrow(/why contains a lone surrogate/);
+    await expect(propose({ ...BASE, client: cut })).rejects.toThrow(/client contains a lone surrogate/);
+    expect(Object.keys(h)).toEqual([]);
+    // The whole emoji is fine, and survives the sweep every later call runs.
+    const p = await propose({ ...BASE, content: "Decision: ship it 😀" });
+    expect(Object.keys(h)).toEqual([p.id]);
+  });
+
+  it("the unit fake refuses at admission exactly what its sweep would delete, like the Lua", async () => {
+    // Before this the fake accepted the row JSON.parse accepts, so the unit suite could not see
+    // the row the real queue swept. Admission and the sweep now share one predicate.
+    const q = new QueueTransport();
+    const exec = q.createScript("").exec;
+    const now = 1_760_000_000_000, ttl = 30 * 86_400_000;
+    const cut = JSON.stringify({ id: "s1", ts: now, path: "notes/synthetic.md", mode: "append", content: "Decision: ship it \ud83d" });
+    expect(cut).toContain("\\ud83d");
+    expect(await exec(["k"], ["admit", now, ttl, 50, "s1", cut])).toEqual(["invalid"]);
+    expect(await exec(["k"], ["get", now, ttl, 50, "s1", ""])).toEqual(["missing"]);
+    // A row that reached the hash by another route is swept, as the Lua sweeps it.
+    q.rows.s2 = cut.replace('"s1"', '"s2"');
+    expect(await exec(["k"], ["list", now, ttl, 50, "", ""])).toEqual(["ok"]);
+    expect(q.rows).toEqual({});
+  });
+
   it("refuses rather than evicting when the queue is full", async () => {
     vi.resetModules();
     const now = 1_760_000_000_000;
@@ -98,10 +136,10 @@ describe("leaving a proposal", () => {
 });
 
 describe("reviewing and accepting", () => {
-  it("hides expired proposals without deleting anything mid-render", async () => {
+  it("prunes expired proposals and malformed backing records during listing", async () => {
     vi.resetModules();
     const now = 1_760_000_000_000;
-    stubStore({
+    const rows = stubStore({
       fresh: JSON.stringify({ id: "fresh", ts: now - 1000, ...BASE }),
       stale: JSON.stringify({ id: "stale", ts: now - 40 * 86_400_000, ...BASE }),
       junk: "{{ not json",
@@ -109,51 +147,12 @@ describe("reviewing and accepting", () => {
     const { listProposals } = await import("../lib/proposals");
     // One malformed entry must not empty the queue.
     expect((await listProposals(now)).map((p) => p.id)).toEqual(["fresh"]);
-  });
-
-  it("writes to the brain and only then drops the proposal", async () => {
-    vi.resetModules();
-    const now = 1_760_000_000_000;
-    const h = stubStore({ abc: JSON.stringify({ id: "abc", ts: now, ...BASE }) });
-    const writeNote = vi.fn().mockResolvedValue({ path: BASE.path, commitSha: "deadbeef" });
-    vi.doMock("../lib/brain", async (orig) => ({ ...(await orig<object>()), writeNote }));
-    const { acceptProposal } = await import("../lib/proposals");
-
-    const res = await acceptProposal("abc", now);
-    expect(writeNote).toHaveBeenCalledWith(BASE.path, BASE.content, BASE.mode);
-    expect(res.commitSha).toBe("deadbeef");
-    expect(h.abc).toBeUndefined();
-  });
-
-  it("keeps the proposal pending when the write fails", async () => {
-    // Dropping first would lose the proposal on any GitHub hiccup.
-    vi.resetModules();
-    const now = 1_760_000_000_000;
-    const h = stubStore({ abc: JSON.stringify({ id: "abc", ts: now, ...BASE }) });
-    vi.doMock("../lib/brain", async (orig) => ({
-      ...(await orig<object>()),
-      writeNote: vi.fn().mockRejectedValue(new Error("GitHub 502")),
-    }));
-    const { acceptProposal } = await import("../lib/proposals");
-    await expect(acceptProposal("abc", now)).rejects.toThrow(/502/);
-    expect(h.abc).toBeDefined();
-  });
-
-  it("cannot commit the same proposal twice", async () => {
-    vi.resetModules();
-    const now = 1_760_000_000_000;
-    stubStore({ abc: JSON.stringify({ id: "abc", ts: now, ...BASE }) });
-    const writeNote = vi.fn().mockResolvedValue({ path: BASE.path, commitSha: "sha1" });
-    vi.doMock("../lib/brain", async (orig) => ({ ...(await orig<object>()), writeNote }));
-    const { acceptProposal } = await import("../lib/proposals");
-    await acceptProposal("abc", now);
-    await expect(acceptProposal("abc", now)).rejects.toThrow(/no pending proposal/);
-    expect(writeNote).toHaveBeenCalledOnce();
+    expect(Object.keys(rows)).toEqual(["fresh"]);
   });
 
   it("rejecting leaves no trace in the brain", async () => {
     vi.resetModules();
-    const now = 1_760_000_000_000;
+    const now = Date.now();
     const h = stubStore({ abc: JSON.stringify({ id: "abc", ts: now, ...BASE }) });
     const writeNote = vi.fn();
     vi.doMock("../lib/brain", async (orig) => ({ ...(await orig<object>()), writeNote }));

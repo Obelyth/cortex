@@ -1,0 +1,232 @@
+/*
+ * overview.css — the Overview screen on v2 (from the canvas "Cortex Console
+ * v2"). Every value here is the canvas's own inline style, ported to a class and named ov*;
+ * every colour is a token from theme.css, so the same rules read on ink and on paper. Panels
+ * carry --bezel and --r; troughs are machined recesses (--trough); the corpus is the inverted
+ * slab (--inv-*) casting onto the page (--cast). Entrances ride the kinetic layer's data-cx on
+ * the server nodes; the inner motion (marks popping, bars growing, the arc drawing) is scoped
+ * under .cxReady [data-cx].cxIn so reduced motion never sees it and no JavaScript means the
+ * finished screen. Stagger is a class band (ovD0…ovD12 → --cx-d), never an inline delay.
+ */
+
+.ovRoot { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; min-width: 0; }
+
+/* ── 00 · the masthead figure ──────────────────────────────────────────────── */
+.ovMast { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: end; position: relative; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.ovMastN { font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: clamp(80px, 10vw, 160px); line-height: 0.85; letter-spacing: -0.02em; color: var(--bright); font-variant-numeric: tabular-nums; }
+.ovMastMeta { flex: 1 1 260px; min-width: 0; padding-bottom: 6px; }
+.ovMastLead { margin: 0; font-family: var(--sans); font-size: clamp(20px, 2vw, 26px); font-weight: 500; line-height: 1.1; color: var(--bright); }
+.ovMastLines { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.9; }
+.ovMastLines b { font-weight: 600; color: var(--ink); }
+/* The head SHA: the accent, an underline that grows on hover. */
+.conRoot a.ovSha { color: var(--accent); font-weight: 700; text-decoration: none; background-image: linear-gradient(var(--accent-hi), var(--accent-hi)); background-size: 0% 1px; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px; transition: background-size 260ms var(--ease), color 160ms var(--ease); }
+.conRoot a.ovSha:hover { background-size: 100% 1px; color: var(--accent-hi); text-decoration: none; }
+
+/* The live field. Cyan marks live data, and this is the largest instance on the page. */
+.ovFlood { flex: 1 1 280px; max-width: 420px; background: var(--accent); color: var(--accent-on); padding: 16px 18px; box-shadow: var(--elev1); border-radius: var(--r); }
+.ovFloodHead { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+.ovFloodDot { width: 6px; height: 6px; background: var(--accent-on); display: inline-block; flex: none; animation: cx-breathe 4.5s ease-in-out infinite; }
+.ovFloodLine { font-family: var(--mono); font-size: 12px; margin-top: 10px; line-height: 1.8; }
+.ovFloodLine b { font-weight: 700; }
+.conRoot a.ovFloodSha { color: var(--accent-on); font-weight: 700; text-decoration: none; background-image: linear-gradient(var(--accent-on), var(--accent-on)); background-size: 0% 2px; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px; transition: background-size 260ms var(--ease); }
+.conRoot a.ovFloodSha:hover { background-size: 100% 2px; color: var(--accent-on); text-decoration: none; }
+/* Degraded is not a colour change into red — it is the field withdrawing. A mirror that is off
+   or unreachable has nothing live to announce, so it stops announcing and says which mode it is in. */
+.ovFloodOff { background: var(--surface); color: var(--ink); border: 1px solid var(--line); box-shadow: var(--bezel); }
+.ovFloodOff .ovFloodDot { background: var(--faint); animation: none; }
+.ovFloodWarn .ovFloodDot { background: var(--warn); }
+
+/* ── 01 · the corpus, the inverted slab ─────────────────────────────────── */
+.ovCorpus { min-width: 0; position: relative; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px; padding: 20px 24px 22px; box-shadow: var(--cast); border-radius: var(--r); }
+.ovCorpusHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--inv-line); }
+.ovTag { display: inline-flex; flex: none; }
+.ovTagN { background: var(--signal); color: var(--signal-on); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
+.ovTagLabel { background: var(--inv-chip); color: var(--inv-fg); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; flex: none; }
+.ovCorpusMeta { font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
+.ovField { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 16px; cursor: crosshair; }
+/* The field is the one focusable thing on the inverted slab, and the foundation's ring is
+   tuned for the normal ground: --accent-hi on --inv-bg measures 1.38:1 on ink, under the
+   3:1 floor. --inv-accent is the slab's own accent and clears it at 3.61:1. Specificity has
+   to beat `.conRoot :focus-visible`, hence the .conRoot prefix. */
+.conRoot .ovField:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 6px; }
+.ovMark { width: 6px; height: 6px; box-sizing: border-box; display: block; border: 1px solid var(--inv-line); background: transparent; transition: transform 100ms var(--ease), background-color 100ms var(--ease); }
+.ovMarkX { background: var(--inv-fg); border-color: var(--inv-fg); }
+.ovMark:hover, .ovMarkHot { transform: scale(1.9); background: var(--inv-accent); border-color: var(--inv-accent); position: relative; z-index: 1; }
+.ovFieldRead { font-family: var(--mono); font-size: 11px; color: var(--inv-muted); margin-top: 12px; min-height: 16px; overflow-wrap: anywhere; }
+
+/* ── The instrument panels ─────────────────────────────────────────────────── */
+.ovPanels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 32px 40px; align-items: start; }
+.ovPanelColumn { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
+.ovWorkingContext { scroll-margin-top:90px; min-width:0; }
+/* Bare, like every grid section in the canvas: no fill, no border, no radius, no bezel and
+   no padding of its own. The header's rule is the only structure an instrument gets, and the
+   two ported screens already on main draw theirs the same way (trends .trSec, settings
+   .setPanel). Boxing all eight inverted the page: the canvas floats exactly two objects — the
+   inverted corpus slab and the sunk working-state band — on otherwise bare ruled columns. */
+.ovPanel { min-width: 0; position: relative; }
+/* Working state sits in a well, on the band, with the grain the canvas gives it. */
+/* The one sunk object, and it carries its own padding now that .ovPanel has none. Recessed,
+   grained, and square-cut — the canvas gives this band no border and no radius. */
+.ovPanelWell { background: var(--band); box-shadow: var(--well); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; padding: 18px 20px 8px; }
+.ovPanelHead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.ovPanelTitle { margin: 0; font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--bright); white-space: nowrap; flex: none; }
+.ovPanelFig { font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ovPanelNote { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+.ovPanelFoot { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 12px; line-height: 1.6; }
+.ovEmpty { font-family: var(--mono); font-size: 12px; color: var(--faint); padding: 14px 0 6px; line-height: 1.6; }
+/* A chip: a classification in a hairline frame, coloured by tone. */
+.ovChip { display: inline-block; padding: 2px 7px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); white-space: nowrap; flex: none; color: var(--muted); }
+.ovChip-accent { color: var(--accent); }
+.ovChip-warn { color: var(--warn); }
+.ovChip-faint { color: var(--faint); }
+.ovChip-muted { color: var(--muted); }
+/* A quiet uppercase link with a 44px target that does not disturb the header's rhythm. */
+.conRoot a.ovLink { display: inline-flex; align-items: center; min-height: 44px; margin: -14px 0; padding: 0; color: var(--accent); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; text-decoration: none; }
+.conRoot a.ovLink:hover { color: var(--accent-hi); text-decoration: none; }
+
+/* ── W09 · boot cost + reader ───────────────────────────────────────────── */
+.ovBoot { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 20px; align-items: center; margin-top: 16px; }
+.ovBootBody { min-width: 0; }
+.ovBootLine { font-size: 14px; line-height: 1.5; color: var(--ink); }
+.ovBootNote { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 6px; line-height: 1.6; }
+.ovReaderRow { display: flex; align-items: center; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.ovReaderLabel { font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); white-space: nowrap; flex: none; }
+.ovReader { height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r); background: var(--sunk); color: var(--ink); font-family: var(--mono); font-size: 12px; white-space: nowrap; box-shadow: var(--trough); min-width: 0; max-width: 100%; cursor: pointer; }
+.ovReader:disabled { color: var(--disabled); cursor: default; }
+/* A save the store refused says so beside the control, rather than the select snapping back. */
+.ovReaderErr { font-family: var(--mono); font-size: 11px; color: var(--warn); flex-basis: 100%; }
+/* Empty it takes no line of its own — the region is always in the DOM, never always visible. */
+.ovReaderErr:empty { flex-basis: auto; }
+.ovRing { display: block; }
+.ovRingDisc { fill: var(--sunk); }
+.ovRingTrack { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 0.1 9.5; opacity: 0.55; }
+.ovRingArc { fill: none; stroke: var(--accent); stroke-width: 7; stroke-linecap: round; }
+.ovRingPct { font-family: var(--sans); font-weight: 800; font-size: 26px; fill: var(--bright); font-variation-settings: var(--display-wide); text-anchor: middle; }
+.ovRingLabel { font-family: var(--mono); font-size: 8px; fill: var(--faint); letter-spacing: 1.5px; text-anchor: middle; }
+
+/* ── W10 · activity ────────────────────────────────────────────────────────── */
+.ovRanges { display: inline-flex; gap: 2px; }
+.ovRange { display: inline-flex; align-items: center; min-height: 44px; margin: -14px 0; padding: 0 10px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; transition: color 120ms var(--ease), border-color 160ms var(--ease); }
+.ovRange:hover { color: var(--bright); }
+.ovRangeOn { border-bottom-color: var(--accent); color: var(--accent); }
+.ovTrough { margin-top: 16px; background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r); padding: 10px 8px 4px; min-width: 0; }
+.ovChart { display: block; width: 100%; height: auto; overflow: visible; }
+.ovAxisMid { stroke: var(--line); stroke-width: 1; }
+.ovAxisText { font-family: var(--mono); font-size: 10px; fill: var(--faint); }
+.ovChartLegend { font-family: var(--mono); font-size: 10px; fill: var(--faint); letter-spacing: 1px; }
+.ovChartHover { font-family: var(--mono); font-size: 11px; fill: var(--bright); }
+.ovBarUp { fill: var(--muted); transform-box: fill-box; transform-origin: 50% 100%; }
+.ovBarDown { fill: var(--accent); transform-box: fill-box; transform-origin: 50% 0; }
+.ovBarPeak { fill: var(--warn); }
+.ovBarUpOn { fill: var(--bright); }
+.ovBarDownOn { fill: var(--accent-hi); }
+.ovHit { fill: transparent; cursor: pointer; outline: none; }
+.ovHit:hover, .ovHitOn, .ovHit:focus-visible { fill: var(--glass); }
+.ovActRead { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; min-height: 16px; }
+.ovActNote { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 8px; line-height: 1.6; }
+
+/* ── W11 · working state ───────────────────────────────────────────────────── */
+.ovWs { display: grid; grid-template-columns: 40px 76px minmax(0, 1fr); gap: 10px; align-items: baseline; width: 100%; text-align: left; padding: 11px 0; border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: var(--ink); cursor: pointer; font: inherit; transition: color 120ms var(--ease); }
+.ovWs:hover { color: var(--bright); }
+.ovWsId { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+.ovWsKind { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; color: var(--muted); }
+.ovWsKind-handoff { color: var(--accent); }
+.ovWsKind-question { color: var(--warn); }
+.ovWsKind-decision { color: var(--ok); }
+.ovWsKind-focus { color: var(--muted); }
+.ovWsBody { font-size: 13px; line-height: 1.45; min-width: 0; overflow-wrap: anywhere; }
+.ovWsMeta { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 3px; }
+@media (max-width: 700px) {
+  .ovWorkingContext .ovWs { grid-template-columns: 40px minmax(0, 1fr); row-gap: 6px; }
+  .ovWorkingContext .ovWsBody { grid-column: 1 / -1; }
+}
+
+/* ── W12 · memory pipeline ─────────────────────────────────────────────────── */
+/* Key and value share the row: the key takes what it needs, the value the rest, right-aligned
+   and allowed to wrap — a nowrap value ("most read" names three notes) would overflow the panel. */
+.ovKv { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--hair); }
+.ovKvK { font-size: 13px; color: var(--muted); }
+.ovKvV { font-family: var(--mono); font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+
+/* ── W13 · doors ───────────────────────────────────────────────────────────── */
+.ovDoor { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--hair); }
+.ovDoorDot { width: 6px; height: 6px; display: inline-block; background: var(--line); }
+.ovDoorDotLive { background: var(--accent); }
+.ovDoorBody { min-width: 0; }
+.ovDoorName { display: block; font-size: 14px; font-weight: 500; color: var(--bright); }
+.ovDoorSub { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 2px; overflow-wrap: anywhere; }
+
+/* ── W14 · recent saves ────────────────────────────────────────────────────── */
+.ovSave { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 12px; align-items: baseline; width: 100%; text-align: left; min-height: 44px; padding: 10px 0; border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: var(--ink); cursor: pointer; font: inherit; transition: color 120ms var(--ease); }
+.ovSave:hover { color: var(--bright); }
+.ovSaveSha { font-family: var(--mono); font-size: 11px; color: var(--accent); white-space: nowrap; }
+.ovSaveMsg { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ovSaveAgo { font-family: var(--mono); font-size: 11px; color: var(--faint); white-space: nowrap; }
+
+/* ── W15 · how answers checked out ─────────────────────────────────────────── */
+.ovStack { display: block; width: 100%; height: 8px; margin-top: 16px; background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r-chip); }
+.ovTone-ok { fill: var(--ok); background: var(--ok); }
+.ovTone-crit { fill: var(--crit); background: var(--crit); }
+.ovTone-muted { fill: var(--muted); background: var(--muted); }
+.ovTone-warn { fill: var(--warn); background: var(--warn); }
+.ovStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 14px; }
+.ovStatN { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: 26px; line-height: 1; color: var(--bright); font-variant-numeric: tabular-nums; }
+.ovStatN i { width: 8px; height: 8px; display: inline-block; flex: none; }
+.ovStatK { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 6px; white-space: nowrap; }
+
+/* ── The lens bodies this screen provides (L1 · L8 · L9 · W11) ───────────── */
+/* The shell's body is a grid, which would stretch the eyebrow chip to the drawer's width. */
+.lensBody > .ovChip { justify-self: start; }
+.ovLensId { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
+.ovLensDesc { font-size: 14px; line-height: 1.55; margin: 0; color: var(--ink); text-wrap: pretty; }
+.ovLensKv { margin: 0; display: grid; gap: 0; }
+.ovLensKvRow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; border-top: 1px solid var(--hair); }
+.ovLensKv dt { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 8px 0; white-space: nowrap; }
+.ovLensKv dd { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--ink); padding: 8px 0; overflow-wrap: anywhere; }
+.ovLensTies { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ovLensTie { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: baseline; width: 100%; text-align: left; min-height: 44px; padding: 9px 0; border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: var(--ink); cursor: pointer; font: inherit; transition: color 120ms var(--ease); }
+.ovLensTie:hover { color: var(--bright); }
+.ovLensTieStill { cursor: default; }
+.ovLensTieStill:hover { color: var(--ink); }
+/* A stamp is a verdict; it wraps rather than hides behind an ellipsis. */
+.ovLensTieKind { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); overflow-wrap: anywhere; line-height: 1.4; }
+.ovLensTieLabel { display: block; font-size: 13px; overflow-wrap: anywhere; }
+.ovLensTieWhy { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 2px; overflow-wrap: anywhere; }
+.ovLensActs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.conRoot .ovLensAct { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; white-space: nowrap; transition: transform 140ms var(--ease), border-color 140ms var(--ease); }
+.conRoot .ovLensAct:hover { transform: translateY(-1px); border-color: var(--accent); color: var(--bright); text-decoration: none; }
+.conRoot .ovLensAct:active { transform: translateY(1px); }
+.conRoot .ovLensActPrimary { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.conRoot .ovLensActPrimary:hover { color: var(--accent-on); border-color: var(--accent-hi); background: var(--accent-hi); }
+.ovLensNote { font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; }
+
+/* ── Motion ────────────────────────────────────────────────────────────────── */
+/* Stagger bands: a class sets --cx-d, which the kinetic layer's reveal transition reads on a
+   data-cx node and the keyframes below read on the marks and bars inside one. 70ms steps. */
+.ovD0 { --cx-d: 0ms; } .ovD1 { --cx-d: 70ms; } .ovD2 { --cx-d: 140ms; } .ovD3 { --cx-d: 210ms; } .ovD4 { --cx-d: 280ms; }
+.ovD5 { --cx-d: 350ms; } .ovD6 { --cx-d: 420ms; } .ovD7 { --cx-d: 490ms; } .ovD8 { --cx-d: 560ms; } .ovD9 { --cx-d: 630ms; }
+.ovD10 { --cx-d: 700ms; } .ovD11 { --cx-d: 770ms; } .ovD12 { --cx-d: 840ms; }
+/* The chip stamps, marks pop, bars grow from the axis, the arc draws — once, after the section
+   has arrived, never before hydration and never under reduced motion (the root is not armed). */
+.conRoot.cxReady [data-cx].cxIn .ovMark { animation: cx-pop 400ms var(--ease) var(--cx-d, 0ms) backwards; }
+.conRoot.cxReady [data-cx].cxIn .ovBarUp,
+.conRoot.cxReady [data-cx].cxIn .ovBarDown { animation: cx-bar 520ms var(--ease) var(--cx-d, 0ms) backwards; }
+.conRoot.cxReady [data-cx].cxIn .ovRingArc { animation: cx-ring 1100ms var(--ease) 200ms backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .ovFloodDot, .ovMark, .ovBarUp, .ovBarDown, .ovRingArc { animation: none !important; }
+  .ovMark:hover, .ovMarkHot, .conRoot .ovLensAct:hover, .conRoot .ovLensAct:active { transform: none; }
+}
+
+/* ── Narrow ────────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .ovMast { gap: 16px 24px; padding-bottom: 20px; }
+  .ovFlood { max-width: none; flex-basis: 100%; }
+  .ovCorpus { padding: 16px 14px 18px; }
+  .ovPanelWell { padding: 16px 14px 8px; }
+  .ovBoot { grid-template-columns: 1fr; justify-items: start; }
+  .ovKvV { text-align: left; }
+  .ovKv { grid-template-columns: 1fr; gap: 4px; }
+  .ovSave { grid-template-columns: 76px minmax(0, 1fr); }
+  .ovSaveAgo { grid-column: 2; }
+  .ovSaveMsg { white-space: normal; overflow-wrap: anywhere; }
+}

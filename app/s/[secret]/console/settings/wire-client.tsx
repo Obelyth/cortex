@@ -1,16 +1,17 @@
 "use client";
-import { useEffect, useState } from "react";
-import styles from "../console.module.css";
+import { useEffect, useRef, useState } from "react";
+import { ClipboardFailure, copyExactText } from "./clipboard";
 
 /**
  * The wire-up picker — pick your client, get the exact config, copy it working.
  *
  * Two rules, both inherited and both load-bearing:
  *
- * SCREENSHOTS ARE NOT CREDENTIALS. The connector secret is derivable here (it is in the
- * address bar), but it is never DISPLAYED — the visible snippet masks it as ••••. The copy
- * button assembles the real URL at click time, straight to the clipboard. Same standard as
- * the address bar itself: the operator can copy it; a photo of the screen learns nothing.
+ * SCREENSHOTS ARE NOT CREDENTIALS BY DEFAULT. The connector secret is derivable here (it is in
+ * the address bar), but the normal snippet masks it as ••••. The copy button assembles the real
+ * URL at click time. If browser clipboard permission is refused after that explicit action, the
+ * screen says so and holds the exact URL behind a second explicit click (Reveal) — a screenshot
+ * of the failure carries nothing either — instead of failing silently.
  *
  * THE SERVER TELLS NOTHING. MCP_TOKEN and GUEST_PATH_SECRET stay placeholders because the
  * server never sends their values to any page — those get pasted by the operator from
@@ -114,17 +115,31 @@ const WIRES: Wire[] = [
   },
 ];
 
-export function WireClient({ guestOpen }: { guestOpen: boolean }) {
-  const [pick, setPick] = useState("claude-code");
-  const [copied, setCopied] = useState(false);
+export function WireClient({
+  guestOpen,
+  guestMissing = [],
+  guestStoreState = "store",
+  initialWire = "claude-code",
+}: {
+  guestOpen: boolean;
+  guestMissing?: readonly string[];
+  guestStoreState?: "store" | "unconfigured" | "unreachable";
+  initialWire?: string;
+}) {
+  const [pick, setPick] = useState(initialWire);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const [fallback, setFallback] = useState<string | null>(null);
   // Derived after mount so the server-rendered payload carries only placeholders.
   const [origin, setOrigin] = useState("https://<host>");
   const [secret, setSecret] = useState<string | null>(null);
+  const copyAttempt=useRef(0),reset=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const invalidateCopy=()=>{copyAttempt.current++;if(reset.current!==null)clearTimeout(reset.current);reset.current=null;};
+  useEffect(()=>()=>invalidateCopy(),[]);
 
   useEffect(() => {
     // origin, not host: local dev is http, production is https — a hardcoded scheme lies in one of them.
     setOrigin(window.location.origin);
-    // /s/<secret>/console/guide — the browser already holds this; the page never printed it.
+    // /s/<secret>/console/settings — the browser already holds this; the page never printed it.
     const m = window.location.pathname.match(/^\/s\/([^/]+)\//);
     setSecret(m ? m[1] : null);
   }, []);
@@ -134,59 +149,74 @@ export function WireClient({ guestOpen }: { guestOpen: boolean }) {
   const usesSecret = w.door === "connector";
 
   async function copy() {
+    invalidateCopy();const own=copyAttempt.current;
     const real = usesSecret && secret ? w.snippet(origin, secret) : shown;
-    try {
-      await navigator.clipboard.writeText(real);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* clipboard denied — the snippet is still selectable by hand */
+    const result = await copyExactText(real);
+    if(copyAttempt.current!==own)return;
+    if (result.ok) {
+      setCopyState("copied");
+      setFallback(null);
+      reset.current=setTimeout(() => {if(copyAttempt.current===own)setCopyState("idle");reset.current=null;}, 1600);
+    } else {
+      setCopyState("failed");
+      setFallback(result.fallback);
     }
   }
 
   return (
-    <section className="card">
-      <div className={styles.sectionHead}>
-        <span className={styles.label}>Wire up your client</span>
-        <span className={styles.note}>
-          pick the thing you use — the config comes out ready to paste
-        </span>
+    <div className="setWide">
+      <div className="setBlockHead">
+        <h3 className="setEyebrow">Wire up your client</h3>
+        <span className="setBlockNote">pick the thing you use — the config comes out ready to paste</span>
       </div>
-      <div className={styles.gScope}>
-        {WIRES.map((x) => (
-          <button
-            key={x.id}
-            type="button"
-            className={`${styles.gArea}${x.id === pick ? " " + styles.gOn : ""}`}
-            aria-pressed={x.id === pick}
-            onClick={() => {
-              setPick(x.id);
-              setCopied(false);
-            }}
-          >
-            {x.name}
+      <div className="setWire">
+        <div className="setChips" role="group" aria-label="Client">
+          {WIRES.map((x) => (
+            <button
+              key={x.id}
+              type="button"
+              className="setChip"
+              aria-pressed={x.id === pick}
+              onClick={() => {
+                invalidateCopy();
+                setPick(x.id);
+                setCopyState("idle");
+                setFallback(null);
+              }}
+            >
+              {x.name}
+            </button>
+          ))}
+        </div>
+        <div className="setWireMeta">
+          <span className="setBlockNote">
+            path {w.door === "terminal" ? "01 · terminal" : w.door === "connector" ? "02 · connector" : "03 · guest"} ·{" "}
+            {w.grants} · {w.where}
+          </span>
+          <button type="button" className="setBtn" onClick={() => void copy()} aria-live="polite">
+            {copyState === "copied" ? "copied" : copyState === "failed" ? "copy failed" : usesSecret ? "copy with secret" : "copy"}
           </button>
-        ))}
+        </div>
+        <pre className="setPre">{shown}</pre>
+        {fallback && <ClipboardFailure text={fallback} />}
+        <p className="setWireNote">
+          {w.note}
+          {w.door === "guest" &&
+            (guestOpen
+              ? " This door is open on this deployment."
+              : guestMissing.length
+                ? ` This door is CLOSED on this deployment — missing ${guestMissing.join(" + ")}.`
+                : guestStoreState === "unreachable"
+                  ? " This door is UNAVAILABLE — the guest policy store did not answer."
+                  : guestStoreState === "unconfigured"
+                    ? " This door is CLOSED — the guest policy store is not configured."
+                    : " This door is CLOSED — its prerequisites are unavailable.")}
+          {usesSecret &&
+            (fallback
+              ? " Copy failed — the browser refused the clipboard. Press reveal above to select the exact URL by hand, and hide it again before a screenshot."
+              : " The secret is masked on screen — copy carries the real URL, a screenshot carries nothing.")}
+        </p>
       </div>
-      <div className={styles.wireMeta}>
-        <span className={styles.note}>
-          path {w.door === "terminal" ? "01 · terminal" : w.door === "connector" ? "02 · connector" : "03 · guest"} ·{" "}
-          {w.grants} · {w.where}
-        </span>
-        <button type="button" className={styles.rdBtn} onClick={copy}>
-          {copied ? "copied" : usesSecret ? "copy with secret" : "copy"}
-        </button>
-      </div>
-      <pre className={styles.pre}>{shown}</pre>
-      <p className={styles.pathNote}>
-        {w.note}
-        {w.door === "guest" &&
-          (guestOpen
-            ? " This door is open on this deployment."
-            : " This door is CLOSED on this deployment — set GUEST_PATH_SECRET to open it.")}
-        {usesSecret &&
-          " The secret is masked on screen — copy carries the real URL, a screenshot carries nothing."}
-      </p>
-    </section>
+    </div>
   );
 }

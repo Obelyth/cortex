@@ -1,5 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
-import { syncMirror, type MirrorStore, type NoteRow, type SyncDeps } from "../lib/mirror";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  __setStore,
+  dateUndatedNotes,
+  mirrorStore,
+  syncMirror,
+  type MirrorStore,
+  type NoteDater,
+  type NoteRow,
+  type SyncDeps,
+} from "../lib/mirror";
 import type { CompareResult } from "../lib/github";
 
 /**
@@ -12,11 +21,11 @@ function fakeStore(seed: NoteRow[] = [], head: string | null = null) {
   let currentHead = head;
   const applies: Array<{ expectedHead: string | null; newHead: string; upserts: string[]; removes: string[]; rows?: NoteRow[] }> = [];
   const store: MirrorStore = {
+    async snapshot() {
+      return { head: currentHead, rows: [...rows.values()] };
+    },
     async head() {
       return currentHead;
-    },
-    async all() {
-      return [...rows.values()];
     },
     async paths() {
       return [...rows.keys()];
@@ -35,6 +44,12 @@ function fakeStore(seed: NoteRow[] = [], head: string | null = null) {
   return { store, rows, applies, head: () => currentHead };
 }
 
+afterEach(() => {
+  __setStore(undefined);
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
+
 const AHEAD = { complete: true, ahead: true };
 
 function deps(overrides: Partial<SyncDeps> = {}): SyncDeps {
@@ -49,18 +64,21 @@ function deps(overrides: Partial<SyncDeps> = {}): SyncDeps {
 
 describe("syncMirror — the backfill IS reconcile-from-empty", () => {
   it("full-syncs an empty mirror in one atomic apply", async () => {
-    const { store, rows, applies, head } = fakeStore();
+    const legacy = { path: "tools/atlas-snapshot.json", content: "{}", commit_sha: "sha1" };
+    const { store, rows, applies, head } = fakeStore([legacy], null);
     const d = deps({
-      fullLoad: vi.fn(async () => new Map([["notes/a.md", "A"], ["tools/atlas-snapshot.json", "{}"]])),
+      fullLoad: vi.fn(async () => new Map([["notes/a.md", "A"]])),
     });
     await syncMirror(store, null, "sha2", d);
     expect(rows.get("notes/a.md")).toEqual({
       path: "notes/a.md",
       content: "A",
       commit_sha: "sha2",
-      last_commit_at: "2026-08-06T12:00:00Z",
+      last_commit_at: null,
     });
     expect(head()).toBe("sha2");
+    expect(rows.get(legacy.path)).toEqual(legacy);
+    expect(applies[0].removes).not.toContain(legacy.path);
     expect(d.compare).not.toHaveBeenCalled();
     // ONE apply carrying rows and head together. There is no partial ordering to get wrong,
     // because there are no parts: a crash leaves the old complete state or the new one.
@@ -231,28 +249,76 @@ describe("write-recency provenance", () => {
     expect(applies[0].rows?.[0]?.last_commit_at).toBeNull();
   });
 
-  // A full sync now carries the head commit's date, same bound the patch path uses.
+  // A full sync sends NULL for every row, and does not even ask for the head commit's date.
   //
-  // was: it sent nothing, and note_scores coalesces a null last_commit_at to mirrored_at — which
-  // sync_apply sets to now() on every upsert. So a force-push (or any commit touching more than
-  // PATCH_LIMIT files) reset the AUTHORSHIP age of every full-synced row to today, re-warming
-  // notes that had gone cold and pushing them back out of propose_deletions' 180-day window.
-  // The migration that added the column exists specifically to stop the mirror resetting note
-  // age; leaving the full-sync path out of it reopened that hole through a different column.
-  it("stamps the head commit's date on a full sync", async () => {
+  // was: it stamped every row with the head commit's date, "the same bound the patch path uses".
+  // It is not the same bound: the patch path's rows are exactly the files that commit touched,
+  // a full sync's rows are the whole corpus, and sync_apply's coalesce let the non-null date win.
+  // Every rebuild, force-push or >PATCH_LIMIT commit therefore re-warmed the entire corpus, and
+  // nothing ever went cold (measured 2026-09-04: hot 17, warm 139, cold 0 of 156). The version
+  // before THAT sent nothing and note_scores coalesced NULL to mirrored_at, resetting age through
+  // a different column. The fix is not a third guess: the store's rule is now that content
+  // decides (migration 20260905100000), and the dater below learns the true date within a tick.
+  it("sends null on a full sync — the store decides by content, the dater learns the rest", async () => {
     const { store, applies } = fakeStore([], null);
-    await syncMirror(store, null, "sha2", deps());
-    expect(applies[0].rows?.[0]?.last_commit_at).toBe("2026-08-06T12:00:00Z");
+    const d = deps();
+    await syncMirror(store, null, "sha2", d);
+    expect(applies[0].rows?.[0]?.last_commit_at).toBeNull();
+    expect(d.commitDate).not.toHaveBeenCalled();
+  });
+});
+
+describe("dateUndatedNotes — the clock's second job", () => {
+  function fakeDater(paths: string[]) {
+    const written: Array<[string, string]> = [];
+    const dater: NoteDater = {
+      undated: vi.fn(async (limit: number) => paths.slice(0, limit)),
+      setCommitDate: vi.fn(async (path: string, at: string) => { written.push([path, at]); }),
+    };
+    return { dater, written };
+  }
+
+  it("dates each undated path from git and reports the tally", async () => {
+    const { dater, written } = fakeDater(["notes/a.md", "notes/b.md"]);
+    const dates: Record<string, string> = { "notes/a.md": "2026-07-01T00:00:00Z", "notes/b.md": "2026-08-15T00:00:00Z" };
+    const out = await dateUndatedNotes(dater, async (p) => dates[p], 20);
+    expect(out).toEqual({ undated: 2, dated: 2, unknown: [], failed: [] });
+    expect(written).toEqual([["notes/a.md", "2026-07-01T00:00:00Z"], ["notes/b.md", "2026-08-15T00:00:00Z"]]);
   });
 
-  // Still never GUESSED. sync_apply coalesces server-side, so null preserves whatever date the
-  // patch path already learned rather than blanking it.
-  it("sends null on a full sync when the commit date is unavailable", async () => {
-    const { store, applies } = fakeStore([], null);
-    await syncMirror(store, null, "sha2", deps({
-      commitDate: vi.fn(async () => { throw new Error("api down"); }),
-    }));
-    expect(applies[0].rows?.[0]?.last_commit_at).toBeNull();
+  it("passes the limit through, so a tick never asks for the whole mirror", async () => {
+    const { dater } = fakeDater(["a", "b", "c", "d"]);
+    const out = await dateUndatedNotes(dater, async () => "2026-01-01T00:00:00Z", 2);
+    expect(dater.undated).toHaveBeenCalledWith(2);
+    expect(out.dated).toBe(2);
+  });
+
+  // A path git has no history for is reported and left NULL. Writing now() would be the guess
+  // this whole column exists to refuse.
+  it("leaves a path with no history undated and names it", async () => {
+    const { dater, written } = fakeDater(["notes/ghost.md", "notes/real.md"]);
+    const out = await dateUndatedNotes(dater, async (p) => (p === "notes/real.md" ? "2026-05-05T00:00:00Z" : null));
+    expect(out.unknown).toEqual(["notes/ghost.md"]);
+    expect(out.dated).toBe(1);
+    expect(written.map(([p]) => p)).toEqual(["notes/real.md"]);
+  });
+
+  it("isolates one failing lookup to one path — the batch goes on", async () => {
+    const { dater } = fakeDater(["notes/a.md", "notes/b.md", "notes/c.md"]);
+    const out = await dateUndatedNotes(dater, async (p) => {
+      if (p === "notes/b.md") throw new Error("502");
+      return "2026-03-03T00:00:00Z";
+    });
+    expect(out.failed).toEqual(["notes/b.md"]);
+    expect(out.dated).toBe(2);
+  });
+
+  it("stops at the deadline and leaves the rest for the next tick", async () => {
+    const { dater } = fakeDater(["a", "b", "c"]);
+    let calls = 0;
+    const out = await dateUndatedNotes(dater, async () => { calls++; return "2026-03-03T00:00:00Z"; }, 20, () => calls >= 1);
+    expect(out.dated).toBe(1);
+    expect(out.undated).toBe(3);
   });
 });
 
@@ -293,5 +359,148 @@ describe("syncMirror — bytes the store cannot hold", () => {
     const d = deps({ fullLoad: vi.fn(async () => new Map([["notes/a.md", text]])) });
     await syncMirror(store, null, "sha2", d);
     expect(applies[0].rows?.[0]?.content).toBe(text);
+  });
+});
+
+function configuredStore(fetcher: typeof fetch): MirrorStore {
+  vi.stubEnv("SUPABASE_URL", "https://mirror.example");
+  vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "service-secret");
+  vi.stubGlobal("fetch", fetcher);
+  const store = mirrorStore();
+  if (!store) throw new Error("test mirror store was not configured");
+  return store;
+}
+
+describe("PostgREST mirror snapshot contract", () => {
+  const HEAD = "a".repeat(40);
+
+  it("reads and validates the scalar corpus_snapshot JSON envelope", async () => {
+    const store = configuredStore(vi.fn(async () => new Response(JSON.stringify({
+      head: HEAD,
+      rows: [{ path: "notes/a.md", content: "exact\r\ntext", commit_sha: "b".repeat(40) }],
+    }), { status: 200 })));
+
+    await expect(store.snapshot()).resolves.toEqual({
+      head: HEAD,
+      rows: [{ path: "notes/a.md", content: "exact\r\ntext", commit_sha: "b".repeat(40) }],
+    });
+  });
+
+  it.each([
+    ["missing head", { rows: [] }],
+    ["invalid populated head", { head: "not-a-sha", rows: [{ path: "notes/a.md", content: "A", commit_sha: HEAD }] }],
+    ["empty head with populated rows", { head: "", rows: [{ path: "notes/a.md", content: "A", commit_sha: HEAD }] }],
+    ["duplicate path", { head: HEAD, rows: [
+      { path: "notes/a.md", content: "A", commit_sha: HEAD },
+      { path: "notes/a.md", content: "B", commit_sha: HEAD },
+    ] }],
+    ["wrong row type", { head: HEAD, rows: [{ path: "notes/a.md", content: 4, commit_sha: HEAD }] }],
+  ])("rejects %s rather than returning unchecked rows", async (_label, payload) => {
+    const store = configuredStore(vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+    await expect(store.snapshot()).rejects.toThrow(/snapshot/i);
+  });
+
+  it("accepts the seeded empty-string head only for an empty uninitialized mirror", async () => {
+    const store = configuredStore(vi.fn(async () => new Response('{"head":"","rows":[]}', { status: 200 })));
+    await expect(store.snapshot()).resolves.toEqual({ head: "", rows: [] });
+  });
+
+  it("rejects a declared response body above the transport ceiling", async () => {
+    const body = new ReadableStream({
+      pull(controller) {
+        controller.enqueue(new TextEncoder().encode('{"head":null,"rows":[]}'));
+        controller.close();
+      },
+    });
+    const store = configuredStore(vi.fn(async () => new Response(body, {
+      status: 200,
+      headers: { "Content-Length": String(64 * 1024 * 1024 + 1) },
+    })));
+
+    await expect(store.snapshot()).rejects.toThrow(/too large/i);
+  });
+
+  it("fails closed when corpus_snapshot RPC is missing", async () => {
+    const store = configuredStore(vi.fn(async () => new Response("not found", { status: 404 })));
+    await expect(store.snapshot()).rejects.toThrow(/corpus_snapshot 404/);
+  });
+});
+
+describe("PostgREST administrative keyset pagination", () => {
+  const rows = Array.from({ length: 650 }, (_, i) => ({
+    path: `notes/${String(i).padStart(4, "0")}.md`,
+    temperature: "warm" as const,
+    score: i / 1000,
+    reads: i,
+  }));
+
+  function cappedTransport(failAfter = Number.POSITIVE_INFINITY) {
+    const urls: string[] = [];
+    let calls = 0;
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      calls++;
+      const url = new URL(String(input));
+      urls.push(url.toString());
+      if (calls > failAfter) return new Response("down", { status: 503 });
+      const cursor = url.searchParams.get("path")?.replace(/^gt\./, "") ?? null;
+      const page = rows.filter((row) => cursor === null || row.path > cursor).slice(0, 500);
+      const projected = url.pathname.endsWith("/notes") ? page.map(({ path }) => ({ path })) : page;
+      return new Response(JSON.stringify(projected), { status: 200 });
+    });
+    return { fetcher: fetcher as typeof fetch, urls };
+  }
+
+  it("lists all paths through capped short pages and stops only on the empty page", async () => {
+    const { fetcher, urls } = cappedTransport();
+    const store = configuredStore(fetcher);
+    const paths = await store.paths();
+    expect(paths).toEqual(rows.map((row) => row.path));
+    expect(new Set(paths).size).toBe(650);
+    expect(urls).toHaveLength(3);
+  });
+
+  it("lists all scores through capped short pages without duplicates", async () => {
+    const { fetcher, urls } = cappedTransport();
+    const store = configuredStore(fetcher);
+    const scores = await store.scores();
+    expect(scores).not.toBeNull();
+    expect(scores!.map((row) => row.path)).toEqual(rows.map((row) => row.path));
+    expect(new Set(scores!.map((row) => row.path)).size).toBe(650);
+    expect(urls).toHaveLength(3);
+  });
+
+  it("encodes the last returned path as the next keyset cursor", async () => {
+    const tricky = "notes/z tricky,!()'.md";
+    let call = 0;
+    const urls: URL[] = [];
+    const store = configuredStore(vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      urls.push(url);
+      call++;
+      return new Response(JSON.stringify(call === 1 ? [{ path: tricky }] : []), { status: 200 });
+    }));
+    await store.paths();
+    expect(urls[1].searchParams.get("path")).toBe(`gt.${tricky}`);
+  });
+
+  it("accepts database collation order without re-sorting it as JavaScript strings", async () => {
+    let call = 0;
+    const databaseOrdered = [{ path: "notes/z.md" }, { path: "notes/A.md" }];
+    const store = configuredStore(vi.fn(async () => new Response(
+      JSON.stringify(call++ === 0 ? databaseOrdered : []),
+      { status: 200 }
+    )));
+    await expect(store.paths()).resolves.toEqual(databaseOrdered.map((row) => row.path));
+  });
+
+  it("rejects a repeated cursor instead of looping forever", async () => {
+    const store = configuredStore(vi.fn(async () => new Response('[{"path":"notes/a.md"}]', { status: 200 })));
+    await expect(store.paths()).rejects.toThrow(/progress/i);
+  });
+
+  it("returns no score list when a later page fails instead of a truncated prefix", async () => {
+    const { fetcher } = cappedTransport(1);
+    const store = configuredStore(fetcher);
+    await expect(store.scores()).resolves.toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import {
   READER_MODEL_IDS,
 } from "../lib/reader";
 import { DEFAULT_MODEL } from "../lib/ask";
+import { isDeadlineExceeded, READER_TIMEOUT_MS } from "../lib/deadline";
 
 /**
  * The reader is pluggable, and what matters is that plugging never weakens the contract:
@@ -187,6 +188,36 @@ describe("openai reader", () => {
     const err = String(await openaiReader(P("p"), "gpt-5.6-terra").catch((e: Error) => e));
     expect(err).toMatch(/OpenAI returned unparseable JSON/);
     expect(err).not.toContain("<html>");
+  });
+
+  it("treats a body that stalls past the budget as the deadline, not as unparseable JSON", async () => {
+    // Headers arrive, the body never finishes: the abort fires inside res.json(), whose
+    // catch used to reshape every failure as "unparseable JSON" — a plain Error, so ask()
+    // threw and the call logged ERROR instead of the honest timed-out reply. The stub's body
+    // errors on the request's own signal, the way a real fetch body does.
+    vi.useFakeTimers();
+    try {
+      vi.stubEnv("OPENAI_API_KEY", "sk-test");
+      vi.stubGlobal("fetch", vi.fn(async (_url: string | URL, init?: RequestInit) => {
+        const signal = init?.signal as AbortSignal;
+        const body = new ReadableStream<Uint8Array>({
+          start(ctrl) {
+            ctrl.enqueue(new TextEncoder().encode('{"output":['));
+            signal.addEventListener("abort", () => ctrl.error(signal.reason));
+          },
+        });
+        return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+      }));
+      const pending = openaiReader(P("p"), "gpt-5.6-sol").then(() => null, (e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(READER_TIMEOUT_MS - 1);
+      await vi.advanceTimersByTimeAsync(1);
+      const e = await pending;
+      expect(isDeadlineExceeded(e)).toBe(true);
+      expect(String(e)).toMatch(/OpenAI response stalled — body not read within 45s/);
+      expect(String(e)).not.toMatch(/unparseable/);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("labels a timeout with the budget it blew, and a network failure with its provider", async () => {

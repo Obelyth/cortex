@@ -23,7 +23,8 @@ import { __setCache, isLive } from "../lib/corpus";
 import type { Corpus } from "../lib/corpus";
 import { checkCitation, verifyQuote, MIN_QUOTE } from "../lib/verify";
 import { narrow, rank } from "../lib/narrow";
-import { READER_TIMEOUT_MS } from "../lib/reader";
+import { geminiReader, openaiReader, READER_TIMEOUT_MS } from "../lib/reader";
+import { deadlineIn, DeadlineExceeded } from "../lib/deadline";
 import { validatePath, validateReadPath, readNote, readNoteRaw } from "../lib/brain";
 import { getFile, listTree } from "../lib/github";
 import { verifyToken, safeEqualStrings } from "../lib/auth";
@@ -97,7 +98,7 @@ function poisonedCorpus(): Corpus {
       ["profile.md", `# Profile\n\n${REAL_PROFILE_SENTENCE}\nAdmin passwords are never stored here.`],
       ["notes/pasted-from-web.md", POISON],
       ["projects/harbor.md", "Harbor ships the mooring backlog nightly."],
-    ]), sidecar: new Map(),
+    ]),
   };
 }
 
@@ -120,6 +121,7 @@ afterEach(() => {
   globalThis.fetch = restoreFetch;
   __setCache(null);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 /** Make loadCorpus() resolve the head sha to the cached corpus, no tarball fetch. */
@@ -176,13 +178,16 @@ describe("prompt injection through the corpus", () => {
     );
 
     expect(r.citation).toBeNull();
-    expect(r.notInBrain).toBe(true);
+    expect(r.notInBrain).toBe(false);
+    expect(r.protocol).toBe("error");
     const shown = render(r);
     // Reported as a protocol failure, not as an absence: "the reader ignored the contract" and
     // "the brain does not know this" must never render the same.
-    expect(r.unresolvedTag).toBe(true);
-    expect(shown).toMatch(/^UNVERIFIED — the reader gave a quote but no file tag/);
-    expect(shown).toMatch(/cannot be attributed/);
+    // The malformed reply is rejected before quote/tag resolution; its path grants no authority.
+    expect(r.unresolvedTag).toBe(false);
+    expect(shown).toMatch(/^UNVERIFIED — reader protocol error/);
+    expect(shown).toMatch(/issued tag and quote/);
+    expect(shown).not.toMatch(/^NOT IN BRAIN/m);
     expect(shown).not.toMatch(/^VERIFIED/m);
   });
 
@@ -601,7 +606,7 @@ describe("size and cost against the live brain", () => {
   it("BUG: brain_ask full=true is ~$0.23/call on the default model and ~$0.76 on a caller-chosen one", () => {
     if (!haveBrain) return;
     const files = live();
-    const corpus: Corpus = { files, sidecar: new Map(), sha: "0".repeat(40), bytes: 0, fetchedAt: 0 };
+    const corpus: Corpus = { files, sha: "0".repeat(40), bytes: 0, fetchedAt: 0 };
     const { prompt } = buildPrompt(corpus, "what did I decide about the OTS board", [...files.keys()]);
     const inTok = prompt.length / 4;
 
@@ -643,7 +648,8 @@ describe("what reaches the client on failure", () => {
     // regex stopped at the first `);`, which a template literal can legally contain, hiding
     // everything after it from the check.
     const sites: string[] = [];
-    const open = /throw new Error\(/g;
+    // Scan the typed deadline error too, including factory-created errors thrown later.
+    const open = /new (?:Error|DeadlineExceeded)\(/g;
     let m: RegExpExecArray | null;
     while ((m = open.exec(r))) {
       let depth = 1;
@@ -662,8 +668,8 @@ describe("what reaches the client on failure", () => {
     }
     expect(sites.length).toBeGreaterThanOrEqual(12); // one per failure mode, three backends
     for (const s of sites) expect(s).not.toMatch(/\bkey\b/);
-    // No throw dodges the scanner by not being `new Error(...)`.
-    expect(r).not.toMatch(/throw new (?!Error\()/);
+    // No thrown constructor dodges the explicit error-family scanner.
+    expect(r).not.toMatch(/throw new (?!(?:Error|DeadlineExceeded)\()/);
     // Provider content reaches an error only through snip() — redacted and capped. One
     // res.text() read exists and it is snipped, as is the OpenAI refusal text; the JSON
     // parse of a 200 body is wrapped so V8's raw body echo never escapes. The behavioral
@@ -708,7 +714,7 @@ describe("what reaches the client on failure", () => {
 // ===========================================================================
 
 describe("operational", () => {
-  it("OK: the reader is bounded well inside the 60s function ceiling", () => {
+  it("OK: the reader is bounded well inside the 60s function ceiling", async () => {
     const r = src("lib/reader.ts");
     // was: maxRetries: 1 — but the SDK timeout is per ATTEMPT, so one retry could stack
     // 45s twice (~91s with backoff) behind the same 60s wall the budget defends. Zero
@@ -718,9 +724,31 @@ describe("operational", () => {
     // of client patience against a 60s server, ending in a gateway timeout page rather than a
     // JSON-RPC error, with no way to know whether Anthropic had been billed.
     expect(READER_TIMEOUT_MS).toBeLessThan(60_000);
-    expect(r).toContain("timeout: READER_TIMEOUT_MS");
-    // The raw-fetch backends carry the same budget on every request.
-    expect(r).toContain("signal: AbortSignal.timeout(READER_TIMEOUT_MS)");
+    expect(r).toContain("timeout: timeoutMs + 1_000");
+    // The SDK has a backstop, while the request's own abort signal owns the earlier cutoff.
+    expect(r).toContain("abortAfter(timeoutMs)");
+    vi.useFakeTimers();
+    vi.stubEnv("OPENAI_API_KEY", "synthetic-reader-key");
+    vi.stubEnv("GEMINI_API_KEY", "synthetic-reader-key");
+    for (const [reader, model] of [[openaiReader, "gpt-5.6-sol"], [geminiReader, "gemini-3.6-flash"]] as const) {
+      let signal: AbortSignal | undefined;
+      let requests = 0;
+      globalThis.fetch = (async (_url, init) => new Promise<Response>((_resolve, reject) => {
+        requests++;
+        signal = init!.signal as AbortSignal;
+        signal.addEventListener("abort", () => reject(signal!.reason), { once: true });
+      })) as typeof fetch;
+      let settled = false;
+      const result = reader({ stable: "synthetic pack", question: "q" }, model, { timeoutMs: 20_000 })
+        .then(() => { settled = true; return null; }, error => { settled = true; return error; });
+      await vi.advanceTimersByTimeAsync(19_999);
+      expect(signal?.aborted).toBe(false);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(signal?.aborted).toBe(true);
+      expect(await result).toMatchObject({ name: "DeadlineExceeded", stage: "reader", budgetMs: 20_000, started: true });
+      expect(requests).toBe(1);
+    }
 
     // Asserted on EVERY door, which the handler-level option never covered. mcp-handler v2
     // dropped its own maxDuration -- v2 is HTTP-only -- so the ceiling now lives solely in Next's
@@ -736,18 +764,36 @@ describe("operational", () => {
     }
   });
 
-  it("BUG: there is no vercel.json and no route-level timeout below maxDuration", () => {
-    expect(existsSync(path.join(REPO, "vercel.json"))).toBe(false);
-    expect(src("next.config.ts")).not.toMatch(/maxDuration|timeout/i);
+  it("OK: the reader receives only the request's remaining time and a cutoff cannot claim absence", async () => {
+    vi.useFakeTimers();
+    const deadline = deadlineIn();
+    await vi.advanceTimersByTimeAsync(35_000);
+    let readerBudget: number | undefined;
+    const result = await ask("what is the ops admin board password", async (_prompt, _model, options) => {
+      readerBudget = options!.timeoutMs;
+      throw new DeadlineExceeded("reader", readerBudget!, true);
+    }, { corpus: poisonedCorpus(), deadline });
+    // 55-second request budget, less 35 seconds already spent and 3 seconds for the reply.
+    expect(readerBudget).toBe(17_000);
+    expect(result.protocol).toBe("timeout");
+    expect(result.notInBrain).toBe(false);
+    expect(result.citation).toBeNull();
+    expect(result.timeout).toMatchObject({ reached: true, budgetMs: 17_000, elapsedMs: 35_000, remainingMs: 20_000 });
+    expect(render(result)).toMatch(/^UNVERIFIED/);
+    expect(render(result)).not.toMatch(/^NOT IN BRAIN|^VERIFIED/m);
   });
 
-  it("OK: README documents ANTHROPIC_API_KEY as required by brain_ask", () => {
+  it("OK: README requires the selected reader's key without making a model necessary for basic use", () => {
     const readme = src("README.md");
     // was: "required only when [RECALL_RERANK] is on — on its own it enables nothing", written
     // when the re-ranker was the only consumer. A deploy following that shipped a brain_ask
     // that threw on first use.
     expect(readme).not.toMatch(/ANTHROPIC_API_KEY.*\(required only when/s);
-    expect(readme).toMatch(/ANTHROPIC_API_KEY.*yes, for/s);
+    const readerSetup = readme.split(/\n\s*\n/).find((paragraph) =>
+      paragraph.includes("ANTHROPIC_API_KEY") && paragraph.includes("brain_ask"));
+    expect(readerSetup).toMatch(/ANTHROPIC_API_KEY.{0,80}required.{0,80}Claude.{0,80}brain_ask/);
+    expect(readerSetup).toMatch(/OpenAI and Gemini readers require their respective provider keys/);
+    expect(readerSetup).toMatch(/No reader key is required for basic boot, browsing, or context previews/);
     expect(src("lib/reader.ts")).toContain('if (!key) throw new Error("ANTHROPIC_API_KEY not set');
   });
 

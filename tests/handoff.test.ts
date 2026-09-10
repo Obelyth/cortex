@@ -13,7 +13,7 @@ vi.mock("../lib/github", () => ({
 }));
 
 import { __setCache } from "../lib/corpus";
-import { __setBubbleStore, type BubbleRead } from "../lib/bubble";
+import { __setBubbleStore, type BubbleRead, type BubbleStore } from "../lib/bubble";
 import { __setStore } from "../lib/mirror";
 import type { EdgeRow } from "../lib/edges";
 import type { ScoreRow } from "../lib/mirror";
@@ -212,13 +212,8 @@ describe("renderHandoff — the cited bundle", () => {
     expect(text).toMatch(/included 4 of 4 candidate pieces · \d+\.\d KB of 24\.0 KB budget/);
   });
 
-  it("enforces the budget, keeps the project page anyway, and counts what fell out", () => {
-    // Room for the page piece and nothing else: everything after it is dropped and counted.
-    const { text } = renderHandoff(inputs({ budgetBytes: 130 }));
-    expect(text).toContain("the project page body");
-    expect(text).toContain("included 1 of 4 candidate pieces");
-    expect(text).not.toContain("resume at the tuning table");
-    expect(text).not.toContain("depth numbers");
+  it("rejects a budget that cannot hold the minimum truthful envelope", () => {
+    expect(() => renderHandoff(inputs({ budgetBytes: 130 }))).toThrow(/handoff budget 130 bytes is too small/);
   });
 
   it("bounds an enormous project page to its tail — the freshest end — and says so with the numbers", () => {
@@ -240,9 +235,37 @@ describe("renderHandoff — the cited bundle", () => {
     const i = inputs({ budgetBytes: 10_000 });
     i.files.set("projects/harbor.md", "x\n".repeat(50_000));
     const { text } = renderHandoff(i);
-    const m = text.match(/(\d+\.\d) KB of 10\.0 KB budget/);
-    expect(m).not.toBeNull();
-    expect(Number(m![1])).toBeLessThanOrEqual(10.0);
+    expect(new TextEncoder().encode(text).byteLength).toBeLessThanOrEqual(10_000);
+  });
+
+  it("counts the complete UTF-8 output envelope, including headings and coverage", () => {
+    const i = inputs({ budgetBytes: 4_000 });
+    i.files.set("projects/harbor.md", `${"界😀e\u0301".repeat(2_000)}\n`);
+    const rendered = renderHandoff(i);
+    expect(new TextEncoder().encode(rendered.text).byteLength).toBeLessThanOrEqual(4_000);
+    expect(rendered.text).not.toContain("�");
+    expect(rendered.decisions.find((d) => d.kind === "page")!.bytes).toBeGreaterThan(2_000);
+  });
+
+  it("retains the newest correction when one day has more project state than fits", () => {
+    const i = inputs({ budgetBytes: 4_000, edges: [], bubble: { state: "read", read: { items: [], total: 0, swept: 0 } } });
+    i.files.set(
+      "log/2026-08-10.md",
+      `# Log\n\n## 08:00 · harbor\n\nOLD STATE ${"x".repeat(3_000)}\n\n## 20:00 · harbor\n\nEVENING CORRECTION`
+    );
+    const { text } = renderHandoff(i);
+    expect(text).toContain("EVENING CORRECTION");
+    expect(text).not.toContain("OLD STATE");
+  });
+
+  it("renders a nonempty truthful tail for a one-line page ending in newline", () => {
+    const i = inputs({ budgetBytes: 4_000, edges: [], bubble: { state: "read", read: { items: [], total: 0, swept: 0 } } });
+    i.files.set("projects/harbor.md", `${"界".repeat(4_000)}\n`);
+    const { text, served } = renderHandoff(i);
+    expect(text).toContain("TAIL ONLY");
+    expect(text).toMatch(/WHY: .*TAIL ONLY[^\n]*---\n[^\n]+/);
+    expect(served).toContain("projects/harbor.md");
+    expect(text).not.toContain("�");
   });
 
   it("continues past an oversized piece rather than breaking — a huge log entry must not hide the neighbours", () => {
@@ -267,8 +290,8 @@ describe("renderHandoff — the cited bundle", () => {
     i.files.set("log/2026-08-10.md", `# Log 2026-08-10\n\n${entries}`);
     const { text } = renderHandoff(i);
     expect(text).toContain("notes/soundings.md · WHY: link"); // the neighbour still rides
-    expect(text).toContain("§ 08:00"); // the newest log entries still ride…
-    expect(text).not.toContain("§ 10:20"); // …but not all fifteen
+    expect(text).toContain("§ 10:20"); // the newest log entries ride…
+    expect(text).not.toContain("§ 08:00"); // …and the stale morning state yields first
   });
 
   it("rides a big neighbour as an announced head excerpt instead of dropping it whole", () => {
@@ -327,7 +350,6 @@ describe("assembleHandoff — the live entry", () => {
   function seed(fileEntries: Record<string, string>) {
     __setCache({
       files: files(fileEntries),
-      sidecar: new Map(),
       sha: "deadbeefcafe0000",
       bytes: 0,
       fetchedAt: Date.now(),
@@ -351,6 +373,18 @@ describe("assembleHandoff — the live entry", () => {
     expect(text).toContain("bubble absent on this deploy");
     expect(text).toContain("connections graph unavailable");
     expect(text).toMatch(/included 1 of 1 candidate pieces/);
+  });
+
+  it("requests the project scope before the bubble page limit and excludes general items", async () => {
+    seed({ "projects/harbor.md": "# Harbor" });
+    let scope: Parameters<BubbleStore["open"]>[0];
+    __setBubbleStore({
+      async open(value) { scope = value; return { items: [], total: 0, swept: 0 }; },
+      async add() { throw new Error("unused"); }, async update() { return null; },
+      async file() { return null; }, async drop() { return null; },
+    });
+    await assembleHandoff(" Projects/HARBOR.md ");
+    expect(scope).toEqual({ project: "harbor", includeGeneral: false });
   });
 
   it("clamps a caller budget below the floor instead of assembling nothing", async () => {

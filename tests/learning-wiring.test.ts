@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+/** A PostgREST-shaped page: the reader walks note_edges by Range, so a stub that ignored the
+ *  header answered the same rows on every page. Real PostgREST never does. */
+const rangeSlice = <T,>(rows: T[], init?: RequestInit): T[] => {
+  const range = new Headers(init?.headers).get("range");
+  if (!range) return rows;
+  const [from, to] = range.split("-").map(Number);
+  return rows.slice(from, to + 1);
+};
 import type { McpServer } from "@modelcontextprotocol/server";
 import type { Corpus } from "../lib/corpus";
+import { createHash } from "node:crypto";
 
 /**
  * The Learning knobs, wired — every test here proves a REAL code path changed, through the real
@@ -23,7 +32,6 @@ const corpus: Corpus = {
   sha: "eaf0a03e4849aaaa",
   bytes: 200,
   fetchedAt: Date.now(),
-  sidecar: new Map(),
   files: new Map([
     ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
     ["projects/harbor.md", "The plates backlog went into a deleted database."],
@@ -38,6 +46,11 @@ function fakeStore(seed: Record<string, string> = {}) {
   const state = { data, setOpts, sets: 0, incrs: 0 };
   vi.doMock("@upstash/redis", () => ({
     Redis: class {
+      eval(_script:string,keys:string[],args:string[]) {
+        if(args[0]!=="read")throw new Error("unexpected guest write");
+        const raw=data.get(keys[0])??"";
+        return Promise.resolve(["read",raw?JSON.parse(raw):"",createHash("sha1").update(raw||"cortex:guest:missing:v1").digest("hex")]);
+      }
       get(k: string) {
         return Promise.resolve(data.get(k) ?? null);
       }
@@ -72,6 +85,15 @@ function fakeStore(seed: Record<string, string> = {}) {
       }
     },
   }));
+  // The mock has to beat the module registry, not merely the imports written below it.
+  // vi.doMock redirects what is imported AFTER it, so a case that reached for vi.importActual
+  // first — the handoff budget one does, and lib/handoff pulls lib/brain → lib/access →
+  // lib/calls → lib/kv — has already cached a lib/kv holding the REAL Redis, and no later
+  // doMock can dislodge it. Dropping the registry here rebuilds every graph below against the
+  // fake whatever ran before. Without it the real client is constructed, its request lands on
+  // the stubbed global fetch, and the Upstash retry backoff keeps re-firing for seconds — into
+  // whichever test is running by then, whose fetch spy is left counting a call it never made.
+  vi.resetModules();
   vi.stubEnv(URL_KEY, "https://example.upstash.io");
   vi.stubEnv(TOK_KEY, "test-token");
   return state;
@@ -124,7 +146,7 @@ async function pinCorpus() {
 }
 
 beforeEach(() => {
-  vi.stubEnv("BRAIN_REPO", "acme/brain");
+  vi.stubEnv("BRAIN_REPO", "example-owner/brain");
   vi.stubEnv("GITHUB_TOKEN", "test");
   vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
   const head = (async (url: string | URL) => {
@@ -251,15 +273,28 @@ describe("the watch switches and the co-read floor", () => {
       { src: "notes/beta.md", dst: "projects/harbor.md", kind: "coaccess", weight, evidence: `co-read in ${weight} shared one-hour windows` },
     ]);
 
+  const PG_BASE = "https://x.supabase.co/rest/v1/";
+
   /** Postgres answers coaccess; the KV fake answers the learning read; GitHub is never asked
    *  because the corpus rides in as an argument. */
   function stubEdgeFetch(body: string) {
     vi.stubEnv("SUPABASE_URL", "https://x.supabase.co");
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "k");
-    const f = vi.fn(async () => new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }));
+    const rows = JSON.parse(body) as unknown;
+    const f = vi.fn(
+      async (_url: string | URL, init?: RequestInit) =>
+        new Response(JSON.stringify(Array.isArray(rows) ? rangeSlice(rows, init) : rows), { status: 200, headers: { "Content-Type": "application/json" } })
+    );
     vi.stubGlobal("fetch", f);
     return f;
   }
+
+  /** The Postgres round-trips, and only those. The spy stands in for the whole global fetch, so
+   *  "was it called at all" is a wider question than the one being asked: any other request that
+   *  happens to be in flight reads as a coaccess query the check never issued. The assertion
+   *  names Postgres, so it counts Postgres — and still fails when a real one is made. */
+  const pgCalls = (f: ReturnType<typeof stubEdgeFetch>) =>
+    f.mock.calls.filter(([url]) => String(url).startsWith(PG_BASE));
 
   it("an OFF check contributes zero items, and the coaccess read is skipped entirely", async () => {
     fakeStore({
@@ -269,7 +304,7 @@ describe("the watch switches and the co-read floor", () => {
     const { watchItems } = await import("../lib/inbox");
     const items = await watchItems({ files });
     expect(items.map((i) => i.kind)).toEqual(["correction-chain"]);
-    expect(f).not.toHaveBeenCalled(); // no Postgres round-trip for items that would be discarded
+    expect(pgCalls(f)).toEqual([]); // no Postgres round-trip for items that would be discarded
   });
 
   it("all three off: the queue is empty by construction", async () => {

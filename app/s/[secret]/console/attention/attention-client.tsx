@@ -94,15 +94,21 @@ export function AttentionClient({ queue }: { queue: Health["triage"] }) {
               — a decision worth making on purpose rather than inventing inside a design pass.
               What the console can do is carry you to the place the fix happens. */}
           <div className="triAct">
-            <a className="triActGo" href={`corpus?note=${encodeURIComponent(noteOf(q.loc))}`}>
-              open the note
-            </a>
-            <a
-              className="triActAsk"
-              href={`ask?q=${encodeURIComponent(`${q.title} — ${noteOf(q.loc)}. ${q.action}`)}`}
-            >
-              ask the brain about it
-            </a>
+            {/* A pending migration is a finding about the database, not about a note: there is
+                no page to open and nothing the brain can be asked. Copy carries the command. */}
+            {q.kind !== "pending-migration" && (
+              <>
+                <a className="triActGo" href={`corpus?note=${encodeURIComponent(noteOf(q.loc))}`}>
+                  open the note
+                </a>
+                <a
+                  className="triActAsk"
+                  href={`ask?q=${encodeURIComponent(`${q.title} — ${noteOf(q.loc)}. ${q.action}`)}`}
+                >
+                  ask the brain about it
+                </a>
+              </>
+            )}
             <button
               type="button"
               className="triActCopy"

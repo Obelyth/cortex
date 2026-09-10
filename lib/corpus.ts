@@ -2,14 +2,10 @@
  * corpus — the whole live brain, fetched in one shot.
  *
  * The old read path ranked a generated one-line summary of each note and opened the single
- * best file. Measured on the brain's own 185-label eval that is right 55% of the time; a
- * model given the actual text answers 97%. So cortex no longer decides what to read — it
- * ships the corpus and lets the reader read.
+ * best file. Summaries can omit the very terms needed to retrieve a note, so cortex now ships
+ * the selected text and lets the reader read.
  *
- * WHY A TARBALL. Spiked against the real private repo before this was written:
- *
- *   tarball        2 requests, ZERO rate-limit cost, 325 KB, gunzip+untar in 6 ms
- *   trees+blobs    1 tree request + 80 blob requests on a cold cache
+ * WHY A TARBALL. It needs a bounded number of requests without one blob request per file.
  *
  * `GET /repos/{o}/{r}/tarball/{ref}` 302s to codeload with a PRE-SIGNED url, so the second
  * hop needs no credentials — which matters because fetch() strips Authorization on a
@@ -23,50 +19,27 @@ import { promisify } from "node:util";
 import { gh, repo, branch, compareCommits } from "./github";
 import { mirrorStore, syncMirror, fetchFileAt, commitDateOf, type MirrorStore } from "./mirror";
 import { scheduleEdgeRebuild } from "./edges";
+import { deadlineIn, DeadlineExceeded, mirrorBudgetMs, raceDeadline, type Deadline } from "./deadline";
 
 const gunzip = promisify(zlib.gunzip);
 
-/** Excluded from the reader tier. archive/ is 45% of bytes and holds superseded material;
+/** Excluded from the reader tier. archive/ holds superseded material;
  *  a reader given both answers from the dead one. tools/ is code, not memory. */
 // Must stay identical to brain/tools/brain_ask.py SKIP_PREFIX and SKIP_NAMES. Two definitions
 // of "the live corpus" that disagree is the dual-implementation drift this rebuild exists to
-// delete; when they diverged, cortex saw 70 files to brain_ask's 77 and nobody would have
-// noticed until an answer was silently missing. Exported for the parity checks: the live
+// delete; when they diverge, an answer can silently miss a note. Exported for parity checks: the live
 // differential in tests/no-brain-leakage.test.ts reads the real python source from the brain
 // checkout and runs in the brain-gate; tests/corpus.test.ts pins the shape brain-free.
 // ".claude/" is the nested-worktree guard: Claude Code's EnterWorktree checks out at
-// .claude/worktrees/<name>/ INSIDE the repo, a full second copy of every file — measured
-// 2026-08-18, it near-doubled the reader's corpus and re-admitted retired archive content as
-// current. Cortex reads the committed tree where .gitignore already blocks these, so this
+// .claude/worktrees/<name>/ INSIDE the repo, a full second copy of every file. That can duplicate
+// the reader corpus and re-admit retired archive content as current. Cortex reads the committed
+// tree where .gitignore already blocks these, so this
 // entry is parity with brain_ask.py's filesystem walk, not a live hole here.
 export const SKIP_PREFIX = [".git/", ".claude/", "tools/", "archive/", "brain-v2/", ".github/"];
 export const SKIP_NAME = ["brain-index.md", "INDEX.md", "README.md"];
 
-/**
- * Files that ride the brain tarball but are NOT notes.
- *
- * The atlas snapshot is an inventory of the operator's machine, not something the brain should ever
- * answer from, so it must never reach `files` — that map is what brain_ask and brain_corpus
- * read. It lives under tools/, which isLive() already excludes, and is matched here by exact
- * path: no prefix test, so none of the `./tools/…` traversal bypasses isLive has can reach it.
- */
-const SIDECAR = new Set(["tools/atlas-snapshot.json"]);
-
-export function isSidecar(path: string): boolean {
-  return SIDECAR.has(path);
-}
-
-/** The sidecar paths, for callers that must EXCLUDE them — a mirror row-count that includes a
- *  sidecar is not a count of notes, and two cards disagreeing by one "note" reads as a broken
- *  sync to anyone who has not read this file. */
-export function sidecarPaths(): string[] {
-  return [...SIDECAR];
-}
-
 export interface Corpus {
   files: Map<string, string>;
-  /** Non-note files carried by the same tarball. Never part of "the corpus". */
-  sidecar: Map<string, string>;
   sha: string;
   bytes: number;
   fetchedAt: number;
@@ -212,11 +185,7 @@ export function untar(buf: Buffer, keep: (path: string) => boolean = () => true)
     } else if ((type === "1" || type === "2") && keep(rel)) {
       // A symlinked or hardlinked NOTE carries no payload here, and dropping it would make a
       // real note invisible with no signal — exactly the failure this reader keeps having.
-      // A symlinked SIDECAR is different: its contract is "absence is a non-event", so killing
-      // the entire brain over it would invert the design. It degrades to absent instead.
-      if (!isSidecar(rel)) {
-        throw new Error(`corpus contains a link, not a file: "${rel}". Replace it with a regular file.`);
-      }
+      throw new Error(`corpus contains a link, not a file: "${rel}". Replace it with a regular file.`);
     }
     advance();
   }
@@ -224,8 +193,8 @@ export function untar(buf: Buffer, keep: (path: string) => boolean = () => true)
 }
 
 /** Resolve the branch head. One cheap call, and it is what the cache is keyed on. */
-async function headSha(): Promise<string> {
-  const res = await gh(`/repos/${repo()}/commits/${branch()}`);
+async function headSha(deadline?: Deadline): Promise<string> {
+  const res = await gh(`/repos/${repo()}/commits/${branch()}`, { deadline });
   if (!res.ok) throw new Error(`cannot resolve ${branch()}: HTTP ${res.status}`);
   return ((await res.json()) as { sha: string }).sha;
 }
@@ -243,86 +212,71 @@ const MAX_TAR_BYTES = 64 * 1024 * 1024;
  * which must load exactly the file set the corpus is built from — one loader, one definition of
  * what rides the mirror, no second implementation to drift.
  */
-export async function loadFilesAt(sha: string): Promise<Map<string, string>> {
-  const res = await gh(`/repos/${repo()}/tarball/${sha}`);
+export async function loadFilesAt(sha: string, deadline?: Deadline): Promise<Map<string, string>> {
+  const res = await gh(`/repos/${repo()}/tarball/${sha}`, { deadline });
   if (!res.ok) throw new Error(`tarball fetch failed: HTTP ${res.status}`);
   const gz = Buffer.from(await res.arrayBuffer());
   const tar = await gunzip(gz, { maxOutputLength: MAX_TAR_BYTES });
-  // The predicate is passed in so entries that are neither a note nor a known sidecar are never
-  // decoded into strings at all.
-  return new Map(untar(tar, (p) => isLive(p) || isSidecar(p)));
+  // Retired visualization assets and every other non-note entry are never decoded or retained.
+  return new Map(untar(tar, isLive));
 }
 
 /** Assemble a Corpus from a flat file set, whichever loader produced it. */
 function assemble(all: Map<string, string>, sha: string): Corpus {
   const files = new Map<string, string>();
-  const sidecar = new Map<string, string>();
   let bytes = 0;
   for (const [path, text] of all) {
-    if (isSidecar(path)) {
-      // Deliberately kept out of `files` and out of `bytes`: the reader is only ever handed the
-      // corpus, and the token gauge measures the corpus.
-      sidecar.set(path, text);
-      continue;
-    }
+    // A mirror can still hold pre-retirement non-note rows. Ignore them without mutating the
+    // customer's store; only live notes enter the corpus or its byte count.
+    if (!isLive(path)) continue;
     files.set(path, text);
     bytes += Buffer.byteLength(text, "utf8");
   }
   if (files.size === 0) throw new Error("corpus contained no live notes — refusing to serve");
-  return { files, sidecar, sha, bytes, fetchedAt: Date.now() };
+  return { files, sha, bytes, fetchedAt: Date.now() };
 }
 
-async function build(sha: string): Promise<Corpus> {
-  return assemble(await loadFilesAt(sha), sha);
+async function build(sha: string, deadline?: Deadline): Promise<Corpus> {
+  return assemble(await loadFilesAt(sha, deadline), sha);
 }
 
 /**
  * The corpus served from the Postgres mirror, healed first when it is behind.
  *
  * The mirror never gets to be wrong quietly: sync runs before serving, rows are partitioned by
- * the same isLive/isSidecar the tarball path uses, and an empty result throws — which the caller
+ * the same isLive predicate the tarball path uses, and an empty result throws — which the caller
  * treats as "use the tarball", never as "the brain is empty". The keep predicate is bound HERE,
  * so the one definition of "the live corpus" stays in this file.
  */
-async function buildFromMirror(store: MirrorStore, sha: string): Promise<Corpus> {
-  // head() and all() were awaited in series, and they do not depend on each other. Measured
-  // against the live store: head ~160-470 ms, all ~185-210 ms for 92 rows / 711 KB, and the
-  // reconcile between them is 0 ms whenever the mirror is already at head — which is the normal
-  // case. Two sequential round-trips for one answer.
-  //
-  // So both start together. The rows are read OPTIMISTICALLY, on the bet that no sync is needed,
-  // which is the bet that is right almost every time.
-  const headPromise = store.head();
-  const optimisticRows = store.all();
-  // Nothing may observe a rejection later than its await, or Node reports an unhandled rejection
-  // and the process notices a failure the code has already handled.
-  optimisticRows.catch(() => undefined);
+async function buildFromMirror(store: MirrorStore, sha: string, deadline: Deadline): Promise<Corpus> {
+  const initial = await store.snapshot();
+  const before = initial.head;
+  if (before === sha) {
+    return assemble(new Map(initial.rows.map((row) => [row.path, row.content])), sha);
+  }
 
-  // The head the store ACTUALLY holds after syncing, which is not always the one we asked for:
-  // when another instance wins the CAS its state is the truth and ours was never applied.
-  // Stamping the corpus with the requested sha in that case attributed every citation to a
-  // commit whose content we are not serving — a VERIFIED stamp on a false provenance claim.
-  const before = await headPromise;
-  const head = await syncMirror(store, before, sha, {
-    compare: (base, head) => compareCommits(base, head, (p) => isLive(p) || isSidecar(p)),
+  await syncMirror(store, before, sha, {
+    compare: (base, head) => compareCommits(base, head, isLive),
     fetchAt: fetchFileAt,
     commitDate: commitDateOf,
-    fullLoad: loadFilesAt,
+    fullLoad: (at) => loadFilesAt(at, deadline),
   });
-
-  // The bet, settled. If the sync moved the head then the optimistic read is of the PREVIOUS
-  // state and must be discarded — serving it would attribute the old content to the new commit,
-  // which is the false-provenance failure the comment above exists to prevent. Correctness is
-  // never traded for the round-trip; the re-read only happens when something actually changed.
-  const rows = head === before ? await optimisticRows : await store.all();
-  const corpus = assemble(new Map(rows.map((r) => [r.path, r.content])), head);
-  // A reconcile that advanced the head is the moment the connections graph went stale — and the
-  // moment the fresh corpus is already sitting in memory, so the rebuild costs zero extra reads.
-  // Scheduled via after(), never awaited: the graph is an observation of the corpus, and nothing
-  // that serves notes may wait on it (lib/edges.ts). The builder itself skips when the graph
-  // already describes this head, so a lost race here re-triggers at most one cheap check.
-  if (head !== before) scheduleEdgeRebuild(corpus.files, head);
+  const after = await store.snapshot();
+  if (!after.head) throw new Error("mirror: snapshot remained uninitialized after reconciliation");
+  const head = after.head;
+  const corpus = assemble(new Map(after.rows.map((row) => [row.path, row.content])), head);
   return corpus;
+}
+
+/** What a caller may hand loadCorpus besides `force`. */
+export interface LoadCorpusOptions {
+  /**
+   * The request's deadline, when the load rides inside a tool call. Every stage below — the
+   * head lookup, the mirror race, the tarball — spends from it instead of from its own fixed
+   * ceiling, so the stages compose under the function wall. Absent (scripts, tests, the console's
+   * own renders) a fresh request-sized deadline stands in, which is the old behaviour exactly.
+   */
+  deadline?: Deadline;
 }
 
 /**
@@ -331,29 +285,42 @@ async function buildFromMirror(store: MirrorStore, sha: string): Promise<Corpus>
  * Never returns partially-read state: a failed fetch throws and the caller reports it,
  * rather than answering from half a brain — the failure mode the old index path had.
  */
-export async function loadCorpus(force = false): Promise<Corpus> {
+export async function loadCorpus(force = false, opts: LoadCorpusOptions = {}): Promise<Corpus> {
+  const deadline = opts.deadline ?? deadlineIn();
   let sha: string;
   try {
-    sha = await headSha();
+    sha = await headSha(deadline);
   } catch (e) {
     // GitHub 5xx and secondary rate limits are routine. Throwing here meant a complete,
     // already-verified corpus sat in memory while the brain reported failure. Serving it is
     // not "half a brain" — it is whole, just possibly one commit behind, and every answer
     // already carries the commit it was proven against, so the staleness stays visible.
     if (!force && cached) {
-      console.error(`[corpus] head resolution failed, serving cache @${cached.sha}: ${String(e)}`);
+      if (e instanceof DeadlineExceeded) {
+        console.error("[corpus] head resolution deadline exceeded, serving cache");
+      } else {
+        console.error("[corpus] head resolution failed, serving cache");
+      }
+      scheduleEdgeRebuild(cached.files, cached.sha);
       return cached;
     }
     throw e;
   }
-  if (!force && cached?.sha === sha) return cached;
+  if (!force && cached?.sha === sha) {
+    scheduleEdgeRebuild(cached.files, cached.sha);
+    return cached;
+  }
 
+  // A second caller joins the first build and inherits ITS deadline. Two concurrent tool calls
+  // start within milliseconds of each other, so the difference is noise; the alternative — a
+  // second full fetch per caller — is the duplication this map exists to prevent.
   const existing = inFlight.get(sha);
   if (existing) return existing;
 
-  const p = buildVia(sha)
+  const p = buildVia(sha, deadline)
     .then((c) => {
       cached = c;
+      scheduleEdgeRebuild(c.files, c.sha);
       return c;
     })
     .finally(() => inFlight.delete(sha));
@@ -369,39 +336,115 @@ export async function loadCorpus(force = false): Promise<Corpus> {
  * one throws immediately and the tarball serves. The race's loser keeps running in the
  * background; if it eventually completes its apply, the CAS decides as usual.
  */
-const MIRROR_DEADLINE_MS = 20_000;
+export const MIRROR_DEADLINE_MS = 20_000;
+
+/**
+ * What the mirror race leaves for the tarball that serves when it loses: one GitHub round trip,
+ * github.ts's REQUEST_TIMEOUT_MS. A literal rather than the import because half the test suite
+ * mocks ./github wholesale; tests/deadline.test.ts pins the two equal. Without the reserve a
+ * mirror that spent the whole remaining budget would hand the fallback nothing, and "mirror slow"
+ * would become "no corpus at all".
+ */
+export const TARBALL_RESERVE_MS = 15_000;
 
 /**
  * Mirror when configured and healthy, tarball otherwise — and "otherwise" is the ordinary path,
  * not an emergency: with no SUPABASE_URL this function IS yesterday's build(), byte for byte of
  * behaviour. A mirror failure is logged and absorbed, because a memory server that goes dark
  * when its cache layer hiccups has its priorities backwards.
+ *
+ * The race's ceiling is the mirror's own cap or what the request has left after the tarball's
+ * reserve, whichever is smaller; a request too far gone to give the mirror a real turn skips it
+ * and lets the tarball spend what remains. Either way the fallback stays inside the budget.
  */
-async function buildVia(sha: string): Promise<Corpus> {
+async function buildVia(sha: string, deadline: Deadline): Promise<Corpus> {
   const store = mirrorStore();
   if (store) {
-    try {
-      let timer: NodeJS.Timeout | undefined;
-      const deadline = new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`mirror: exceeded ${MIRROR_DEADLINE_MS}ms total budget`)),
-          MIRROR_DEADLINE_MS
-        );
-        timer.unref?.();
-      });
+    const budget = mirrorBudgetMs(MIRROR_DEADLINE_MS, deadline.remaining(), TARBALL_RESERVE_MS);
+    if (budget === 0) {
+      console.error(`[mirror] skipped: ${deadline.remaining()}ms left in the request — serving tarball`);
+    } else {
       try {
-        return await Promise.race([buildFromMirror(store, sha), deadline]);
-      } finally {
-        clearTimeout(timer);
+        return await raceDeadline(
+          buildFromMirror(store, sha, deadline),
+          budget,
+          () => new DeadlineExceeded("mirror", budget, true, `mirror: exceeded ${budget}ms total budget`)
+        );
+      } catch (e) {
+        console.error(`[mirror] serving tarball instead: ${String(e)}`);
       }
-    } catch (e) {
-      console.error(`[mirror] serving tarball instead: ${String(e)}`);
     }
   }
-  return build(sha);
+  return build(sha, deadline);
 }
 
 /** Test seam and a way to force a cold path in production if the cache is ever suspect. */
 export function __setCache(c: Corpus | null): void {
   cached = c;
+}
+
+/* ── What the reader never sees ─────────────────────────────────────────────────────────── */
+
+/** One file outside the reader tier: its path and its size, and nothing else. */
+export interface SkippedFile {
+  path: string;
+  bytes: number;
+}
+
+export interface Skipped {
+  sha: string;
+  files: SkippedFile[];
+}
+
+/** The one skipped prefix that holds notes rather than code: archive/ (tools/ is code, the
+ *  dot-directories are plumbing). This is the set listSkipped() describes. */
+export const SKIPPED_NOTES_PREFIX = "archive/";
+
+export function isSkippedNote(path: string): boolean {
+  return /\.md$/i.test(path) && path.startsWith(SKIPPED_NOTES_PREFIX);
+}
+
+let skippedCache: Skipped | null = null;
+
+/** Test seam, same contract as __setCache. */
+export function __setSkipped(s: Skipped | null): void {
+  skippedCache = s;
+}
+
+/**
+ * archive/ as a listing — paths and sizes — for the console's explorer (approved console design):
+ * "the brain does not know" and "the brain filed it away" are different answers, and the
+ * operator should be able to see which one they got.
+ *
+ * READ-ONLY AND DISPLAY-ONLY, BY CONSTRUCTION. This never returns text, so nothing that
+ * consumes it can hand a skipped note to narrow(), buildPrompt() or the reader: the type has no
+ * body to pack. It is a second, separate loader beside loadCorpus() rather than a flag on it,
+ * because "the live corpus" must keep exactly one definition (isLive) and this is not part of it.
+ * The mirror never holds archive/ either, so the tarball is the only source; a listing that
+ * cannot be made returns null and the explorer says so, rather than an empty archive/ that would
+ * read as "nothing was ever filed away".
+ */
+export async function listSkipped(): Promise<Skipped | null> {
+  let sha: string;
+  try {
+    sha = await headSha();
+  } catch (e) {
+    if (skippedCache) return skippedCache;
+    console.error(`[corpus] archive/ not listed — head resolution failed: ${String(e)}`);
+    return null;
+  }
+  if (skippedCache?.sha === sha) return skippedCache;
+  try {
+    const res = await gh(`/repos/${repo()}/tarball/${sha}`);
+    if (!res.ok) throw new Error(`tarball fetch failed: HTTP ${res.status}`);
+    const tar = await gunzip(Buffer.from(await res.arrayBuffer()), { maxOutputLength: MAX_TAR_BYTES });
+    const files = untar(tar, isSkippedNote)
+      .map(([path, text]) => ({ path, bytes: Buffer.byteLength(text, "utf8") }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    skippedCache = { sha, files };
+    return skippedCache;
+  } catch (e) {
+    console.error(`[corpus] archive/ not listed this render — the reader tier is unaffected: ${String(e)}`);
+    return skippedCache;
+  }
 }

@@ -1,0 +1,504 @@
+/**
+ * Settings — v2 (the Claude Design canvas "Cortex Console v2", screen-settings.html).
+ *
+ * The same controls the screen always had, restated as instrument panels: a band carrying the
+ * headline, the saved line and the store chip; then one group per decision — a mono eyebrow,
+ * a lede and a number square at left, the rows at right under one rule. A switch is a pill on
+ * a trough with a lit knob; a stepper is a raised bezel around a tabular figure; a select sits
+ * in a sunk well. Every value is a v2 token, so the paper ground comes for free; disabled reads
+ * through --disabled and --hair, never through opacity. Targets are 44px: the small pills and
+ * chips extend their hit area with a pseudo-element rather than growing on screen.
+ *
+ * Every class here is `set*` and every `set*` class the markup names has a rule here
+ * (tests/settings-classes.test.ts).
+ */
+
+/* ── The band: headline · saved line · store chip ───────────────────────── */
+.setRoot { position: relative; }
+.setMast {
+  position: relative;
+  margin: -44px calc(50% - 50vw) 0;
+  width: 100vw;
+  background: var(--band);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--well), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px);
+  background-size: 3px 3px;
+}
+.setMastIn {
+  max-width: 1080px; margin: 0 auto; padding: 32px 28px 22px; box-sizing: border-box;
+  display: flex; align-items: end; justify-content: space-between; gap: 20px; flex-wrap: wrap;
+}
+.setMastText { min-width: 0; flex: 1 1 320px; }
+.setTitle {
+  font-family: var(--display); font-size: clamp(26px, 3vw, 38px); font-weight: 500;
+  line-height: 1.05; letter-spacing: -0.02em; margin: 0; color: var(--bright); text-wrap: balance;
+}
+.setTitle b { font-weight: 800; font-variation-settings: var(--display-wide); }
+.setSubline { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 10px; line-height: 1.6; }
+.setSaved { color: var(--faint); }
+.setStore {
+  display: inline-block; padding: 3px 9px; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.12em; text-transform: uppercase; border: 1px solid currentColor;
+  border-radius: var(--r-chip); white-space: nowrap;
+}
+.setStoreOn { color: var(--accent); }
+.setStoreHeld { color: var(--warn); }
+
+/* ── The sheet ──────────────────────────────────────────────────────────── */
+.setSheet { max-width: 1080px; margin: 0 auto; padding: 0 28px 72px; box-sizing: border-box; }
+@media (max-width: 900px) { .setMastIn, .setSheet { padding-left: 14px; padding-right: 14px; } }
+
+/* A refused write, verbatim, under one red rule. Conflicts the store reports use the same line. */
+.setRefused {
+  margin-top: 16px; padding: 10px 0; border-bottom: 1px solid var(--crit);
+  font-family: var(--mono); font-size: 12px; color: var(--crit); line-height: 1.5;
+}
+/* A refused copy: the sentence and the reveal verb on one line; the exact text, if any, only
+   after that click, in the same sunk pre as the masked snippet. */
+.setRefusedRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.setRefusedPre { margin-top: 10px; }
+/* A panel whose store is down says so at the top of its rows, in amber, and holds. */
+.setHeld {
+  padding: 10px 0; border-bottom: 1px solid var(--hair);
+  font-family: var(--mono); font-size: 11px; color: var(--warn); line-height: 1.5;
+}
+
+/* ── A group: eyebrow, lede, number square · the rows under one rule ─────── */
+/* An intrinsic track, as the canvas has it, not a fixed third. A hard 1fr/2fr held all the way
+   down to the 760px breakpoint, so between roughly 760 and 1040 the lede column sat at about
+   34 characters and the explanation broke into four or five stub lines while two thirds of the
+   row stood empty beside it. auto-fit drops to one column when the columns can no longer earn
+   their width, instead of holding a shape that has stopped working. */
+.setGroup {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 20px 40px; padding: 32px 0 0;
+}
+.setGroupHead { min-width: 0; }
+.setEyebrow {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--bright); white-space: nowrap; margin: 0;
+}
+.setLede { font-size: 14px; color: var(--muted); margin: 10px 0 0; line-height: 1.55; text-wrap: pretty; max-width: 44ch; }
+/* The number square: an inverted, grained, bezelled 44px tile. Pops in once the kinetic layer arms. */
+.setN {
+  margin-top: 16px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+  background: var(--inv-bg); color: var(--inv-fg);
+  background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px;
+  box-shadow: var(--bezel); border-radius: var(--r);
+  font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.1em;
+}
+.conRoot.cxReady .setN { animation: cx-pop 360ms var(--ease) 160ms backwards; }
+/* 1 / -1, not span 2. auto-fit decides the track count from the CONTAINER; the media query below
+   was deciding the span from the VIEWPORT, and the two disagree wherever the container is not the
+   window. Measured: inside .setSheet the container is viewport - 56px, so with the query's 16px gap
+   two 300px tracks still fit from a 644px container, i.e. a 700px viewport — well under the 760px
+   at which the query assumed one column and told the panel to span one. Between 672 and 760px the
+   panel therefore rendered at half width beside empty space. "1 / -1" means the whole row whatever
+   the row is, so no viewport number has to be kept in sync with a container. */
+.setPanel { min-width: 0; position: relative; border-top: 1px solid var(--line); grid-column: 1 / -1; }
+/* The groups arrive in sequence: one delay per group, in the sheet, never inline. */
+.setGroup:nth-of-type(2) { --cx-d: 60ms; }
+.setGroup:nth-of-type(3) { --cx-d: 120ms; }
+.setGroup:nth-of-type(4) { --cx-d: 180ms; }
+.setGroup:nth-of-type(5) { --cx-d: 240ms; }
+@media (max-width: 760px) {
+  /* auto-fit already collapses the columns, and .setPanel spans 1 / -1, so neither needs saying. */
+  .setGroup { gap: 16px; }
+  .setN { margin-top: 12px; }
+}
+
+/* ── A row: title and a one-line sub at left, the control at right ───────── */
+.setRow {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 20px; align-items: center;
+  padding: 13px 0; border-bottom: 1px solid var(--hair); min-height: 60px; box-sizing: border-box;
+}
+.setRowBody { min-width: 0; flex: 1 1 220px; }
+.setLabel { display: block; font-size: 14px; font-weight: 500; color: var(--bright); }
+.setSub { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 3px; line-height: 1.5; overflow-wrap: anywhere; }
+.setCtl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+/* A locked switch says so in words — dimming it read as a third state (neither on nor off). */
+.setLock {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--faint); white-space: nowrap; flex: none;
+}
+
+/* ── The switch: a pill on a trough, a lit knob ──────────────────────────── */
+.setSwt {
+  position: relative; width: 46px; height: 26px; flex: none; padding: 0; margin: 9px 0;
+  border: 1px solid var(--line); background: var(--sunk); cursor: pointer;
+  box-shadow: var(--trough); border-radius: 13px;
+  transition: background-color 180ms var(--ease), border-color 180ms var(--ease);
+}
+/* The 44px target, without a 44px pill. */
+.setSwt::before { content: ""; position: absolute; inset: -10px -4px; }
+.setKnob {
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; background: var(--muted);
+  border-radius: 50%; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 2px rgba(0, 0, 0, 0.35);
+  transform: translateX(0); transition: transform 180ms var(--ease), background-color 180ms var(--ease);
+}
+.setSwt[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+.setSwt[aria-checked="true"] .setKnob { transform: translateX(20px); background: var(--accent-on); }
+.setSwt:disabled { cursor: default; background: var(--sunk); border-color: var(--hair); }
+.setSwt:disabled .setKnob { background: var(--disabled); }
+
+/* ── The stepper: a raised bezel around a tabular figure ────────────────── */
+.setStep {
+  display: inline-flex; align-items: center; flex: none;
+  border: 1px solid var(--line); border-radius: var(--r-chip); box-shadow: var(--bezel); background: var(--surface);
+}
+.setStepBtn {
+  width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink); cursor: pointer;
+  font-family: var(--mono); font-size: 15px; white-space: nowrap; border-radius: var(--r-chip);
+  transition: background-color 120ms var(--ease);
+}
+.setStepBtn:hover:enabled { background: var(--surface2); }
+.setStepBtn:disabled { color: var(--disabled); cursor: default; }
+.setStepVal {
+  min-width: 76px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--bright);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.setStep[aria-disabled="true"] { border-color: var(--hair); box-shadow: none; }
+.setStep[aria-disabled="true"] .setStepVal { color: var(--muted); }
+
+/* ── The select: the platform control in a sunk well ─────────────────────── */
+.setSelect {
+  height: 44px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--sunk); color: var(--ink); font-family: var(--mono); font-size: 12px;
+  white-space: nowrap; box-shadow: var(--well); cursor: pointer; max-width: 100%;
+}
+.setSelect:disabled { color: var(--disabled); border-color: var(--hair); cursor: default; }
+
+/* ── Chips: pressed is the accent field ──────────────────────────────────── */
+.setChips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.setChip {
+  position: relative; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-chip);
+  background: transparent; color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 11px;
+  white-space: nowrap; transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.setChip::before { content: ""; position: absolute; inset: -4px 0; }
+.setChip:hover:enabled { background: var(--surface2); }
+.setChip[aria-pressed="true"] { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.setChip:disabled { color: var(--disabled); border-color: var(--hair); cursor: default; }
+.setChip[aria-pressed="true"]:disabled { background: var(--sunk); color: var(--disabled); border-color: var(--hair); }
+
+/* ── A text value at the right of a row ──────────────────────────────────── */
+/* margin-left auto, so a value that wraps onto its own line still sits at the right. */
+.setVal { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink); text-align: right; white-space: nowrap; }
+.setValOn { color: var(--accent); }
+.setValOff { color: var(--faint); }
+.setValMuted { color: var(--muted); white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+
+/* ── A plain button: the one verb a row may carry (clear now · rebuild · copy) ── */
+.setBtn {
+  min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-chip);
+  background: var(--surface); color: var(--ink); cursor: pointer; box-shadow: var(--bezel);
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+  transition: background-color 120ms var(--ease), border-color 120ms var(--ease);
+}
+.setBtn:hover:enabled { background: var(--surface2); border-color: var(--muted); }
+.setBtn:disabled { color: var(--disabled); border-color: var(--hair); box-shadow: none; cursor: default; }
+
+/* ── Capability setup: value-free status rows; write-only fields live in the shared lens ── */
+.setConfigRows { display: grid; border-bottom: 1px solid var(--line); }
+.setConfigRows > .setConfigProject { padding: 12px 0; margin: 0; border-bottom: 1px solid var(--hair); }
+/* Three tracks with no pixel floor: a floor of 660px inside a ~592px auto-fit column overflowed
+   the sheet at 1280. Below 1100px the three facts stack, the width where they stop fitting. */
+.setConfigRow {
+  /* Environment-reference links must land below the 52px sticky navigation. */
+  scroll-margin-top: 64px;
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.4fr);
+  gap: 12px 20px; align-items: center; min-height: 66px; padding: 11px 0;
+  border: 0; border-bottom: 1px solid var(--hair); background: transparent; color: inherit;
+  text-align: left; cursor: pointer;
+}
+.setConfigRow:hover { background: var(--glass); }
+.setConfigFact { font-family: var(--mono); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+.setConfigEditor { display: grid; gap: 14px; }
+.setConfigProject, .setConfigState, .setConfigStatus { margin: 0; font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.setConfigProject b { color: var(--bright); }
+.setConfigLabel { display: grid; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.setConfigInput {
+  width: 100%; min-height: 44px; box-sizing: border-box; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--sunk); color: var(--ink);
+  font-family: var(--mono); font-size: 12px; box-shadow: var(--well);
+}
+.setConfigWarn { margin: 0; color: var(--warn); font-size: 13px; line-height: 1.55; text-wrap: pretty; }
+.setConfigActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.setConfigDeploy { color: var(--accent); font-family: var(--mono); font-size: 11px; width: fit-content; }
+@media (max-width: 1100px) {
+  .setConfigRow { grid-template-columns: minmax(0, 1fr); gap: 7px; }
+}
+
+/* ── Operations permissions: read-only provider setup and recovery path ─── */
+.setOps { min-width: 0; padding: 18px 0 22px; border-bottom: 1px solid var(--line); }
+.setOpsIntro { display: grid; grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr); gap: 16px 28px; align-items: baseline; }
+.setOpsIntro h3 {
+  margin: 0; font-size: 18px; font-weight: 650; color: var(--bright); scroll-margin-top: 64px;
+}
+.setOpsIntro p { margin: 0; max-width: 70ch; color: var(--muted); font-size: 13px; line-height: 1.6; text-wrap: pretty; }
+.setOpsRequirements { margin-top: 18px; border-top: 1px solid var(--line); }
+.setOpsRequirement { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--hair); }
+.setOpsHead { display: flex; justify-content: space-between; gap: 12px 24px; align-items: flex-start; flex-wrap: wrap; }
+.setOpsTitle { min-width: 0; flex: 1 1 420px; }
+.setOpsTitle h4 {
+  margin: 0; color: var(--bright); font-size: 14px; font-weight: 600; scroll-margin-top: 64px;
+}
+.setOpsTitle p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; max-width: 72ch; text-wrap: pretty; }
+.setOpsState {
+  flex: none; border: 1px solid currentColor; border-radius: var(--r-chip); padding: 3px 8px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; line-height: 1.4; text-transform: uppercase;
+}
+.setOpsState-missing { color: var(--warn); }
+.setOpsState-invalid { color: var(--crit); }
+.setOpsState-present-unverified { color: var(--muted); }
+.setOpsIdentities { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 12px 0 0; }
+.setOpsIdentities div { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-width: 0; }
+.setOpsIdentities dt { color: var(--faint); font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; }
+.setOpsIdentities dd { min-width: 0; margin: 0; color: var(--ink); font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
+.setOpsBlocked { margin: 10px 0 0; color: var(--warn); font-family: var(--mono); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.setOpsNextRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; margin-top: 10px; }
+.setOpsNext, .setOpsAction {
+  min-height: 44px; box-sizing: border-box; display: inline-flex; align-items: center; padding: 8px 13px;
+  border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent; color: var(--ink);
+  font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; line-height: 1.3;
+  text-decoration: none; text-transform: uppercase; cursor: pointer;
+}
+.conRoot .setOpsNext:hover, .conRoot .setOpsAction:hover { border-color: var(--muted); color: var(--bright); text-decoration: none; }
+.setOpsDetails { min-width: min(100%, 460px); flex: 1 1 460px; color: var(--muted); }
+.setOpsDetails summary { width: fit-content; min-height: 44px; box-sizing: border-box; display: list-item; padding: 12px 0; cursor: pointer; color: var(--accent); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.setOpsDetails div { max-width: 74ch; padding: 0 0 2px; }
+.setOpsDetails p { margin: 6px 0 0; font-size: 12px; line-height: 1.6; text-wrap: pretty; }
+.setOpsDetails code { color: var(--ink); font-family: var(--mono); font-size: 0.94em; overflow-wrap: anywhere; }
+.setOpsDeployment { margin-top: 18px; padding: 14px 16px; background: var(--sunk); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--trough); }
+.setOpsDeployment b { color: var(--bright); font-size: 13px; }
+.setOpsDeployment p { margin: 5px 0 0; max-width: 74ch; color: var(--muted); font-size: 12px; line-height: 1.6; text-wrap: pretty; }
+.setOpsActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; }
+.setOpsActions span { min-width: min(100%, 280px); flex: 1 1 360px; color: var(--faint); font-family: var(--mono); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+  .setOpsIntro { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .setOpsNextRow { align-items: flex-start; }
+  .setOpsDetails { flex-basis: 100%; }
+}
+
+/* ── Readers · the record: rows a click opens in the lens ────────────────── */
+.setRec { margin-top: 22px; }
+.setRecHead {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+.setRecNote { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.setRecCols, .setRecRow {
+  display: grid; grid-template-columns: minmax(0, 1.4fr) 92px minmax(0, 1fr) 56px; gap: 10px; align-items: center;
+}
+.setRecCols {
+  padding: 8px 0; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--faint); white-space: nowrap;
+}
+.setRecRow {
+  width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--hair); background: transparent;
+  color: inherit; text-align: left; cursor: pointer; font: inherit; border-radius: 0;
+  transition: background-color 120ms var(--ease);
+}
+.setRecRow:hover { background: var(--glass); }
+.setRecModel {
+  display: block; font-family: var(--mono); font-size: 12px; color: var(--bright);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.setRecDefault { color: var(--accent); }
+.setRecSub { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setRecEval {
+  display: inline-block; justify-self: start; padding: 2px 7px; font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip);
+  color: var(--faint); white-space: nowrap;
+}
+.setRecEvalOk { color: var(--ok); }
+.setRecEvalWarn { color: var(--warn); }
+.setRecNum { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 560px) {
+  .setRecCols, .setRecRow { grid-template-columns: minmax(0, 1fr) 72px; }
+  .setRecCols > :nth-child(n + 3), .setRecRow > :nth-child(n + 3) { display: none; }
+}
+
+/* ── The reader in the lens (L11) ────────────────────────────────────────── */
+.setLensTag {
+  display: inline-block; padding: 2px 8px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em;
+  text-transform: uppercase; border: 1px solid currentColor; border-radius: var(--r-chip); color: var(--muted); white-space: nowrap;
+}
+.setLensTagOn { color: var(--accent); }
+.setLensId { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; margin-top: 8px; }
+.setLensDesc { font-size: 14px; line-height: 1.55; margin: 0; color: var(--ink); text-wrap: pretty; }
+.setLensKv { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; }
+.setLensK {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint);
+  padding: 8px 0; border-top: 1px solid var(--hair); white-space: nowrap;
+}
+.setLensV { margin: 0; font-family: var(--mono); font-size: 12px; color: var(--ink); padding: 8px 0; border-top: 1px solid var(--hair); overflow-wrap: anywhere; }
+.setLensTies {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+  margin-top: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.setLensTie {
+  display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; align-items: baseline;
+  padding: 9px 0; border-bottom: 1px solid var(--hair); color: var(--ink);
+}
+.setLensTieKind { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.setLensTieLabel { display: block; font-size: 13px; }
+.setLensTieWhy { display: block; font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 2px; }
+.setLensEmpty { font-family: var(--mono); font-size: 11px; color: var(--faint); padding: 9px 0; }
+.setLensActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.setLensBtn {
+  min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent;
+  color: var(--ink); cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; white-space: nowrap; flex: none; transition: transform 140ms var(--ease);
+}
+.setLensBtn:hover:enabled { transform: translateY(-1px); }
+.setLensBtn:active:enabled { transform: translateY(1px); }
+.setLensBtnPrimary { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+.setLensBtn:disabled { color: var(--disabled); border-color: var(--hair); background: transparent; cursor: default; transform: none; }
+.setLensNote { font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.6; }
+
+/* ── Doors: the wide blocks under the deployment group ───────────────────── */
+.setWide { margin-top: 32px; }
+.setBlockHead {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+.setBlockNote { font-family: var(--mono); font-size: 11px; color: var(--faint); overflow-wrap: anywhere; }
+/* Who does what: four cells on one rule. */
+.setRoles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.setRole { padding: 14px 20px 12px 0; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.setRole + .setRole { border-left: 1px solid var(--hair); padding-left: 20px; }
+.setRoleName { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.setRoleWho { font-size: 14px; font-weight: 500; color: var(--bright); overflow-wrap: anywhere; }
+.setRoleDoes { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.setRoleDetail { font-family: var(--mono); font-size: 11px; color: var(--faint); line-height: 1.55; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .setRoles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .setRole:nth-child(3) { border-left: 0; padding-left: 0; }
+  .setRole:nth-child(n + 3) { border-top: 1px solid var(--hair); }
+}
+@media (max-width: 520px) {
+  .setRoles { grid-template-columns: minmax(0, 1fr); }
+  .setRole + .setRole { border-left: 0; padding-left: 0; border-top: 1px solid var(--hair); }
+}
+/* Choose your path: three bezelled panels. */
+.setDoors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 18px; align-items: stretch; }
+.setDoor {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--bezel);
+}
+.setDoorHead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.setDoorNum { font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint); }
+.setDoorName { font-size: 14px; font-weight: 500; color: var(--bright); }
+.setDoorGrants { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+.setDoorState { display: flex; align-items: center; gap: 8px; min-height: 16px; }
+.setDoorState > .setBlockNote { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.setDot { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled); flex: none; }
+.setDotOn { background: var(--ok); }
+.setDoorLink { margin-left: auto; flex: none; padding: 12px 0; font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.setDoorWho { margin: 0; font-size: 12px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
+.setPre {
+  margin: 0; padding: 10px 12px; font-family: var(--mono); font-size: 11px; line-height: 1.55; color: var(--ink);
+  background: var(--sunk); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--well);
+  overflow-x: visible; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; max-width: 100%;
+}
+.setDoorNote { margin: auto 0 0; padding-top: 4px; font-size: 12px; line-height: 1.5; color: var(--faint); overflow-wrap: anywhere; }
+@media (max-width: 900px) { .setDoors { grid-template-columns: minmax(0, 1fr); } }
+/* Wire up your client: the picker, the meta line, the copy verb, the snippet. */
+.setWire { margin-top: 18px; display: grid; gap: 12px; }
+.setWire .setChips { justify-content: flex-start; }
+.setWireMeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.setWireNote { margin: 0; font-size: 12px; line-height: 1.55; color: var(--faint); overflow-wrap: anywhere; }
+/* The toolset, by door. */
+.setTools { margin-top: 18px; }
+.setTool {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: 10px 16px; align-items: baseline;
+  padding: 10px 0; border-bottom: 1px solid var(--hair);
+}
+.setToolName { font-family: var(--mono); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.setToolWhat { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.setToolDoor { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.setToolDoorGuest { color: var(--accent); }
+@media (max-width: 700px) {
+  .setTool { grid-template-columns: minmax(0, 1fr) auto; }
+  .setToolWhat { grid-column: 1 / -1; }
+}
+.setProse { margin: 18px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); max-width: 74ch; }
+.setProse b { color: var(--ink); }
+.setProse code { font-family: var(--mono); font-size: 0.92em; color: var(--ink); }
+
+/* ── How these resolve: the explanation, one caret down ──────────────────── */
+.setHow { margin-top: 28px; font-size: 14px; color: var(--muted); max-width: 74ch; }
+.setHowSum {
+  display: inline-block; padding: 12px 0; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--accent); list-style: none; white-space: nowrap;
+}
+.setHowSum::-webkit-details-marker { display: none; }
+.setHowSum::before { content: "› "; }
+.setHow[open] .setHowSum::before { content: "‹ "; }
+.setHowP { margin: 4px 0 0; line-height: 1.6; }
+
+/* ── Motion off: the finished sheet ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .conRoot.cxReady .setN { animation: none; }
+  .setSwt, .setKnob, .setChip, .setStepBtn, .setBtn, .setRecRow, .setLensBtn { transition: none; }
+  .setLensBtn:hover:enabled, .setLensBtn:active:enabled { transform: none; }
+}
+
+/* ── The folds: explanation one caret down ─────────────────────────────────── */
+/* A <details> rather than a hand-rolled disclosure — it is keyboard-operable, announces its own
+   state, and needs no JavaScript to open. The marker is typographic, per the law's "no icon
+   library": a rotating chevron drawn from a border, not a glyph. */
+.setFold { border-top: 1px solid var(--hair); }
+.setFold:first-child { border-top: 0; }
+/* The doors list mixes both row shapes: a door with steps is a .setFold, and the one address row
+   with nothing to walk through stays a plain .setRow. They separate by opposite conventions —
+   .setFold draws a rule ABOVE itself, .setRow one BELOW (:109) — so where the two meet there was
+   no line at all between the last fold and the address row, and a stray rule under the list's
+   final row. Container-scoped at (0,2,0), so .setRow keeps its own convention everywhere else. */
+.setFoldRows > .setRow { border-top: 1px solid var(--hair); border-bottom: 0; }
+.setFoldRows > .setRow:first-child { border-top: 0; }
+.setFoldSum {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: baseline; gap: 12px;
+  min-height: 44px; padding: 12px 0; cursor: pointer; list-style: none;
+}
+.setFoldSum::-webkit-details-marker { display: none; }
+.setFoldSum::before {
+  content: ""; width: 5px; height: 5px; margin-top: 5px;
+  border-right: 1px solid var(--faint); border-bottom: 1px solid var(--faint);
+  transform: rotate(-45deg); transition: transform 160ms var(--ease);
+}
+.setFold[open] > .setFoldSum::before { transform: rotate(45deg); }
+.conRoot .setFoldSum:hover .setLabel { color: var(--bright); }
+.setFoldTop > .setFoldSum .setLabel { font-size: 13px; }
+
+.setFoldBody { padding: 4px 0 18px 26px; }
+/* The nested rows carry their own carets, so they lose the outer one's indent. */
+.setFoldRows { padding-left: 0; }
+.setFoldWhy { margin: 0 0 12px; font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 62ch; text-wrap: pretty; }
+
+/* setDoorStep, not setStep: .setStep was already taken, 250 lines above, by the numeric stepper
+   control (- value +). Declaring it a second time here at equal specificity meant the later rule
+   won, and every stepper on the screen — cache lifetime, handoff budget, co-read floor — became a
+   two-column grid holding three children: the minus and the value on one row, the plus pushed to a
+   second, and the 44px button overflowing a 20px track so the value clipped at the box edge. The
+   folds did not even have to be open; a stylesheet does not care. */
+.setDoorSteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.setDoorStep { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.setDoorStepN {
+  font-family: var(--mono); font-size: 10px; color: var(--faint);
+  border: 1px solid var(--hair); text-align: center; line-height: 18px; height: 18px;
+}
+.setCmd {
+  display: block; margin: 8px 0 6px; padding: 10px 12px; overflow-x: visible;
+  background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r);
+  font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+}
+.setCopy {
+  min-height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-chip);
+  background: transparent; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: color 120ms var(--ease), border-color 160ms var(--ease);
+}
+.conRoot .setCopy:hover { color: var(--bright); border-color: var(--accent); }

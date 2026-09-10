@@ -23,6 +23,7 @@ import { rank, tokenize } from "./narrow";
 import { parseFrontmatter, safeText, byName } from "./frontmatter";
 import { splitBlocks, isBannerText } from "./verify";
 import { redact } from "./redact";
+import { LEARNING_POLICY } from "./prediction";
 
 export interface EdgeRow {
   src: string;
@@ -46,6 +47,7 @@ export function scrubEvidence(s: string): string {
   return clean || "(evidence redacted)";
 }
 const ev = scrubEvidence;
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** An explicit wiki-style reference. Newlines excluded so an unclosed bracket cannot swallow
  *  the rest of the note into one giant "ref". Exported for the inbox checks — one definition
@@ -54,7 +56,7 @@ export const WIKILINK = /\[\[([^\[\]\n]+)\]\]/g;
 
 /**
  * Resolve a [[ref]] against the live corpus. The house convention is loose — the brain writes
- * [[alpha-beats-beta]] (a basename), [[notes/aurora-authoring]] (a path minus .md) and
+ * [[search-comparison]] (a basename), [[notes/document-editing]] (a path minus .md) and
  * could write a full path — so resolution tries exact path, then path+".md", then a unique
  * basename match, case-insensitively.
  *
@@ -80,21 +82,29 @@ export function resolveRef(ref: string, files: Map<string, string>): string | nu
 /** `link` — explicit [[..]] references, resolved to live note paths. Directed src → dst;
  *  weight = how many places in src say so. */
 export function linkEdges(files: Map<string, string>): EdgeRow[] {
+  return [...linkSteps(files)].filter((edge): edge is EdgeRow => edge !== undefined);
+}
+
+class DerivationCapacity extends Error {}
+function* linkSteps(files: Map<string, string>, max = Infinity): Generator<EdgeRow | undefined> {
   const out = new Map<string, { dst: string; src: string; sites: Array<{ line: number; text: string }> }>();
   for (const [src, text] of files) {
+    yield;
     const lines = text.split("\n");
     for (let i = 0; i < lines.length; i++) {
       for (const m of lines[i].matchAll(WIKILINK)) {
+        yield;
         const dst = resolveRef(m[1], files);
         if (!dst || dst === src) continue;
         const key = `${src}\u0000${dst}`;
         const e = out.get(key) ?? { src, dst, sites: [] };
         e.sites.push({ line: i + 1, text: lines[i].trim() });
         out.set(key, e);
+        if (out.size > max) throw new DerivationCapacity();
       }
     }
   }
-  return [...out.values()].map(({ src, dst, sites }) => ({
+  for (const { src, dst, sites } of out.values()) yield {
     src,
     dst,
     kind: "link" as const,
@@ -105,33 +115,37 @@ export function linkEdges(files: Map<string, string>): EdgeRow[] {
       `L${sites[0].line}: ${sites[0].text}` +
         (sites.length > 1 ? ` (+${sites.length - 1} more: L${sites.slice(1).map((s) => s.line).join(", L")})` : "")
     ),
-  }));
+  };
 }
 
 /** `tag` — shared frontmatter tags. Symmetric, stored once with src < dst; weight = overlap. */
 export function tagEdges(files: Map<string, string>): EdgeRow[] {
+  return [...tagSteps(files)].filter((edge): edge is EdgeRow => edge !== undefined);
+}
+
+function* tagSteps(files: Map<string, string>): Generator<EdgeRow | undefined> {
   const tagged: Array<{ path: string; tags: string[] }> = [];
   for (const [path, text] of files) {
+    yield;
     const tags = parseFrontmatter(text).tags;
     if (tags.length) tagged.push({ path, tags });
   }
   // byName on the paths first, so "src < dst" means the same thing on every machine.
   tagged.sort((a, b) => byName(a.path, b.path));
-  const out: EdgeRow[] = [];
   for (let i = 0; i < tagged.length; i++) {
     for (let j = i + 1; j < tagged.length; j++) {
+      yield;
       const shared = tagged[i].tags.filter((t) => tagged[j].tags.includes(t));
       if (shared.length === 0) continue;
-      out.push({
+      yield {
         src: tagged[i].path,
         dst: tagged[j].path,
         kind: "tag",
         weight: shared.length,
-        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort((a, b) => a.localeCompare(b)).join(", ")}`),
-      });
+        evidence: ev(`${shared.length} shared frontmatter tag${shared.length === 1 ? "" : "s"}: ${shared.sort(byCodeUnit).join(", ")}`),
+      };
     }
   }
-  return out;
 }
 
 /** How many neighbours `lexical` keeps per note. Matches the ask path's shortlist instinct:
@@ -142,11 +156,16 @@ export const LEXICAL_K = 5;
  * `lexical` — each note's top-K BM25 neighbours, reusing lib/narrow.ts's scorer verbatim: the
  * note's own text is the "question" and the rest of the corpus is ranked against it. One scorer,
  * one opinion of "lexically close" — a second BM25 here would be the dual-implementation drift
- * this repo keeps deleting. O(n²) tokenisation at n≈97 measures in seconds and runs off the
- * request path (after() or the manual script), so it buys simplicity with time nobody is waiting
- * on.
+ * this repo keeps deleting. Prepared corpus statistics reuse document tokenization; ranking
+ * every note against the corpus still requires quadratic pair scoring. Publication uses the
+ * bounded builder below (2,000 notes, 8 MiB source, 5 seconds), retaining stale relationships
+ * when that work cannot complete. These bounds do not limit primary note storage or search.
  */
 export function lexicalEdges(files: Map<string, string>, k = LEXICAL_K): EdgeRow[] {
+  return [...lexicalSteps(files, k)].filter((edge): edge is EdgeRow => edge !== undefined);
+}
+
+function* lexicalSteps(files: Map<string, string>, k = LEXICAL_K): Generator<EdgeRow | undefined> {
   const n = files.size;
   // Term rarity for the evidence line: in how many notes does each term appear? The scorer
   // knows this internally but does not expose it, and the evidence needs to name the terms
@@ -154,13 +173,14 @@ export function lexicalEdges(files: Map<string, string>, k = LEXICAL_K): EdgeRow
   const df = new Map<string, number>();
   const toks = new Map<string, Set<string>>();
   for (const [path, text] of files) {
+    yield;
     const set = new Set(tokenize(text));
     toks.set(path, set);
     for (const w of set) df.set(w, (df.get(w) ?? 0) + 1);
   }
 
-  const out: EdgeRow[] = [];
   for (const [src, text] of [...files.entries()].sort((a, b) => byName(a[0], b[0]))) {
+    yield;
     const top = rank(files, text)
       .filter((s) => s.path !== src)
       .slice(0, k);
@@ -171,7 +191,7 @@ export function lexicalEdges(files: Map<string, string>, k = LEXICAL_K): EdgeRow
         .filter((w) => toks.get(dst)!.has(w))
         .sort((a, b) => (df.get(a) ?? 0) - (df.get(b) ?? 0) || (a < b ? -1 : a > b ? 1 : 0))
         .slice(0, 3);
-      out.push({
+      yield {
         src,
         dst,
         kind: "lexical",
@@ -179,15 +199,14 @@ export function lexicalEdges(files: Map<string, string>, k = LEXICAL_K): EdgeRow
         evidence: ev(
           `bm25 ${score.toFixed(1)} across the ${n}-note corpus; rarest shared terms: ${shared.join(", ") || "(none survive tokenising)"}`
         ),
-      });
+      };
     }
   }
-  return out;
 }
 
 /** A note path as it appears in prose. The write-policy shapes plus profile.md — an edge can
  *  only point at something the corpus can hold. */
-const PATH_IN_TEXT = /\b(?:profile\.md|(?:projects|notes|log)\/[A-Za-z0-9._-]+\.md)\b/g;
+const PATH_IN_TEXT = /\b(?:profile\.md|(?:projects|notes|log|history)\/[A-Za-z0-9._-]+\.md)\b/g;
 /** The in-place correction marker, same shape verify.ts keys on. */
 const WAS_MARK = /was:\s*["“]/i;
 
@@ -199,9 +218,15 @@ const WAS_MARK = /was:\s*["“]/i;
  * verify.ts's isBannerText — the one definition of "this text retracts something".
  */
 export function correctionEdges(files: Map<string, string>): EdgeRow[] {
+  return [...correctionSteps(files)].filter((edge): edge is EdgeRow => edge !== undefined);
+}
+
+function* correctionSteps(files: Map<string, string>, max = Infinity): Generator<EdgeRow | undefined> {
   const out = new Map<string, { src: string; dst: string; sites: Array<{ line: number; text: string }> }>();
   for (const [src, text] of files) {
+    yield;
     for (const b of splitBlocks(text)) {
+      yield;
       if (!isBannerText(b.text) && !WAS_MARK.test(b.text)) continue;
       for (const m of b.text.match(PATH_IN_TEXT) ?? []) {
         // Only live targets: a marker naming archive/ or a deleted note is history pointing at
@@ -211,16 +236,17 @@ export function correctionEdges(files: Map<string, string>): EdgeRow[] {
         const e = out.get(key) ?? { src, dst: m, sites: [] };
         e.sites.push({ line: b.line, text: b.text.trim() });
         out.set(key, e);
+        if (out.size > max) throw new DerivationCapacity();
       }
     }
   }
-  return [...out.values()].map(({ src, dst, sites }) => ({
+  for (const { src, dst, sites } of out.values()) yield {
     src,
     dst,
     kind: "correction" as const,
     weight: sites.length,
     evidence: ev(`L${sites[0].line}: ${sites[0].text}`),
-  }));
+  };
 }
 
 /**
@@ -236,6 +262,8 @@ export function deriveEdges(files: Map<string, string>): EdgeRow[] {
 /* ── The store plumbing — pulse.ts's raw-fetch pattern, same budget posture ── */
 
 const EDGES_TIMEOUT_MS = 10_000;
+/** Persisted graph algorithm identity: Unicode tokenization/preparation changed lexical edges. */
+export const STRUCTURAL_EDGE_VERSION = "structural-v2-unicode-bm25-1.5-1";
 
 function env(): { base: string; key: string } | null {
   const base = process.env.SUPABASE_URL?.replace(/\/$/, "");
@@ -252,7 +280,7 @@ function pg(e: { base: string; key: string }, path: string, init: RequestInit = 
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
-    signal: AbortSignal.timeout(EDGES_TIMEOUT_MS),
+    signal: init.signal ?? AbortSignal.timeout(EDGES_TIMEOUT_MS),
   });
 }
 
@@ -260,77 +288,119 @@ function pg(e: { base: string; key: string }, path: string, init: RequestInit = 
  *  EXPECTED state, not an error. The code must degrade honestly, never crash, never invent. */
 const isMissing = (res: Response) => res.status === 404;
 
-export type RebuildResult =
-  | { state: "off" }
-  | { state: "missing" }
-  | { state: "current"; head: string }
-  | { state: "stale-head"; head: string }
-  | { state: "rebuilt"; head: string; derived: number };
-
-/**
- * Full idempotent rebuild of the graph at `head`: derive in here, replace in one transaction in
- * the edges_rebuild RPC. Skips without deriving when the graph already describes `head` — the
- * common case after every reconcile that did NOT move the head is answered by one cheap read.
- */
-export async function rebuildEdges(
-  files: Map<string, string>,
-  head: string,
-  opts: { force?: boolean } = {}
-): Promise<RebuildResult> {
-  const e = env();
-  if (!e) return { state: "off" };
-
-  if (!opts.force) {
-    const res = await pg(e, "edges_state?select=built_head&id=is.true");
-    if (isMissing(res)) return { state: "missing" };
-    if (!res.ok) throw new Error(`edges: GET edges_state ${res.status}`);
-    const rows = (await res.json()) as Array<{ built_head: string }>;
-    if (rows[0]?.built_head === head) return { state: "current", head };
-  }
-
-  const edges = deriveEdges(files);
-  const res = await pg(e, "rpc/edges_rebuild", {
-    method: "POST",
-    body: JSON.stringify({ new_head: head, edges }),
-  });
-  if (isMissing(res)) return { state: "missing" };
-  if (!res.ok) throw new Error(`edges: POST edges_rebuild ${res.status}`);
-  const applied = (await res.json()) === true;
-  return applied ? { state: "rebuilt", head, derived: edges.length } : { state: "stale-head", head };
+/** Status adapters must not infer freshness from a matching Git head. Check after reading
+ * rows, including the original build stamp, so a concurrent publication cannot look coherent. */
+async function confirmGraphStamp(e: {base:string;key:string}, head:string, builtAt:string, read:GraphRequest=(path,init)=>pg(e,path,init)): Promise<"current"|"missing"|"unavailable"> {
+  const res=await read("rpc/edges_freshness",{method:"POST",body:JSON.stringify({new_head:head})});
+  if(isMissing(res))return "missing";
+  if(!res.ok)return "unavailable";
+  const value=await res.json();
+  return value?.state==="current" && value.policy===LEARNING_POLICY && value.structure===STRUCTURAL_EDGE_VERSION && value.builtStructure===STRUCTURAL_EDGE_VERSION && value.builtAt===builtAt ? "current" : "unavailable";
 }
 
-/**
- * The trigger: a reconcile that advanced the head made the graph stale, so ride the request's
- * after() — the same pattern lib/access.ts uses for note_access rows, for the same reason: on a
- * serverless instance the last call before idle is the common case, and a bare floating promise
- * dies exactly there. An OBSERVATION, never the product: nothing that reads notes may wait on,
- * or fail because of, the graph being rebuilt. Failures land in the server log and nowhere else.
- */
-export function scheduleEdgeRebuild(files: Map<string, string>, head: string): void {
-  if (!env()) return;
-  const work = rebuildEdges(files, head).then(
-    (r) => {
-      if (r.state === "rebuilt") console.log(`[edges] graph rebuilt at ${head.slice(0, 8)}: ${r.derived} derived edges`);
-      else if (r.state === "missing") console.log(`[edges] note_edges not migrated yet — graph stays unbuilt until scripts/migrate.ts --apply`);
-      // stale-head used to log NOTHING, which meant "the RPC refused every rebuild" and "the
-      // scheduler never ran" were indistinguishable in production — the exact ambiguity that
-      // stretched the 2026-08-12 frozen-graph hunt across every layer. Every outcome that is
-      // not the common no-op ("current") now says its name.
-      else if (r.state === "stale-head")
-        console.log(`[edges] rebuild at ${head.slice(0, 8)} refused — the mirror had already moved past it; the next reconcile re-triggers`);
-    },
-    (err) => console.error(`[edges] rebuild at ${head.slice(0, 8)} failed — the graph stays at its previous head: ${String(err)}`)
-  );
+export type RebuildResult =
+  | { state: "off" | "missing" }
+  | { state: "current" | "stale-head" | "stale-input" | "busy" | "capacity" | "budget"; head: string }
+  | { state: "rebuilt"; head: string; derived: number };
+
+/** What one edge costs in the payload edges_rebuild_v3 measures: octet_length(edges::text), the
+ * jsonb rendering, not JSON.stringify's. jsonb text puts a space after every colon and comma, so a
+ * flat object of k members is 2k-1 bytes longer than its compact form and each array separator is
+ * two bytes, not one. Counting the compact form let the client admit ~2 MB more than the database
+ * accepts at 200k rows, and the refusal arrived only after the upload. */
+export function jsonbTextBytes(row: EdgeRow): number {
+  return Buffer.byteLength(JSON.stringify(row)) + 2 * Object.keys(row).length + 1;
+}
+
+/** Shared generators preserve the pure derivers while allowing bounded background execution.
+ * Yield every 128 units (and each lexical rank); checks bracket each bounded unit. A single
+ * rank/tokenization is not preemptible, so the 5s budget can overshoot by one bounded unit. */
+export async function deriveEdgesBounded(files: Map<string,string>): Promise<EdgeRow[] | "capacity" | "budget"> {
+  if (files.size > 2000) return "capacity";
+  let bytes=0;
+  for (const [path,text] of files) {bytes += Buffer.byteLength(path)+Buffer.byteLength(text);if(bytes>8*1024*1024)return "capacity";}
+  const started=performance.now(), all:EdgeRow[]=[];
+  let wireBytes=2;
+  const lexical=lexicalSteps(files);
+  for (const steps of [linkSteps(files,200000),tagSteps(files),lexical,correctionSteps(files,200000)]) {
+    let units=0;
+    for (;;) {
+      if (performance.now()-started>5000) return "budget";
+      let step: IteratorResult<EdgeRow | undefined>;
+      try {step=steps.next();} catch(e) {if(e instanceof DerivationCapacity)return "capacity";throw e;}
+      if (performance.now()-started>5000) return "budget";
+      if (step.done) break;
+      if (step.value) {
+        wireBytes += jsonbTextBytes(step.value);
+        // Checked before the push, so the array never holds a 200,001st row and the measured
+        // payload never crosses the ceiling; edges_rebuild_v3 refuses the same two limits.
+        if (all.length >= 200000 || wireBytes > 16 * 1024 * 1024) return "capacity";
+        all.push(step.value);
+      }
+      if (++units % 128 === 0 || steps === lexical) await new Promise<void>(resolve=>setImmediate(resolve));
+    }
+    await new Promise<void>(resolve=>setImmediate(resolve));
+  }
+  all.sort((a,b)=>a.kind.localeCompare(b.kind)||byName(a.src,b.src)||byName(a.dst,b.dst));
+  return performance.now()-started>5000 ? "budget" : all;
+}
+
+let activeRebuild: {head:string; force:boolean; promise:Promise<RebuildResult>} | null = null;
+export function rebuildEdges(files: Map<string,string>, head:string, opts:{force?:boolean}={}): Promise<RebuildResult> {
+  if (activeRebuild) return activeRebuild.head===head && (!opts.force || activeRebuild.force) ? activeRebuild.promise : Promise.resolve({state:"busy",head});
+  const promise = rebuild(files,head,opts).finally(()=>{activeRebuild=null;});
+  activeRebuild={head,force:Boolean(opts.force),promise};
+  return promise;
+}
+async function rebuild(files:Map<string,string>,head:string,opts:{force?:boolean}):Promise<RebuildResult> {
+  const e=env();if(!e)return {state:"off"};
+  const check=await pg(e,"rpc/edges_freshness",{method:"POST",body:JSON.stringify({new_head:head})});
+  if(isMissing(check))return {state:"missing"};
+  if(!check.ok)throw new Error(`edges freshness: HTTP ${check.status}`);
+  const input=await check.json();
+  if (!input || input.policy!==LEARNING_POLICY || input.structure!==STRUCTURAL_EDGE_VERSION || typeof input.watermark!=="string" || typeof input.cutoff!=="string" || typeof input.structural!=="boolean") throw new Error("edges freshness: invalid identity");
+  if(input.state==="stale-head")return {state:"stale-head",head};
+  if(input.state==="current"&&!opts.force)return {state:"current",head};
+  if(input.state!=="stale"&&input.state!=="current")throw new Error("edges freshness: invalid state");
+  let edges:EdgeRow[]|null=null;
+  if(input.structural||opts.force) {
+    const derived=await deriveEdgesBounded(files);
+    if(typeof derived==="string")return {state:derived,head};
+    edges=derived;
+  }
+  const res=await pg(e,"rpc/edges_rebuild_v3",{method:"POST",body:JSON.stringify({new_head:head,expected_watermark:input.watermark,expected_cutoff:input.cutoff,expected_structure:STRUCTURAL_EDGE_VERSION,edges,force:Boolean(opts.force)})});
+  if(isMissing(res))return {state:"missing"};
+  if(!res.ok)throw new Error(`edges rebuild: HTTP ${res.status}; outcome unknown until next freshness check`);
+  const state=await res.json();
+  if(state==="rebuilt")return {state,head,derived:edges?.length??0};
+  if(["current","stale-head","stale-input","busy","capacity"].includes(state))return {state,head};
+  throw new Error("edges rebuild: invalid outcome");
+}
+
+let scheduled=false, nextCheck=0;
+let pendingCorpus:{files:Map<string,string>;head:string}|null=null;
+/** Every corpus return path may call this. No fetch/derivation starts before after() runs. */
+export function scheduleEdgeRebuild(files:Map<string,string>,head:string):void {
+  if(!env())return;
+  // Retain only the latest observation, including while another callback is queued/running.
+  // No timer: a later request must arm the next callback once the process-wide cooldown ends.
+  pendingCorpus={files,head};
+  if(scheduled||Date.now()<nextCheck)return;
+  scheduled=true;
   try {
-    after(work);
-  } catch (e) {
-    // No request scope (tests, scripts — or a runtime change that quietly took after() away).
-    // The work promise above is already running with its handlers attached; on a serverless
-    // instance it now races the post-response freeze. That is survivable — the next head
-    // advance re-triggers, and the manual script always exists — but it must never again be
-    // SILENT: a swallowed scheduler is this repo's recurring failure shape, and this catch was
-    // the one place the 2026-08-12 investigation could not see into.
-    console.error(`[edges] after() unavailable for the rebuild at ${head.slice(0, 8)} — running unanchored, racing instance freeze: ${String(e)}`);
+    after(async()=>{
+      const {files,head}=pendingCorpus!;
+      pendingCorpus=null;
+      nextCheck=Date.now()+60_000;
+      try {
+        const result=await rebuildEdges(files,head);
+        if(result.state!=="current"&&result.state!=="off")console.log(`[edges] refresh ${result.state} at ${head.slice(0,8)}`);
+      } catch(e) {console.error(`[edges] refresh unavailable; last confirmed graph may be stale, outcome requires recheck: ${String(e)}`);}
+      finally {scheduled=false;}
+    });
+  } catch(e) {
+    scheduled=false;
+    console.error(`[edges] after() unavailable; refresh not started: ${String(e)}`);
   }
 }
 
@@ -377,7 +447,7 @@ export function groupEdges(rows: EdgeRow[], topK = PANEL_TOP_K): Record<string, 
       if (!perKind.has(e.kind)) perKind.set(e.kind, []);
       perKind.get(e.kind)!.push(e);
     }
-    for (const kind of [...perKind.keys()].sort((a, b) => a.localeCompare(b))) {
+    for (const kind of [...perKind.keys()].sort(byCodeUnit)) {
       kept.push(
         ...perKind
           .get(kind)!
@@ -407,9 +477,12 @@ export async function edgesFor(path: string): Promise<EdgeRow[] | null> {
     // PostgREST or= syntax; the path is quoted because note paths carry dots and slashes, and
     // the whole filter is URI-encoded so no path byte can escape into query structure.
     const filter = encodeURIComponent(`(src.eq."${path}",dst.eq."${path}")`);
-    const res = await pg(e, `note_edges?select=src,dst,kind,weight,evidence&or=${filter}&order=src.asc,dst.asc,kind.asc`);
-    if (!res.ok) return null;
-    const rows = (await res.json()) as EdgeRow[];
+    // Paged like every other graph read: PostgREST answers an un-Ranged GET with its max-rows
+    // (Supabase's default is 1,000) and a 200, and one request cannot tell 1,000-of-1,000 from
+    // 1,000-of-1,500. A hub note past that cap would have lost neighbours silently.
+    const rows = await pagedEdges(graphReader(e), `note_edges?select=src,dst,kind,weight,evidence&or=${filter}&order=src.asc,dst.asc,kind.asc`)
+      .catch(notAnswered);
+    if (!rows) return null;
     // Same egress rule as edgesPulse: evidence was scrubbed at build time, but older rows may
     // predate the rule, and one opinion applied twice cannot drift.
     for (const r of rows) r.evidence = ev(r.evidence);
@@ -418,6 +491,14 @@ export async function edgesFor(path: string): Promise<EdgeRow[] | null> {
     console.error(`[edges] edgesFor(${path}) unavailable — the bundle renders without neighbours: ${String(err)}`);
     return null;
   }
+}
+
+/** An HTTP refusal (the table missing pre-migration, the store unwell) is a not-an-answer
+ *  state these readers report as null without a log line, exactly as their single un-Ranged
+ *  GET did; anything else — the read budget, the row cap — is a fault worth logging. */
+function notAnswered(err: unknown): null {
+  if (typeof (err as { status?: unknown })?.status === "number") return null;
+  throw err;
 }
 
 /**
@@ -435,9 +516,12 @@ export async function coaccessEdges(): Promise<EdgeRow[] | null> {
   const e = env();
   if (!e) return null;
   try {
-    const res = await pg(e, "note_edges?select=src,dst,kind,weight,evidence&kind=eq.coaccess&order=weight.desc,src.asc,dst.asc");
-    if (!res.ok) return null;
-    const rows = (await res.json()) as EdgeRow[];
+    // Paged, for the reason edgesFor gives: one un-Ranged GET stops at the provider's max-rows
+    // and says nothing about it. (src, dst) is unique within one kind, so the order is total
+    // and the pages cannot overlap or skip.
+    const rows = await pagedEdges(graphReader(e), "note_edges?select=src,dst,kind,weight,evidence&kind=eq.coaccess&order=weight.desc,src.asc,dst.asc")
+      .catch(notAnswered);
+    if (!rows) return null;
     // Evidence was scrubbed at build time, but these strings land on the console and older
     // rows may predate the rule — one opinion applied twice cannot drift.
     for (const r of rows) r.evidence = ev(r.evidence);
@@ -449,22 +533,27 @@ export async function coaccessEdges(): Promise<EdgeRow[] | null> {
 }
 
 /**
- * The whole graph, flat — the map's read. The map budgets and shapes in lib/atlas.ts (a render
- * concern), so this returns rows, not opinions. Null for every not-an-answer state — store off,
- * table missing, store unwell — because the map must render the ring without a graph rather
- * than render "this brain has no structure" out of a table it could not reach.
+ * The whole graph, flat — shared retrieval and handoff infrastructure. This returns rows, not
+ * rendering opinions. Null for every not-an-answer state — store off, table missing, store
+ * unwell — so callers never turn an unavailable graph into "this brain has no structure."
  */
 export async function allEdges(): Promise<EdgeRow[] | null> {
   const e = env();
   if (!e) return null;
   try {
-    const rows = await pagedEdges(e);
-    // Evidence was scrubbed at build time, but the map's drawer is an egress and older rows may
+    const read=graphReader(e);
+    const stamp=await read("edges_state?select=built_head,built_at&id=is.true");
+    if(!stamp.ok)return null;
+    const states=await stamp.json();
+    if(!states[0]?.built_head)return null;
+    const rows = await pagedEdges(read);
+    if(await confirmGraphStamp(e,states[0].built_head,states[0].built_at,read)!=="current")return null;
+    // Evidence was scrubbed at build time, but graph consumers are egresses and older rows may
     // predate the rule — one opinion applied twice cannot drift.
     for (const r of rows) r.evidence = ev(r.evidence);
     return rows;
   } catch (err) {
-    console.error(`[edges] allEdges unavailable — the map renders without the graph: ${String(err)}`);
+    console.error(`[edges] allEdges unavailable — no partial graph returned: ${String(err)}`);
     return null;
   }
 }
@@ -482,17 +571,47 @@ export type EdgesPulse =
 
 /** Paged, for the same reason mirror.ts pages: PostgREST caps a response at its own max-rows,
  *  and trusting one response would silently serve a partial graph the day it outgrows the cap. */
-async function pagedEdges(e: { base: string; key: string }): Promise<EdgeRow[]> {
+type GraphRequest=(path:string,init?:RequestInit)=>Promise<Response>;
+/** Read safety, not storage limits. All pages, stamp and freshness share this budget. Body
+ * bytes are charged while streaming; a gateway that ignores pagination never yields partial success. */
+function graphReader(e:{base:string;key:string}):GraphRequest {
+  const deadline=performance.now()+10_000;let bytes=0;
+  return async(path,init)=>{
+    const remaining=Math.floor(deadline-performance.now());
+    if(remaining<=0)throw new Error("graph read budget exceeded");
+    const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
+    let reader:ReadableStreamDefaultReader<Uint8Array>|undefined;
+    try {
+      return await Promise.race([
+        (async()=>{
+          const res=await pg(e,path,{...init,signal:controller.signal});
+          reader=res.body?.getReader();const chunks:Uint8Array[]=[];
+          if(reader)for(;;){const chunk=await reader.read();if(chunk.done)break;bytes+=chunk.value.byteLength;
+            if(bytes>64*1024*1024)throw new Error("graph response capacity exceeded");chunks.push(chunk.value);}
+          if(performance.now()>deadline)throw new Error("graph read budget exceeded");
+          return new Response(res.status===204?null:Buffer.concat(chunks),{status:res.status,headers:res.headers});
+        })(),
+        new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error("graph read budget exceeded")),remaining);}),
+      ]);
+    }finally{clearTimeout(timer);controller.abort();void reader?.cancel().catch(()=>{});}
+  };
+}
+
+/** Every row `query` selects, in pages. The query must carry a total order, or two pages could
+ *  overlap or skip a row; every caller here orders on a key that is unique for what it filters. */
+async function pagedEdges(read:GraphRequest, query="note_edges?select=src,dst,kind,weight,evidence&order=src.asc,dst.asc,kind.asc"): Promise<EdgeRow[]> {
   const out: EdgeRow[] = [];
   const PAGE = 1000;
-  for (let from = 0; ; from += PAGE) {
-    const res = await pg(e, "note_edges?select=src,dst,kind,weight,evidence&order=src.asc,dst.asc,kind.asc", {
+  for (let from = 0; ; ) {
+    const res = await read(query, {
       headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
     });
     if (!res.ok) throw Object.assign(new Error(`edges: GET note_edges ${res.status}`), { status: res.status });
     const rows = (await res.json()) as EdgeRow[];
+    if(!Array.isArray(rows)||rows.length>PAGE||out.length+rows.length>350_000)throw new Error("graph row capacity exceeded");
+    if(rows.length===0)return out;
     out.push(...rows);
-    if (rows.length < PAGE) return out;
+    from+=rows.length;
   }
 }
 
@@ -506,17 +625,20 @@ export async function edgesPulse(): Promise<EdgesPulse> {
   const e = env();
   if (!e) return { state: "off" };
   try {
-    const stateRes = await pg(e, "edges_state?select=built_head,built_at&id=is.true");
+    const read=graphReader(e);
+    const stateRes = await read("edges_state?select=built_head,built_at&id=is.true");
     if (isMissing(stateRes)) return { state: "missing" };
     if (!stateRes.ok) return { state: "unavailable" };
     const stateRows = (await stateRes.json()) as Array<{ built_head: string; built_at: string }>;
     // A state row with an empty head is the RPC's serialization bootstrap, not a build.
     if (!stateRows[0]?.built_head) return { state: "empty" };
 
-    const rows = await pagedEdges(e);
+    const rows = await pagedEdges(read);
     // Evidence was scrubbed at build time, but the console is an egress and older rows may
     // predate the rule — redact() is cheap and one opinion applied twice cannot drift.
     for (const r of rows) r.evidence = ev(r.evidence);
+    const freshness=await confirmGraphStamp(e,stateRows[0].built_head,stateRows[0].built_at,read);
+    if(freshness!=="current")return {state:freshness};
     return {
       state: "built",
       head: stateRows[0].built_head,
@@ -542,6 +664,24 @@ export type EdgesSummary =
       byKind: Record<EdgeRow["kind"], number>;
       total: number;
     };
+
+/** A bounded diagnostic read of graph readiness. Unlike edgesSummary(), this never pages the
+ * edge rows: one state read plus one freshness check is enough to say whether the derived
+ * relationship store is current without hauling evidence or counting an unbounded graph. */
+export async function edgesBuildStatus(): Promise<"off" | "missing" | "empty" | "unavailable" | "current"> {
+  const e = env();
+  if (!e) return "off";
+  try {
+    const stateRes = await pg(e, "edges_state?select=built_head,built_at&id=is.true&limit=1");
+    if (isMissing(stateRes)) return "missing";
+    if (!stateRes.ok) return "unavailable";
+    const rows = (await stateRes.json()) as Array<{ built_head: string; built_at: string }>;
+    if (!rows[0]?.built_head) return "empty";
+    return await confirmGraphStamp(e, rows[0].built_head, rows[0].built_at) === "current" ? "current" : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
 /**
  * The build stamp and the edge counts by kind — the settings screen's read. Same states and the
  * same numbers as edgesPulse (one build stamp, one table), but it fetches only the `kind`
@@ -552,7 +692,8 @@ export async function edgesSummary(): Promise<EdgesSummary> {
   const e = env();
   if (!e) return { state: "off" };
   try {
-    const stateRes = await pg(e, "edges_state?select=built_head,built_at&id=is.true");
+    const read=graphReader(e);
+    const stateRes = await read("edges_state?select=built_head,built_at&id=is.true");
     if (isMissing(stateRes)) return { state: "missing" };
     if (!stateRes.ok) return { state: "unavailable" };
     const stateRows = (await stateRes.json()) as Array<{ built_head: string; built_at: string }>;
@@ -563,22 +704,25 @@ export async function edgesSummary(): Promise<EdgesSummary> {
     // Paged like pagedEdges and for the same reason: PostgREST caps a response at its own
     // max-rows, and a count read off one truncated page would understate the graph quietly.
     const PAGE = 1000;
-    for (let from = 0; ; from += PAGE) {
-      const res = await pg(e, "note_edges?select=kind", {
+    for (let from = 0; ; ) {
+      const res = await read("note_edges?select=kind&order=src.asc,dst.asc,kind.asc", {
         headers: { Range: `${from}-${from + PAGE - 1}`, "Range-Unit": "items" },
       });
       if (!res.ok) return { state: "unavailable" };
       const rows = (await res.json()) as Array<{ kind: EdgeRow["kind"] }>;
+      if(!Array.isArray(rows)||rows.length>PAGE||total+rows.length>350_000)return {state:"unavailable"};
+      if(rows.length===0)break;
       for (const r of rows) {
         if (r.kind in byKind) byKind[r.kind]++;
         total++;
       }
-      if (rows.length < PAGE) break;
+      from+=rows.length;
     }
+    const freshness=await confirmGraphStamp(e,stateRows[0].built_head,stateRows[0].built_at,read);
+    if(freshness!=="current")return {state:freshness};
     return { state: "built", head: stateRows[0].built_head, builtAt: stateRows[0].built_at, byKind, total };
   } catch (err) {
     console.error(`[edges] summary unavailable — the settings row renders degraded: ${String(err)}`);
     return { state: "unavailable" };
   }
 }
-

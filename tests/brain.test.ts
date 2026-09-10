@@ -80,7 +80,6 @@ describe("getContext", () => {
   function corpusOf(files: Record<string, string>) {
     __setCache({
       files: new Map(Object.entries(files)),
-      sidecar: new Map(),
       sha: "deadbeefcafe0000",
       bytes: 0,
       fetchedAt: Date.now(),
@@ -416,7 +415,7 @@ describe("getContext holds its ceiling and its ordering", () => {
     for (const [d, size] of Object.entries(days)) {
       files.set(`log/${d}.md`, `# Log\n\n## 09:00 · ops\n\n${"y".repeat(size)}`);
     }
-    __setCache({ files, sidecar: new Map(), sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
+    __setCache({ files, sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
   }
 
   // Mutation: `spent + text.length` -> `text.length`. Seven ordinary days each fit alone, so
@@ -432,7 +431,7 @@ describe("getContext holds its ceiling and its ordering", () => {
     const ctx = await getContext();
     const recent = ctx.slice(ctx.indexOf("# RECENT"));
     expect(recent.length).toBeLessThan(20_000);
-    expect(ctx).toMatch(/[1-3] days? expanded, [4-6] digested/);
+    expect(ctx).toContain("0 days expanded, 7 digested");
     vi.useRealTimers();
   });
 
@@ -477,7 +476,7 @@ describe("getContext holds its ceiling and its ordering", () => {
       ["profile.md", "P"],
       ["log/2026-07-24.md", `# Log\n\n## 09:00 · ${"z".repeat(200_000)}\n\n${"y".repeat(9_000)}`],
     ]);
-    __setCache({ files, sidecar: new Map(), sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
+    __setCache({ files, sha: "deadbeefcafe0000", bytes: 0, fetchedAt: Date.now() });
     const ctx = await getContext();
     expect(ctx.length).toBeLessThan(15_000);
     expect(ctx).toContain("brain_read log/2026-07-24.md");
@@ -489,7 +488,6 @@ describe("getContext with the bubble", () => {
   function corpusOf2(files: Record<string, string>) {
     __setCache({
       files: new Map(Object.entries(files)),
-      sidecar: new Map(),
       sha: "deadbeefcafe0000",
       bytes: 0,
       fetchedAt: Date.now(),

@@ -37,7 +37,7 @@ describe.skipIf(!present)("live brain corpus", () => {
       if (isLive(rel)) files.set(rel, readFileSync(join(BRAIN, rel), "utf8"));
     }
     // Seed the SHA-keyed cache so getContext reads the on-disk brain and touches no network.
-    __setCache({ files, sidecar: new Map(), sha: "0".repeat(40), bytes: 0, fetchedAt: Date.now() });
+    __setCache({ files, sha: "0".repeat(40), bytes: 0, fetchedAt: Date.now() });
     ctx = await getContext();
   });
 

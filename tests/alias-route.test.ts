@@ -60,6 +60,18 @@ describe("secret-URL alias route", () => {
     expect(await synthetic.text()).toContain("tools/list");
   });
 
+  // THE REFUSAL MUST NOT OUTRANK THE SECRET. HEAD and GET are answered 405 so mcp-handler
+  // cannot pin a function for 60s, but that answer lives BELOW the secret check on purpose:
+  // 405 above it would tell an unauthenticated prober that this route exists, which is the one
+  // thing a secret in the path buys. A wrong secret is a 404 for every method there is.
+  it.each(["GET", "HEAD", "POST", "DELETE"])("404s on a wrong secret for %s, never 405", async (method) => {
+    const secret = "b".repeat(64);
+    const req = new Request(`https://cortex.test/api/s/${secret}/mcp`, { method });
+    const res = await aliased(req, { params: Promise.resolve({ secret, transport: "mcp" }) });
+    expect(res.status).toBe(404);
+    expect(mHandler).not.toHaveBeenCalled();
+  });
+
   it("HEAD returns 405 immediately and never invokes the shared handler (mcp-handler hangs on HEAD for 60s)", async () => {
     const req = new Request(`https://cortex.test/api/s/${SECRET}/mcp`, { method: "HEAD" });
     const res = await aliased(req, { params: Promise.resolve({ secret: SECRET, transport: "mcp" }) });

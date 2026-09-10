@@ -1,4 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+/** A PostgREST-shaped page: the reader walks note_edges by Range, so a stub that ignored the
+ *  header answered the same rows on every page. Real PostgREST never does. */
+const rangeSlice = <T,>(rows: T[], init?: RequestInit): T[] => {
+  const range = new Headers(init?.headers).get("range");
+  if (!range) return rows;
+  const [from, to] = range.split("-").map(Number);
+  return rows.slice(from, to + 1);
+};
 import {
   supersededNotes,
   supersededLinkItems,
@@ -29,7 +37,7 @@ describe("supersededNotes — what counts as a retired page", () => {
   it("a description LEADING with SUPERSEDED marks the note; a mid-sentence mention does not", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      // The shape that must NOT match: prose ABOUT the stamp vocabulary, not a retired page.
+      // Prose ABOUT the stamp vocabulary is not a retired page.
       "notes/about-stamps.md": `---\ndescription: "How answers get stamped VERIFIED or SUPERSEDED against a commit"\n---\n\nprose\n`,
       "notes/plain.md": "# No frontmatter at all\n",
     });
@@ -118,7 +126,7 @@ describe("check 1 — live link to a superseded note", () => {
       // Replica of the live shape: the note explaining what it USED to say, with the pointer
       // to the retired page inside the parenthetical.
       "projects/harbor.md":
-        "# Harbor\n\n- **Anchor** — uses this brand. (was: this page used to cover the old plan instead — updated 2026-07-24; see notes/dead.md.)\n",
+        "# Harbor\n\n- **Tandem** — uses this brand. (was: this page used to cover the old plan instead — updated 2026-07-24; see notes/dead.md.)\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -559,10 +567,10 @@ describe("watchItems — the assembler and the absent-edges fallback", () => {
     vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "k");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        jsonRes([
+      vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+        jsonRes(rangeSlice([
           { src: "notes/beta.md", dst: "projects/harbor.md", kind: "coaccess", weight: 7, evidence: "co-read in 7 shared one-hour windows" },
-        ])
+        ], init))
       )
     );
     const items = await watchItems({ files });

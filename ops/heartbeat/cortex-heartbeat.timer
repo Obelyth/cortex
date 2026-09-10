@@ -1,0 +1,12 @@
+# ops/heartbeat/cortex-heartbeat.timer
+[Unit]
+Description=Cortex ops heartbeat every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+RandomizedDelaySec=60
+Persistent=false
+
+[Install]
+WantedBy=timers.target

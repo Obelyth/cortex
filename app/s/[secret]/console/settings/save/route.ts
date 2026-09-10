@@ -1,6 +1,6 @@
 import { readSettings, writeSettings } from "@/lib/settings";
-import { bad, gateConsolePost } from "../../post-gate";
-import { readGuestPolicy, writeGuestPolicy, isScopeEntry } from "@/lib/guest";
+import { bad, gateConsolePost, requireSecretOnly } from "../../post-gate";
+import { readGuestPolicy, writeGuestPolicy, isScopeEntry,GuestPolicyConflict } from "@/lib/guest";
 import { applyLearningPatch, readLearning, writeLearning } from "@/lib/learning";
 import { PROVIDERS, providerOf, type Provider, type ReaderModel } from "@/lib/reader";
 
@@ -19,6 +19,70 @@ import { PROVIDERS, providerOf, type Provider, type ReaderModel } from "@/lib/re
  */
 export const dynamic = "force-dynamic";
 
+type SaveFamily = "reader" | "learning" | "guest";
+
+function freshJson(body: unknown, status = 200): Response {
+  return Response.json(body, {
+    status,
+    headers: { "cache-control": "private, no-store, max-age=0" },
+  });
+}
+
+/**
+ * A narrowly scoped, independently gated read used only when the browser cannot validate a
+ * save response. It returns one minimal family DTO and only from an authoritative store read;
+ * fallback defaults are never offered as proof that a write completed.
+ */
+export async function GET(
+  req: Request,
+  ctx: { params: Promise<{ secret: string }> },
+): Promise<Response> {
+  const gate = await requireSecretOnly(req, ctx.params);
+  if ("deny" in gate) return gate.deny;
+  const family = new URL(req.url).searchParams.get("family") as SaveFamily | null;
+
+  if (family === "reader") {
+    const state = await readSettings();
+    if (state.source !== "store") {
+      return freshJson({ error: "the current reader settings are unavailable" }, 503);
+    }
+    return freshJson({
+      family,
+      current: {
+        defaultReader: state.defaultReader,
+        disabledProviders: state.disabledProviders,
+      },
+    });
+  }
+
+  if (family === "learning") {
+    const state = await readLearning();
+    if (state.source !== "store") {
+      return freshJson({ error: "the current learning settings are unavailable" }, 503);
+    }
+    return freshJson({ family, current: state.selection });
+  }
+
+  if (family === "guest") {
+    const state = await readGuestPolicy();
+    if (state.source !== "store") {
+      return freshJson({ error: "the current guest policy is unavailable" }, 503);
+    }
+    return freshJson({
+      family,
+      current: {
+        scope: state.scope,
+        citations: state.citations,
+        dailyAsks: state.dailyAsks,
+        maxK: state.maxK,
+        revision:state.revision,
+      },
+    });
+  }
+
+  return freshJson({ error: "family must be reader, learning, or guest" }, 400);
+}
+
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ secret: string }> }
@@ -27,34 +91,17 @@ export async function POST(
   if ("deny" in gate) return gate.deny;
   const b = gate.body;
 
-  const current = await readSettings();
-
-  // A partial patch, so the two controls never overwrite each other: the screen sends only the
-  // field the click changed, and a stale tab cannot revert a switch it never showed.
-  let defaultReader: ReaderModel | null = current.defaultReader;
-  if ("defaultReader" in b) {
-    const v = b.defaultReader;
-    if (v === null || v === "") {
-      defaultReader = null;
-    } else if (typeof v === "string" && providerOf(v)) {
-      defaultReader = v as ReaderModel;
-    } else {
-      return bad(`"${String(v)}" is not an allowed reader model`);
-    }
-  }
-
-  let disabledProviders: Provider[] = current.disabledProviders;
-  if ("disabledProviders" in b) {
-    const v = b.disabledProviders;
-    if (!Array.isArray(v)) return bad("disabledProviders must be an array");
-    const out: Provider[] = [];
-    for (const p of v) {
-      if (typeof p !== "string" || !(PROVIDERS as readonly string[]).includes(p)) {
-        return bad(`"${String(p)}" is not a known provider`);
-      }
-      if (!out.includes(p as Provider)) out.push(p as Provider);
-    }
-    disabledProviders = out;
+  const readerFields = ["defaultReader", "disabledProviders"] as const;
+  const known = new Set<string>([...readerFields, "learning", "guest"]);
+  const unknown = Object.keys(b).filter((key) => !known.has(key));
+  if (unknown.length) return bad("unknown settings field");
+  const families = [
+    ...(readerFields.some((key) => key in b) ? ["reader" as const] : []),
+    ...("learning" in b ? ["learning" as const] : []),
+    ...("guest" in b ? ["guest" as const] : []),
+  ];
+  if (families.length !== 1) {
+    return bad("send exactly one settings family per request: reader, learning, or guest");
   }
 
   // Learning knobs ride the same endpoint, as their own patch — same isolation rule as guest
@@ -86,8 +133,8 @@ export async function POST(
     try {
       await writeLearning(next);
       return Response.json({ ok: true, learning: next });
-    } catch (e) {
-      return bad(e instanceof Error ? e.message : String(e), 409);
+    } catch {
+      return bad("the learning settings store did not confirm the change. Try again.", 503);
     }
   }
 
@@ -98,6 +145,7 @@ export async function POST(
     const g = b.guest;
     if (g === null || typeof g !== "object" || Array.isArray(g)) return bad("guest must be an object");
     const p = g as Record<string, unknown>;
+    if(Object.keys(p).some(k=>!["scope","citations","dailyAsks","maxK","expectedRevision"].includes(k)))return bad("unknown guest policy field");
     const current = await readGuestPolicy();
     // A read-modify-write must never merge onto a fallback. readGuestPolicy() fails OPEN to
     // GUEST_DEFAULTS, so without this check a 1.5s Upstash blip while the operator ticked one
@@ -118,6 +166,7 @@ export async function POST(
     };
     if ("scope" in p) {
       if (!Array.isArray(p.scope)) return bad("guest.scope must be an array");
+      if (p.scope.length === 0) return bad("guest.scope must include at least one allowed path");
       if (!p.scope.every(isScopeEntry)) return bad("guest.scope contains a path that is not allowed");
       next.scope = p.scope as string[];
     }
@@ -130,20 +179,72 @@ export async function POST(
       if (typeof p.maxK !== "number" || p.maxK < 1) return bad("guest.maxK must be a positive number");
       next.maxK = Math.min(Math.floor(p.maxK), 40);
     }
+    if(typeof p.expectedRevision!=="string"||!/^[a-f0-9]{40}$/.test(p.expectedRevision))return bad("current guest policy revision required",409);
     try {
-      await writeGuestPolicy(next);
-      return Response.json({ ok: true, guest: next });
-    } catch (e) {
-      return bad(e instanceof Error ? e.message : String(e), 409);
+      const saved=await writeGuestPolicy(next,p.expectedRevision);
+      return freshJson({ ok: true, guest: saved });
+    } catch(error) {
+      if(error instanceof GuestPolicyConflict)return freshJson({code:"conflict",error:error.message,family:"guest",current:error.current},409);
+      return bad("the guest policy store did not confirm the change. Try again.", 503);
+    }
+  }
+
+  // Validate the requested reader fields before touching the store, then merge only after an
+  // authoritative read. A malformed request remains a 400 even during a store incident.
+  let requestedReader: ReaderModel | null | undefined;
+  if ("defaultReader" in b) {
+    const v = b.defaultReader;
+    if (v === null || v === "") {
+      requestedReader = null;
+    } else if (typeof v === "string" && providerOf(v)) {
+      requestedReader = v as ReaderModel;
+    } else {
+      return bad("not an allowed reader model");
+    }
+  }
+
+  let requestedProviders: Provider[] | undefined;
+  if ("disabledProviders" in b) {
+    const v = b.disabledProviders;
+    if (!Array.isArray(v)) return bad("disabledProviders must be an array");
+    const out: Provider[] = [];
+    for (const p of v) {
+      if (typeof p !== "string" || !(PROVIDERS as readonly string[]).includes(p)) {
+        return bad("not a known provider");
+      }
+      if (!out.includes(p as Provider)) out.push(p as Provider);
+    }
+    requestedProviders = out;
+  }
+
+  // Reader changes are read-modify-write patches. Route the family before this read so a
+  // learning or guest request cannot wait on a store it does not use, and never merge a patch
+  // onto the fallback defaults returned when the reader store could not be read.
+  const current = await readSettings();
+  if (current.source !== "store") {
+    return bad(
+      "the current reader settings could not be read, so this change was not saved — " +
+        "writing now would overwrite your settings with defaults. Try again.",
+      503
+    );
+  }
+  // A stale tab changes only the field it sent, never its old copy of the other field.
+  const defaultReader = requestedReader === undefined ? current.defaultReader : requestedReader;
+  const disabledProviders = requestedProviders ?? current.disabledProviders;
+
+  if (defaultReader) {
+    const provider = providerOf(defaultReader)!;
+    if (disabledProviders.includes(provider)) {
+      return bad(`${defaultReader} cannot be the default while ${provider} is off — change the default first`);
     }
   }
 
   try {
     const next = await writeSettings({ defaultReader, disabledProviders });
     return Response.json(next);
-  } catch (e) {
-    // writeSettings refuses contradictions (a default whose provider this write turns off) and
-    // an unconfigured store. Both are the operator's to resolve, and both read as sentences.
-    return bad(e instanceof Error ? e.message : String(e), 409);
+  } catch {
+    // Every local validation refusal has already been allowlisted above. A later failure is the
+    // store/transport boundary; its provider body may contain commands or credentials.
+    return bad("the reader settings store did not confirm the change. Try again.", 503);
   }
 }

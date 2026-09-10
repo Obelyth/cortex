@@ -8,7 +8,6 @@ const corpus: Corpus = {
   sha: "eaf0a03e4849aaaa",
   bytes: 200,
   fetchedAt: Date.now(),
-  sidecar: new Map(),
   files: new Map([
     ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
     ["notes/beacon-rollout.md", "> SUPERSEDED 2026-07-25 — see projects/beacon.md.\n- SHIPPED 2026-07-14: live in production."],
@@ -41,7 +40,7 @@ function citing(path: string, quote: string, answer = "an answer") {
 // cache is exercised without reaching the network.
 let restore: typeof globalThis.fetch;
 beforeEach(() => {
-  process.env.BRAIN_REPO = "acme/brain";
+  process.env.BRAIN_REPO = "example-owner/brain";
   process.env.GITHUB_TOKEN = "test";
   restore = globalThis.fetch;
   globalThis.fetch = (async (url: string) => {
@@ -159,7 +158,7 @@ describe("ask", () => {
 
   it("honours an empty citation without attempting to verify one", async () => {
     const r = await ask("what is the vercel bill", async () =>
-      JSON.stringify({ answer: "NOT IN BRAIN — no pricing is recorded.", tag: "", quote: "" }));
+      JSON.stringify({ answer: "NOT IN BRAIN — no pricing is recorded.", tag: "", quote: "" }), { full: true });
     expect(r.notInBrain).toBe(true);
     expect(r.citation).toBeNull();
     expect(render(r)).toMatch(/^NOT IN BRAIN/);
@@ -182,7 +181,8 @@ describe("ask", () => {
     // tags resolve to no path at all.
     const r = await ask("anything", async () =>
       JSON.stringify({ answer: "x", tag: "deadbeef", quote: "a sufficiently long quote here" }));
-    expect(r.notInBrain).toBe(true);
+    expect(r.notInBrain).toBe(false);
+    expect(r.protocol).toBe("error");
     expect(r.citation).toBeNull();
   });
 

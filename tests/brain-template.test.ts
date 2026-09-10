@@ -1,15 +1,11 @@
-/**
- * A fresh brain must boot clean. The scaffold documents the retraction system, and any
- * literal marker word in a template file would make a brand-new customer's console open
- * with amber "retracted" findings before they have written a word — which is why the
- * template files point at the README's stamp table instead of spelling the words out.
- * This pins that choice against a well-meaning future edit that writes one back in.
- */
+/** The installed corpus starts with no invented memories or example projects. */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { retracted, splitBlocks } from "../lib/verify";
+import { isLive } from "../lib/corpus";
+import { renderContext } from "../lib/brain";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../brain-template");
 
@@ -25,10 +21,24 @@ describe("brain-template scaffold", () => {
 
   it("has the pages a fresh brain boots from", () => {
     const rel = files.map((p) => path.relative(ROOT, p)).sort();
-    expect(rel).toContain("profile.md");
-    expect(rel).toContain("INDEX.md");
-    expect(rel).toContain("notes/conventions.md");
-    expect(rel).toContain("projects/example-project.md");
+    expect(rel).toEqual(["INDEX.md", "profile.md"]);
+    expect(readFileSync(path.join(ROOT, "profile.md"), "utf8").trim()).toBe("# Profile");
+  });
+
+  it("serves only the blank profile, with no sample project or recent history on first boot", () => {
+    const live = new Map(files
+      .map((file) => [path.relative(ROOT, file), readFileSync(file, "utf8")] as const)
+      .filter(([file]) => isLive(file)));
+    const context = renderContext({
+      corpus: { files: live, sha: "blank-template", bytes: 10, fetchedAt: 0 },
+      bubble: { state: "absent" }, scores: null, nonce: "template-test",
+    });
+    expect([...live.keys()]).toEqual(["profile.md"]);
+    // The profile itself is a router row; no other note is installed.
+    expect(context.routerRows).toBe(1);
+    expect(context.expandedDays).toEqual([]);
+    expect(context.digestedDays).toEqual([]);
+    expect(context.bubble).toBe("absent");
   });
 
   it("boots with zero retracted blocks — no template file trips the verifier", () => {

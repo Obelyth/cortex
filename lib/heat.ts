@@ -20,22 +20,16 @@
  * interface every store fake in the tests must satisfy.
  */
 import { loadCorpus } from "./corpus";
-import { bubbleStore, renderBubble } from "./bubble";
+import { bubbleStore } from "./bubble";
 import {
-  cutRecentDays,
-  lastNDates,
-  RECENT_DAYS,
+  renderContext,
   ROUTER_BUDGET_BYTES,
 } from "./brain";
 import {
-  buildRouter,
   routerCut,
   safeText,
-  MAX_DESCRIPTION,
   type Temperature,
 } from "./frontmatter";
-import { logDigest } from "./digest";
-import { redact } from "./redact";
 import { readPins, type PinRow } from "./pins";
 
 /** One row of note_scores with the scoring's working — what the migration's view exposes. */
@@ -168,52 +162,20 @@ export async function assembleHeat(): Promise<HeatView> {
   const pinByPath = new Map<string, PinRow>();
   for (const p of pins ?? []) pinByPath.set(p.path, p);
 
-  // ── The seat, recomputed exactly as getContext assembles it ────────────────────────────────
-  // Same constants, same walks, same redaction; the nonce is a fixed placeholder of the same
-  // length as the real one (randomBytes(4).hex = 8 chars), so the byte count cannot wobble.
-  const nonce = "00000000";
+  // ── The seat, rendered by the exact pure builder getContext uses ───────────────────────────
   const temps = new Map<string, { temperature: Temperature }>();
   for (const s of scores ?? []) temps.set(s.path, { temperature: s.temperature });
 
-  const profile = corpus.files.get("profile.md");
-  const profileSection =
-    "# PROFILE\n\n" + (profile === undefined ? "(profile.md missing)" : redact(profile));
-
-  const routerStr = buildRouter(corpus.files, temps, ROUTER_BUDGET_BYTES);
   const cut = routerCut(corpus.files, temps, ROUTER_BUDGET_BYTES);
-
-  const bubbleSection = bubbleOutcome.state === "read" ? renderBubble(bubbleOutcome.read) : "";
-  const present = lastNDates(RECENT_DAYS).filter((d) => corpus.files.has(`log/${d}.md`));
-  const { expand, elide } = bubbleSection
-    ? { expand: [] as string[], elide: [...present] }
-    : cutRecentDays(present, corpus.files);
-
-  let recentSection = "";
-  if (present.length > 0) {
-    const blocks = [
-      ...expand.map(
-        (d) => `--- ${nonce} log/${d}.md ---\n${redact(corpus.files.get(`log/${d}.md`)!)}`
-      ),
-      ...elide.map((d) => {
-        const { description } = logDigest(corpus.files.get(`log/${d}.md`)!);
-        return `--- log/${d}.md · ${safeText(description, MAX_DESCRIPTION)} · not expanded — brain_read log/${d}.md for the full day ---`;
-      }),
-    ];
-    recentSection = `# RECENT (last ${RECENT_DAYS} days)\n\n${blocks.join("\n\n")}`;
-  }
-
-  const parts = [profileSection, routerStr];
-  if (bubbleSection) parts.push(bubbleSection);
-  if (recentSection) parts.push(recentSection);
-  const bodyBytes = parts.join("\n\n").length;
+  const preview = renderContext({ corpus, scores, bubble: bubbleOutcome, nonce: "00000000" });
 
   // ── Seat membership per note ────────────────────────────────────────────────────────────────
   // Precedence: verbatim beats a router line. profile.md also has a router row; the row is not
   // the reason it is in the seat.
   const seatOf = new Map<string, SeatKind>();
   for (const e of cut.rendered) seatOf.set(e.path, "router");
-  for (const d of expand) seatOf.set(`log/${d}.md`, "recent");
-  if (profile !== undefined) seatOf.set("profile.md", "profile");
+  for (const d of preview.expandedDays) seatOf.set(`log/${d}.md`, "recent");
+  if (corpus.files.has("profile.md")) seatOf.set("profile.md", "profile");
 
   // ── Tiles ───────────────────────────────────────────────────────────────────────────────────
   const tiles: HeatTile[] = [];
@@ -256,24 +218,19 @@ export async function assembleHeat(): Promise<HeatView> {
     pinsAvailable: pins !== null,
     tiles,
     seat: {
-      tokens: Math.round(bodyBytes / 4),
-      bodyBytes,
-      profileBytes: profileSection.length,
-      routerBytes: routerStr.length,
-      bubbleBytes: bubbleSection.length,
-      recentBytes: recentSection.length,
+      tokens: Math.round(preview.bytes / 4),
+      bodyBytes: preview.bytes,
+      profileBytes: preview.profileBytes,
+      routerBytes: preview.routerBytes,
+      bubbleBytes: preview.bubbleBytes,
+      recentBytes: preview.recentBytes,
       routerRows: cut.rendered.length,
       droppedRows: cut.dropped.length,
       coldRows: cut.cold.length,
-      expandedDays: expand,
-      digestedDays: elide,
-      bubble:
-        bubbleOutcome.state === "read"
-          ? bubbleSection
-            ? "live"
-            : "empty"
-          : bubbleOutcome.state,
-      ranked: scores !== null && scores.length > 0,
+      expandedDays: preview.expandedDays,
+      digestedDays: preview.digestedDays,
+      bubble: preview.bubble,
+      ranked: preview.ranked,
     },
   };
 }

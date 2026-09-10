@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 /** What note_pins may name: the mirror's own write-policy shape. Not READ_PATH_RE — archive/
  *  is never mirrored, so a pin there would be a row about a note the scorer cannot see. */
-const PIN_PATH_RE = /^(profile\.md|(projects|notes|log)\/[A-Za-z0-9._-]+\.md)$/;
+const PIN_PATH_RE = /^(profile\.md|(projects|notes|log|history)\/[A-Za-z0-9._-]+\.md)$/;
 
 const TEMPS = new Set(["hot", "warm", "cold"]);
 

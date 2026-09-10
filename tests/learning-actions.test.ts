@@ -86,6 +86,18 @@ describe("the actions endpoint", () => {
     expect((await res.json()).error).toMatch(/refused whole/);
   });
 
+  it.each(["busy", "capacity", "budget", "stale-input"] as const)("a %s refusal is a 409 that names its state, never 'unknown action'", async (state) => {
+    // These four are members of RebuildResult the switch once let fall through to the
+    // unknown-action 400 — the store's verdict reported as the operator's typo.
+    edges.rebuildEdges.mockResolvedValue({ state, head: "eaf0a03e4849aaaa" });
+    const res = await call({ action: "rebuild-graph" });
+    const body = await res.json();
+    expect(res.status).toBe(409);
+    expect(body.state).toBe(state);
+    expect(body.error).not.toMatch(/unknown action/);
+    expect(body.error.length).toBeGreaterThan(40);
+  });
+
   it("names the unmigrated and unconfigured states instead of pretending", async () => {
     edges.rebuildEdges.mockResolvedValue({ state: "missing" });
     expect((await (await call({ action: "rebuild-graph" })).json()).error).toMatch(/migrate/);

@@ -189,9 +189,12 @@ describe("hopNarrow — gating", () => {
   });
 
   it("hop order is seed-rank first, then weight: the best hit's neighbourhood outranks a stronger edge from a weaker hit", () => {
+    // With b=1.0 (full length normalization, the study's measured setting), a short
+    // exact-length doc outranks a longer doc with more raw term hits — so "top.md" is
+    // the one at/near avgdl, not the one with repeated "quartz".
     const files = corpus({
-      "top.md": "quartz crystal quartz quartz",
-      "second.md": "quartz",
+      "top.md": "quartz",
+      "second.md": "quartz crystal quartz quartz",
       "n1.md": "zzz",
       "n2.md": "zzz",
     });

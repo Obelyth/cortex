@@ -1,0 +1,8 @@
+# ops/heartbeat/cortex-heartbeat.service
+[Unit]
+Description=Cortex ops heartbeat
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/cortex-heartbeat.sh

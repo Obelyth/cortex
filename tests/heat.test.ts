@@ -23,7 +23,6 @@ import { cutRecentDays, getContext } from "../lib/brain";
 function seed(files: Record<string, string>) {
   __setCache({
     files: new Map(Object.entries(files)),
-    sidecar: new Map(),
     sha: "deadbeefcafe0000",
     bytes: 0,
     fetchedAt: Date.now(),
@@ -148,8 +147,8 @@ describe("assembleHeat seat parity", () => {
     // getContext reads temperatures through mirrorStore().scores(); the heat view reads the
     // same view with more columns. Both fakes answer from the same rows.
     __setStore({
+      snapshot: async () => ({ head: null, rows: [] }),
       head: async () => null,
-      all: async () => [],
       paths: async () => [],
       apply: async () => true,
       access: async () => {},

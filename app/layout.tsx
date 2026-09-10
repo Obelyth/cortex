@@ -7,10 +7,11 @@ import "./globals.css";
  * origin, so there is no runtime request to Google — no third-party font CDN in the loading
  * path of a page about keeping a private brain private.
  *
- * Archivo replaced the previous Hanken Grotesk + display-slot pairing in the console
- * redesign, and one variable file does both jobs: the `wdth` axis runs 62–125, so
- * "Archivo Expanded" is this same file at wdth 125 rather than a second download. Display
- * type takes the wide end, running UI text sits at the default 100.
+ * Archivo replaced Steelfish + Hanken Grotesk in the console redesign, and one variable file
+ * does both jobs: the `wdth` axis runs 62–125, so "Archivo Expanded" is this same file at
+ * wdth 125 rather than a second download. Display type takes the wide end, running UI text
+ * sits at the default 100. Steelfish was compressed, which is the opposite of the reference's
+ * wide geometric proportion — that proportion is the point of the change, not a side effect.
  *
  * JetBrains Mono is unchanged and load-bearing: mono is what marks a value as functional —
  * every ID, metric and timestamp.
@@ -29,31 +30,12 @@ const jetbrains = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  // Derived from the deployment so every self-hosted instance emits canonical and Open Graph
-  // URLs for its own host. Vercel injects VERCEL_PROJECT_PRODUCTION_URL (bare hostname, no
-  // scheme) into every build; the literal below is only the final fallback for builds that
-  // run outside Vercel, where absolute metadata URLs have no host to resolve against.
-  metadataBase: new URL(
-    process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : "https://obelyth-cortex.vercel.app",
-  ),
-  title: "Cortex by Obelyth — one memory, every surface",
+  title: "CORTEX by OBELYTH — one memory, every surface",
   description:
-    "Your notes, in one place, available to Claude everywhere you use it. Ask a question and get the answer plus the exact line it came from — checked automatically, or an honest “that isn't in here.”",
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "Cortex by Obelyth — one memory, every surface",
-    description:
-      "A private markdown brain served to every Claude surface over MCP, with a read path that proves its own citations. Open source, AGPL-3.0.",
-    url: "/",
-    siteName: "Cortex by Obelyth",
-    type: "website",
-    images: [{ url: "/brand/obelyth-emblem.png", width: 256, height: 256, alt: "The Obelyth emblem" }],
-  },
-  twitter: { card: "summary" },
-  // The product site is public and indexable. Gated routes 404 without the secret, and the
-  // raw demo-map route still opts itself out with its own x-robots-tag header.
+    "A private markdown brain served to every Claude surface over MCP, with a read path that proves its own citations.",
+  // The console is private and the landing describes a personal system — neither wants indexing.
+  robots: { index: false, follow: false },
+  icons: { icon: "/favicon.svg" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

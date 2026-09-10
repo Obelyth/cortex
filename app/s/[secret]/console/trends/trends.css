@@ -1,0 +1,311 @@
+/*
+ * Trends (v2) — every rule the screen's markup names, prefixed tr*. Values are the v2 tokens;
+ * the paper ground re-points them, so nothing here knows which ground it is on. Steel and
+ * amber carry the data; cyan appears only on the thing under the cursor. Troughs are machined
+ * recesses (--trough); sections sit 48px apart, columns 56px.
+ */
+
+/* ── The inverted strip: full-bleed, the lifetime figures on the light band ── */
+.trRoot { min-width: 0; }
+.trInv {
+  position: relative; z-index: 1;
+  margin: -44px calc(50% - 50vw) 0; width: 100vw;
+  background: var(--inv-bg); color: var(--inv-fg);
+  background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px;
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--cast), inset 0 0 0 1px var(--inv-hair);
+}
+.trInvInner { max-width: 1440px; margin: 0 auto; padding: 44px 28px 0; }
+.trHead {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 24px 48px; align-items: end; padding-bottom: 32px;
+}
+.trHeadLeft { min-width: 0; }
+.trTag { display: inline-flex; flex: none; }
+.trTagN { background: var(--signal); color: var(--signal-on); font: 500 11px var(--mono); letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
+.trTagLabel { background: var(--inv-chip); color: var(--inv-fg); font: 500 11px var(--mono); letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; flex: none; }
+.trTitle {
+  display: block; font-family: var(--sans); font-size: clamp(30px, 3.6vw, 56px); font-weight: 500;
+  line-height: 1.02; letter-spacing: -0.02em; margin: 18px 0 0; color: var(--inv-fg);
+}
+.trTitle b { font-weight: 800; font-variation-settings: var(--display-wide); }
+.trLede { margin: 0; font-size: 15px; line-height: 1.55; color: var(--inv-muted); max-width: 52ch; text-wrap: pretty; }
+/* 240, not 160. The figure is nowrap at clamp(32px,3.2vw,48px), so below about 970px the 32px
+   floor stops the type shrinking while the track keeps narrowing — the value spills its box,
+   and by ~805px it clears the padding and the hairline and lands on the next cell's glyphs:
+   "319h 04m" welded to "170". The canvas carries this same rule verbatim and was never drawn
+   below its own 1440 artboard, so the defect is inherited rather than ported wrong — but it
+   ships broken and the canvas is silent here, so it is decided in the code. At 240 the figure
+   fits at every width from 320 to 1600, and above 960 the four-across layout is unchanged. */
+.trStrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); position: relative; border-top: 1px solid var(--inv-line); }
+.trCell { padding: 22px 18px 26px 0; border-right: 1px solid var(--inv-hair); margin-right: 18px; min-width: 0; }
+.trCell:last-child { border-right: 0; margin-right: 0; }
+.trCellLabel { font: 400 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--inv-faint); white-space: nowrap; }
+.trCellFig {
+  font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide);
+  font-size: clamp(32px, 3.2vw, 48px); line-height: 1; margin-top: 10px; white-space: nowrap;
+  color: var(--inv-fg); font-variant-numeric: tabular-nums;
+}
+.trCellMeta { font: 400 11px var(--mono); color: var(--inv-muted); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trCellSpark { margin-top: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
+.trSparkNote { font: 400 10px var(--mono); color: var(--inv-faint); white-space: nowrap; }
+.trSpark { display: block; flex: none; }
+.trSparkLine { fill: none; stroke: var(--inv-fg); stroke-width: 1.6; stroke-linejoin: round; }
+.trSparkDot { fill: var(--inv-fg); }
+
+/* ── The body: the pulse, then the 2 × 2 grid ─────────────────────────────── */
+.trBody { max-width: 1440px; margin: 0 auto; padding: 44px 0 24px; display: flex; flex-direction: column; gap: 48px; }
+.trGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 48px 56px; }
+.trSecWrap { min-width: 0; }
+/* The four grid instruments rise in sequence after the pulse — the delay the kinetic layer reads. */
+.trGrid > .trSecWrap:nth-child(1) { --cx-d: 70ms; }
+.trGrid > .trSecWrap:nth-child(2) { --cx-d: 140ms; }
+.trGrid > .trSecWrap:nth-child(3) { --cx-d: 210ms; }
+.trGrid > .trSecWrap:nth-child(4) { --cx-d: 280ms; }
+.trSec { min-width: 0; position: relative; }
+.trSecHead {
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  gap: 8px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+.trSecLabel {
+  display: block; margin: 0; font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--bright); white-space: nowrap; flex: none;
+}
+.trSecNote { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; font: 400 11px var(--mono); color: var(--faint); }
+.trSecMeta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* Small chips in a header keep their size and grow their hit area to the 44px floor. */
+.conRoot .trSecLink, .trWinClear { position: relative; }
+.conRoot .trSecLink::before, .trWinClear::before { content: ""; position: absolute; inset: -10px -6px; }
+.conRoot .trSecLink {
+  border: 0; background: transparent; padding: 0; color: var(--accent);
+  font: 400 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; text-decoration: none;
+}
+.conRoot .trSecLink:hover { color: var(--accent-hi); text-decoration: none; }
+.trWinClear {
+  border: 1px solid var(--line); border-radius: var(--r-chip); background: transparent; color: var(--accent); cursor: pointer;
+  padding: 3px 8px; font: 400 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+  transition: border-color var(--dur) var(--ease);
+}
+.trWinClear:hover { border-color: var(--accent); }
+.trReadout { font: 400 11px var(--mono); color: var(--muted); margin-top: 8px; min-height: 16px; }
+.trNone { padding: 12px 0; font: 400 11px var(--mono); color: var(--faint); }
+.trAmber { color: var(--warn); }
+.trSteel { color: var(--muted); }
+.trSpacer { flex: 1; }
+
+/* ── Troughs: machined recesses the drawings sit in ───────────────────────── */
+.trTrough { background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r); padding: 10px 8px 4px; min-width: 0; }
+.trPulse { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 236px); gap: 40px; align-items: center; margin-top: 20px; }
+.trPulseTrough { min-width: 0; }
+.trMemTrough { margin-top: 16px; }
+.trClockCol { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
+.trClockCap { font: 400 11px var(--mono); color: var(--muted); text-align: center; line-height: 1.6; }
+
+/* ── The drawings ─────────────────────────────────────────────────────────── */
+.trChart, .trClock, .trDonut { display: block; height: auto; }
+.trClock { max-width: 260px; }
+.trDonut { max-width: 150px; }
+.trMid { stroke: var(--line); stroke-width: 1; }
+.trAxis { font-family: var(--mono); font-size: 10px; fill: var(--faint); }
+.trAxisEnd { text-anchor: end; }
+.trAxisMid { text-anchor: middle; }
+.trRead { font-family: var(--mono); font-size: 11px; fill: var(--bright); }
+.trLegend { letter-spacing: 1px; }
+.trHit { fill: transparent; outline: none; }
+.trHitGo { cursor: pointer; }
+.trHitOn { fill: var(--glass); }
+.trHit:focus-visible { stroke: var(--accent-hi); stroke-width: 2; }
+/* Bars: steel for reads & writes, snow for asks and memory, amber for not-in-memory and the
+   peak; the hovered slot goes cyan (its partner bright). Graded by opacity, set per bar. */
+.trBar { pointer-events: none; transform-box: fill-box; }
+.trBarUp { transform-origin: 50% 100%; }
+.trBarDown { transform-origin: 50% 0; }
+.trBar-steel { fill: var(--muted); }
+.trBar-snow { fill: var(--ink); }
+.trBar-amber { fill: var(--warn); }
+.trBarPeak { fill: var(--warn); }
+.trBarHover { fill: var(--accent-hi); }
+.trBarBright { fill: var(--bright); }
+/* The clock: steel wedges, the peak amber, the hovered one cyan, an empty hour the surface. */
+.trRing { fill: none; stroke: var(--hair); stroke-width: 1; stroke-dasharray: 2 4; }
+.trWedge { pointer-events: none; transform-box: view-box; transform-origin: 50% 50%; }
+.trWedge-steel { fill: var(--muted); }
+.trWedgeNone { fill: var(--surface2); }
+.trWedgePeak { fill: var(--warn); }
+.trWedgeHover { fill: var(--accent-hi); }
+.trClockHub { fill: var(--sunk); stroke: var(--line); stroke-width: 1; }
+.trClockN { font-family: var(--sans); font-weight: 800; font-size: 22px; fill: var(--bright); text-anchor: middle; font-variation-settings: var(--display-wide); }
+.trClockSub { font-family: var(--mono); font-size: 8px; fill: var(--faint); letter-spacing: 1.5px; text-anchor: middle; }
+/* The donut leads with steel. */
+.trDonutTrack { fill: none; stroke: var(--surface2); stroke-width: 12; }
+.trArc { fill: none; stroke-width: 12; cursor: pointer; transition: stroke-width 160ms var(--ease); }
+.trArcOn { stroke-width: 16; }
+.trArc-steel { stroke: var(--muted); }
+.trArc-amber { stroke: var(--warn); }
+.trArc-snow { stroke: var(--ink); }
+.trArc-ok { stroke: var(--ok); }
+.trArc-grey { stroke: var(--disabled); }
+.trDonutN { font-family: var(--sans); font-weight: 800; font-size: 26px; fill: var(--bright); text-anchor: middle; font-variation-settings: var(--display-wide); }
+.trDonutSub { font-family: var(--mono); font-size: 8px; fill: var(--faint); letter-spacing: 1.5px; text-anchor: middle; }
+.trDot { width: 8px; height: 8px; display: inline-block; }
+.trDot.trArc-steel { background: var(--muted); }
+.trDot.trArc-amber { background: var(--warn); }
+.trDot.trArc-snow { background: var(--ink); }
+.trDot.trArc-ok { background: var(--ok); }
+.trDot.trArc-grey { background: var(--disabled); }
+/* The legend swatches on the memory chart. */
+.trSw { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.trSw i { display: inline-block; width: 8px; height: 8px; }
+.trSwSnow { background: var(--ink); opacity: 0.8; }
+.trSwAmber { background: var(--warn); opacity: 0.7; }
+
+/* ── Rows: a pattern, a reader — hover shifts the row and prints its signal edge ── */
+.trRow {
+  display: grid; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 0; min-height: 44px;
+  border: 0; border-bottom: 1px solid var(--hair); border-left: 3px solid transparent; margin-left: -3px;
+  background: transparent; color: var(--ink); border-radius: 0 var(--r-chip) var(--r-chip) 0; cursor: pointer; font: inherit;
+  transition: transform 200ms var(--ease), border-color 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease);
+}
+.trRow:hover, .trRowOn { transform: translateX(6px) translateY(-1px); border-left-color: var(--signal); background: var(--glass); box-shadow: var(--elev1); }
+/* The content steps in from the signal edge by transform, never by padding — no layout on hover. */
+.trRow > :not(:last-child) { transition: transform 200ms var(--ease); }
+.trRow:hover > :not(:last-child), .trRowOn > :not(:last-child) { transform: translateX(8px); }
+.trPat { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.trModel { grid-template-columns: 10px minmax(0, 1fr) auto; padding-top: 10px; padding-bottom: 10px; }
+.trPatArrow { font: 400 14px var(--mono); white-space: nowrap; }
+.trRowBody { min-width: 0; }
+.trRowTitle { display: block; font-size: 14px; color: var(--bright); }
+.trRowSub { display: block; font: 400 11px var(--mono); color: var(--faint); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; }
+.trChip {
+  display: inline-block; padding: 2px 7px; font: 400 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: var(--r-chip); white-space: nowrap; flex: none;
+}
+.trModelName { display: block; font: 400 12px var(--mono); color: var(--bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trPct { font: 400 12px var(--mono); color: var(--ink); min-width: 40px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ── Busy hours: 6 bands × 7 days in a trough, the peak amber ─────────────── */
+.trHeat {
+  display: grid; grid-template-columns: 44px repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 16px; padding: 12px;
+  background: var(--sunk); box-shadow: var(--trough); border-radius: var(--r); font: 400 10px var(--mono); color: var(--faint);
+}
+.trHeatDay { text-align: center; }
+.trHeatBand { align-self: center; }
+.trHeatCell { height: 28px; border: 1px solid transparent; padding: 0; cursor: pointer; border-radius: 0; transition: transform 120ms var(--ease); }
+.trHeatCell:hover, .trHeatCell:focus-visible { transform: scale(1.1); border-color: var(--bright); }
+.trHeatCell:not(.trHeatNone) { border-color: color-mix(in srgb, var(--ground) 45%, transparent); box-shadow: var(--elev1); }
+.trHeatNone { background: var(--surface2); }
+/* Four amber steps and then orange, exactly as the canvas grades it: 30%, 60%, full --warn, and
+   --signal for the single busiest cell. Shipping five amber steps instead made the peak the same
+   hue as "high" one notch down, so the busiest hour of the week — the one figure this instrument
+   exists to point at — was a shade rather than a colour. */
+.trHeatLow { background: color-mix(in srgb, var(--warn) 30%, transparent); }
+.trHeatMid { background: color-mix(in srgb, var(--warn) 60%, transparent); }
+.trHeatHigh { background: var(--warn); }
+/* --signal, and deliberately outside the ramp. Two reviews have now flagged that this breaks
+   monotonic lightness, and by measurement they are right: on ink low/mid/high climb 0.065 -> 0.184
+   -> 0.462 and peak drops back to 0.204; on paper they descend 0.597 -> 0.355 -> 0.146 and peak
+   rises to 0.204. It reverses direction against high on both grounds.
+   It stays because peak is a MARKER, not a fourth step. trends-client's level() buckets magnitude
+   into low/mid/high only; this class fires solely on the single busiest cell, and the canvas this
+   PR ports says so in its own words — `v === heatMax ? 'var(--signal)'` for the cell and a
+   --signal swatch in the legend. The ring on .trHeatCell.trHeatPeak below is the other half of
+   saying "this one", and a marker is meant to leave the family it marks. Changing it would be
+   overriding the design, which is the one thing this PR exists not to do. */
+.trHeatPeak { background: var(--signal); }
+.trHeatCell.trHeatPeak { box-shadow: inset 0 0 0 1px var(--bright), var(--elev1); }
+.trHeatKey { display: flex; align-items: center; gap: 10px; margin-top: 12px; font: 400 10px var(--mono); color: var(--faint); flex-wrap: wrap; }
+.trKey { display: inline-flex; align-items: center; gap: 5px; }
+.trKey i { width: 10px; height: 10px; display: inline-block; }
+.trHeatRead { color: var(--muted); }
+
+/* ── Who answered: the donut beside its rows ──────────────────────────────── */
+.trWho { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr); gap: 20px; align-items: center; margin-top: 12px; }
+.trDonutBox { min-width: 0; }
+.trWhoList { min-width: 0; }
+
+/* ── The lens bodies: a window of calls, a pattern, a reader ──────────────── */
+.trLens { min-width: 0; }
+.trLensId { font: 400 11px var(--mono); color: var(--faint); overflow-wrap: anywhere; }
+.trLensDesc { font-size: 14px; line-height: 1.55; margin: 16px 0 0; color: var(--ink); text-wrap: pretty; }
+.trLensKv { margin: 16px 0 0; }
+.trLensRow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 14px; border-top: 1px solid var(--hair); }
+.trLensK { font: 400 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); padding: 8px 0; white-space: nowrap; }
+.trLensV { margin: 0; font: 400 12px var(--mono); color: var(--ink); padding: 8px 0; overflow-wrap: anywhere; }
+.trLensTiesLabel {
+  font: 400 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--faint);
+  margin-top: 24px; padding-bottom: 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.trLensTies { list-style: none; margin: 0; padding: 0; }
+.trLensTie { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--hair); color: var(--ink); }
+.trLensTieKind { font: 400 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.trLensTieLabel { display: block; font-size: 13px; }
+.trLensTieWhy { display: block; font: 400 11px var(--mono); color: var(--faint); margin-top: 2px; }
+.trLensActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 22px; }
+.conRoot .trLensAct {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-chip);
+  background: transparent; color: var(--ink); cursor: pointer; font: 600 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase;
+  white-space: nowrap; text-decoration: none; transition: transform 140ms var(--ease);
+}
+.conRoot .trLensAct:hover { transform: translateY(-1px); color: var(--bright); text-decoration: none; }
+.conRoot .trLensAct:active { transform: translateY(1px); }
+.conRoot .trLensActPrimary { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+.conRoot .trLensActPrimary:hover { color: var(--accent-on); }
+/* An inert ink token and a hairline, never opacity — the law's one explicitly named don't, and
+   the pattern .opsAct:disabled already uses. opacity also dims the border and the label
+   together, which is what makes a disabled control read as a rendering fault. */
+.conRoot .trLensAct:disabled { color: var(--disabled); border-color: var(--hair); background: transparent; cursor: default; transform: none; }
+.trLensWhy { font: 400 11px var(--mono); color: var(--warn); flex-basis: 100%; }
+.trLensNote { font: 400 11px var(--mono); color: var(--faint); margin-top: 12px; line-height: 1.6; }
+
+/* ── The empty screen: one statement, then what fills each instrument and when ── */
+.trEmpty { max-width: 78ch; }
+.trEmptyBody { font-size: 15px; line-height: 1.6; color: var(--muted); margin: 0 0 22px; max-width: 66ch; }
+.trEmptyList { border-top: 1px solid var(--line); margin-bottom: 24px; }
+.trEmptyRow { display: grid; grid-template-columns: minmax(160px, 220px) 1fr; gap: 0 24px; padding: 12px 0; border-bottom: 1px solid var(--hair); align-items: baseline; }
+.trEmptyWhat { font: 500 12px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
+.trEmptyWhen { font-size: 13px; line-height: 1.5; color: var(--muted); }
+.conRoot .trEmptyGo {
+  display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--accent); border-radius: var(--r-chip);
+  color: var(--accent); font: 600 11px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none;
+}
+.conRoot .trEmptyGo:hover { color: var(--accent-hi); border-color: var(--accent-hi); text-decoration: none; }
+
+/* ── The kinetic layer: bars grow, wedges pop, arcs draw — once, after the section rises ── */
+.conRoot.cxReady [data-cx].cxIn .trBar { animation: cx-bar 520ms var(--ease) 80ms backwards; }
+.conRoot.cxReady [data-cx].cxIn .trWedge { animation: cx-pop 420ms var(--ease) 100ms backwards; }
+.conRoot.cxReady [data-cx].cxIn .trArc { animation: cx-ring 900ms var(--ease) 200ms backwards; }
+.conRoot.cxReady [data-cx].cxIn .trHeatCell { animation: cx-pop 320ms var(--ease) 80ms backwards; }
+.conRoot.cxReady [data-cx].cxIn .trSparkLine { animation: cx-flood 900ms var(--ease) 300ms backwards; }
+@media (prefers-reduced-motion: reduce) {
+  .trBar, .trWedge, .trArc, .trHeatCell, .trSparkLine { animation: none !important; }
+  .trRow, .trRow > *, .trHeatCell, .trArc, .trWinClear, .conRoot .trLensAct { transition: none; }
+  .trRow:hover, .trRowOn, .trRow:hover > *, .trRowOn > *, .trHeatCell:hover, .trHeatCell:focus-visible, .conRoot .trLensAct:hover { transform: none; }
+}
+
+/* ── Narrow ───────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .trInvInner { padding-left: 14px; padding-right: 14px; }
+  .trPulse { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .trCell { padding-right: 12px; margin-right: 12px; }
+}
+@media (max-width: 480px) {
+  .trWho { grid-template-columns: minmax(0, 1fr); justify-items: stretch; }
+  .trDonutBox { justify-self: center; width: 150px; }
+  .trEmptyRow { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* ── The strip's track count, stepped rather than fitted ───────────────────── */
+/* The strip holds exactly four cells, and auto-fit does not know that. With minmax(240px, 1fr) and
+   no gap it packs as many as the container allows, so a container between 720 and 959px gives
+   THREE tracks and drops the fourth cell alone onto a second row. .trInvInner is the window less
+   56px (28 below 900), which puts that orphan band at a viewport of 748 to 1015px — squarely
+   across laptop and tablet widths, and wider than the earlier 160px track's own orphan band, which
+   is why raising the minimum to 240 moved the problem rather than solving it.
+   Four cells divide as 4, 2 or 1 and never orphan, so the count is stated instead of inferred:
+   four across once four 240px cells fit (a 960px container, a 1016px viewport), two down to where
+   two still do (a 480px container, a 508px viewport), one below that.
+   At the foot, after every other rule in this sheet, because an override that sits above the rule
+   it overrides loses at equal specificity — the mistake that flattened the CX gradient, the
+   footer's two colours, and the Ask small label on this very branch. */
+@media (max-width: 1015px) { .trStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 507px)  { .trStrip { grid-template-columns: minmax(0, 1fr); } }
