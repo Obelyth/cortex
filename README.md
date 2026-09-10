@@ -5,7 +5,10 @@
 
 **One memory, every surface.**
 
-A protected dashboard and MCP server for your private Markdown notes.
+Cortex is a self-hosted AI memory system for private Markdown notes. Its
+protected dashboard lets you inspect and operate that memory. Its Model Context
+Protocol (MCP) server gives compatible AI clients a standard way to read it and,
+when trusted, write to it.
 
 [![release](https://img.shields.io/github/v/release/Obelyth/cortex?label=release)](https://github.com/Obelyth/cortex/releases/latest)
 [![ci](https://img.shields.io/github/actions/workflow/status/Obelyth/cortex/ci.yml?branch=main&label=ci)](https://github.com/Obelyth/cortex/actions/workflows/ci.yml)
@@ -15,7 +18,21 @@ A protected dashboard and MCP server for your private Markdown notes.
 
 Cortex keeps durable notes in a private GitHub repository you control. Note writes become Git commits. An optional Supabase database adds a rebuildable notes mirror, working notes, device records, and operations history. Working notes and operations records are not recoverable from the notes repository, so back up that database separately.
 
-The public release starts blank: no personal corpus, example project, sample history, provider credentials, or preselected working project. You can browse and edit notes and preview context without a paid model key. Generating an answer through Ask requires a configured reader provider and may incur charges.
+An installation from this branch starts blank: no personal corpus, example
+project, sample history, provider credentials, or preselected working project.
+You can browse notes, edit working notes on Overview, and preview context without
+a paid model key. Trusted MCP clients can capture and edit durable notes.
+Generating an answer through Ask requires a configured reader provider and may
+incur charges.
+
+This README documents the source tree you are viewing. On `main`, that includes
+the latest merged dashboard and blank-brain setup, which may be newer than the
+latest published release. If you install from a release tag, follow the README
+stored at that same tag.
+
+**Navigate:** [Dashboard](#the-dashboard) · [Setup](#start-with-a-private-blank-brain) · [Optional services](#add-services-when-you-need-them) · [MCP clients](#connect-a-trusted-client) · [Local development](#local-development) · [Updates](#updates-and-recovery)
+
+**Documentation:** [Environment variables](.env.example) · [Database setup](docs/database-bootstrap.md) · [Dependencies and CI](.github/DEPENDENCIES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](ROADMAP.md) · [Design reference](DESIGN.md)
 
 ## The dashboard
 
@@ -25,7 +42,7 @@ The protected dashboard has five tabs:
 | --- | --- |
 | Ops | Review readiness and operational receipts; explicitly request available checks, migrations, or deployments. |
 | Overview | See activity and manage Working context. Choose a project, inspect its context, and edit or page through working notes here. |
-| Ask | Browse the notes catalog, open notes, capture or edit content, and optionally ask a reader model a question. |
+| Ask | Browse the notes catalog, open notes, inspect context, and optionally ask a reader model a question. Durable note capture and editing use trusted MCP tools, not Ask controls. |
 | Trends | Inspect recorded usage, memory growth, and retrieval patterns. A new installation has no history to chart. |
 | Settings | Set supported preferences, inspect provider readiness, enter supported configuration, and get client connection instructions. |
 
@@ -35,9 +52,9 @@ There is no public demo site on a deployed instance. Open `/s/<CONNECTOR_PATH_SE
 
 ## Start with a private, blank brain
 
-You need Node **22.x** (tested with **22.23.2**), Git, a GitHub account, and a Vercel account to follow the hosted setup. Provider setup and permission grants are one-time administrator steps; the dashboard cannot grant itself access to your accounts.
+You need a GitHub account and a Vercel account for this browser-based hosted setup. Provider setup and permission grants are one-time administrator steps; the dashboard cannot grant itself access to your accounts.
 
-1. Make your own copy of [Obelyth/cortex](https://github.com/Obelyth/cortex), using GitHub's template action or a clone. This is the **application source**, not the notes repository. Keep secrets and notes out of it.
+1. In GitHub, use the template action on [Obelyth/cortex](https://github.com/Obelyth/cortex) to make your own application source repository. This is the **application source**, not the notes repository. Keep secrets and notes out of it.
 2. Create a separate **private** GitHub repository for the brain. Put the two files from [brain-template](brain-template) at its root and make an initial commit. They contain only an empty `profile.md` and an `INDEX.md` listing that profile. Do not upload the enclosing `brain-template` directory. No other directories are needed until you create notes.
 3. Create a fine-grained GitHub token restricted to that brain repository, with **Contents: Read and write**. Set `BRAIN_REPO` to its `owner/repository` and `BRAIN_BRANCH` to its actual default branch. Do not assume the branch is `main` for an existing repository.
 4. Import your application source into Vercel. In the project's environment settings, set `BRAIN_REPO`, `BRAIN_BRANCH`, `GITHUB_TOKEN`, `MCP_TOKEN`, `CONNECTOR_PATH_SECRET`, and `CONSOLE_PASSCODE` for Production. Generate separate random values for the three access credentials and store them in a password manager. [.env.example](.env.example) explains each exact field name and whether it is a secret or configuration value.
@@ -48,7 +65,13 @@ Saving an environment variable does not update an already-running deployment. De
 
 ### Optional setup wizard
 
-The wizard performs the repository and Vercel steps interactively. Install and sign in to the [GitHub CLI](https://cli.github.com/) and [Vercel CLI](https://vercel.com/docs/cli) first; Vercel CLI 50.5.1 or newer is needed for its authenticated deployment check. Creating a brain through the wizard also requires your Git author name and email to be configured; setup checks this before creating the remote repository. The browser-based steps above do not require local Git configuration.
+The wizard performs the repository and Vercel steps interactively. It requires
+Node **22.18.0 or newer and earlier than 23**, Git, an authenticated
+[GitHub CLI](https://cli.github.com/), and an authenticated
+[Vercel CLI](https://vercel.com/docs/cli) version 50.5.1 or newer. If the wizard
+creates the brain repository, Git also needs your author name and email. The
+browser-based steps above do not require Node, local Git, either CLI, or a local
+Git identity.
 
 ```bash
 git clone https://github.com/Obelyth/cortex.git
