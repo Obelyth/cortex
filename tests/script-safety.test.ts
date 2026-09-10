@@ -133,6 +133,11 @@ describe("benchmark baseline boundary", () => {
 });
 
 describe("terminal log fields", () => {
+  it.each([undefined, Symbol("unsupported"), () => 4, { toJSON: () => undefined }])(
+    "refuses a value whose JSON serialization produces no record: %s", (value) => {
+      expect(() => terminalSafety.safeJsonLogRecord!(value)).toThrow("Terminal JSON record is not serializable");
+    },
+  );
   it("renders CR, LF, and ANSI controls visibly without changing ordinary text", () => {
     expect(safeLogValue("alpha\r\nbeta\u001b[31mred\u001b[0m")).toBe("alpha\\r\\nbetared");
     expect(safeLogValue("ordinary/path.md")).toBe("ordinary/path.md");
