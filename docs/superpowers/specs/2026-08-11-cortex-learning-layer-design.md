@@ -1,4 +1,14 @@
-# The learning layer — passive-but-smart
+# Historical proposal: the learning layer
+
+> **Archived design proposal, not current product documentation.** This August 2026
+> proposal predates the current dashboard. Its benchmark figures, cost estimates,
+> data-collection statements, and sequencing describe an earlier development context,
+> not a new installation or a verified product guarantee. `brain_handoff` now ships;
+> the Map is removed. Planned learning mechanisms below are not a feature checklist.
+> Use the [current README](../../../README.md), [roadmap](../../../ROADMAP.md), and
+> [design reference](../../../DESIGN.md) for installation and current behavior.
+
+The original proposal is retained below for development history only.
 
 **Decided 2026-08-11 by the deployment owner:** the brain learns as we go and thinks ahead, but stays
 **passive**. The decision approved usage-learning (layer 1) and structure-learning (layer 2) and
