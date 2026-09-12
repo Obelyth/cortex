@@ -24,7 +24,7 @@ on:
 # diagnosed several times in parallel. Queueing rather than cancelling means the
 # second run starts after the first has finished and sees the real count.
 concurrency:
-  group: ci-autofix-${{ github.event.workflow_run.head_branch }}
+  group: auto-fix-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: false
 
 permissions:
