@@ -193,7 +193,7 @@ export function WireClient({
             path {w.door === "terminal" ? "01 · terminal" : w.door === "connector" ? "02 · connector" : "03 · guest"} ·{" "}
             {w.grants} · {w.where}
           </span>
-          <button type="button" className="setBtn" onClick={() => void copy()} aria-live="polite">
+          <button type="button" className="inkControl setBtn" onClick={() => void copy()} aria-live="polite"><span className="inkSweep" aria-hidden="true" />
             {copyState === "copied" ? "copied" : copyState === "failed" ? "copy failed" : usesSecret ? "copy with secret" : "copy"}
           </button>
         </div>

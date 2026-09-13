@@ -81,16 +81,25 @@ export function ReadersRecord({ readers, note, writable }: Readonly<{ readers: R
         const chip = evalChip(r);
         return (
           <button key={r.model} type="button" className="setRecRow" onClick={() => open(r)} aria-label={`${r.model} — open in the lens`}>
-            <span>
+            <span className="setRecIdentity">
               <span className="setRecModel">
                 {r.model}
                 {r.isDefault && <span className="setRecDefault"> · default</span>}
               </span>
               <span className="setRecSub">{keyWord(r)}</span>
             </span>
-            <span className={chip.cls} title={r.evalNote}>{chip.text}</span>
-            <span className="setRecNum">{r.calls ? `${r.verified} / ${r.unverified} / ${r.errors}` : "—"}</span>
-            <span className="setRecNum">{r.p50 !== null ? `${(r.p50 / 1000).toFixed(1)}s` : "—"}</span>
+            <span className="setRecCell setRecEvalCell">
+              <span className="setRecMetricLabel">Eval</span>
+              <span className={chip.cls} title={r.evalNote}>{chip.text}</span>
+            </span>
+            <span className="setRecCell">
+              <span className="setRecMetricLabel">OK / BAD / ERR</span>
+              <span className="setRecNum">{r.calls ? `${r.verified} / ${r.unverified} / ${r.errors}` : "—"}</span>
+            </span>
+            <span className="setRecCell">
+              <span className="setRecMetricLabel">P50</span>
+              <span className="setRecNum">{r.p50 !== null ? `${(r.p50 / 1000).toFixed(1)}s` : "—"}</span>
+            </span>
           </button>
         );
       })}
@@ -170,7 +179,7 @@ function ReaderLens({
         )}
       </div>
       <div className="setLensActions">
-        <button type="button" className="setLensBtn setLensBtnPrimary" disabled={!can || busy} title={why} onClick={() => void go()}>
+        <button type="button" className="inkControl setLensBtn setLensBtnPrimary" disabled={!can || busy} title={why} onClick={() => void go()}><span className="inkSweep" aria-hidden="true" />
           {busy ? "…" : "Make default"}
         </button>
       </div>

@@ -93,7 +93,7 @@ export function LearningRows({ vm }: Readonly<{ vm: LearningVM }>) {
       <Row label="Clear the cache" sub="deletes every stored answer in this environment; the next asks answer fresh and re-fill">
         <button
           type="button"
-          className="setBtn"
+          className="inkControl setBtn"
           disabled={w.working || vm.storeState !== "store"}
           onClick={() =>
             void act("clear-answer-cache", "clear", (j) => {
@@ -101,7 +101,7 @@ export function LearningRows({ vm }: Readonly<{ vm: LearningVM }>) {
               return `answer cache cleared — ${n} entr${n === 1 ? "y" : "ies"} removed`;
             })
           }
-        >
+        ><span className="inkSweep" aria-hidden="true" />
           {w.busy === "clear" ? "…" : "clear now"}
         </button>
       </Row>
@@ -133,7 +133,7 @@ export function LearningRows({ vm }: Readonly<{ vm: LearningVM }>) {
       <Row label="Rebuild note connections" sub="Recalculates connections from the current notes mirror. It does not edit notes or restore the removed Map. If the notes change during the rebuild, that result is refused.">
         <button
           type="button"
-          className="setBtn"
+          className="inkControl setBtn"
           disabled={w.working || !canRebuild}
           title={canRebuild ? undefined : "needs a migrated, answering graph store"}
           onClick={() =>
@@ -143,7 +143,7 @@ export function LearningRows({ vm }: Readonly<{ vm: LearningVM }>) {
                 : `graph already current at ${String(j.head).slice(0, 8)}`
             )
           }
-        >
+        ><span className="inkSweep" aria-hidden="true" />
           {w.busy === "rebuild" ? "…" : "rebuild"}
         </button>
       </Row>

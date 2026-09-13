@@ -46,6 +46,7 @@
 .opsJobRow small,.opsJobCheck small { margin-top: 3px; color: var(--faint); font-family: var(--mono); font-size: 11px; line-height: 1.5; }
 .opsJobCheck { padding: 9px 0; border-top: 1px solid var(--hair); }
 .opsJobCheck-passed span { color: var(--ok); }.opsJobCheck-failed span { color: var(--crit); }.opsJobCheck-unavailable span { color: var(--warn); }
+.opsJobCheck-running span { color: var(--accent); }.opsJobCheck-waiting span { color: var(--muted); }
 .opsBody { max-width: 1384px; margin: 28px auto 0; display: flex; flex-direction: column; gap: 28px; min-width: 0; }
 
 /* ── Instrument panels: the register and the timeline sit on the band ───────── */
@@ -57,6 +58,9 @@
 .opsTag { display: inline-flex; flex: none; animation: cx-pop 360ms var(--ease) 120ms backwards; }
 .opsTagN { background: var(--signal); color: var(--signal-on); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
 .opsTagLabel { margin: 0; background: var(--surface2); color: var(--bright); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; flex: none; }
+.opsTagN { border-radius: var(--r-chip) 0 0 var(--r-chip); }
+.opsTagLabel { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
+.opsJobRow { border-radius: var(--r-chip); }
 
 /* ── The register ───────────────────────────────────────────────────────────── */
 .opsTable { min-width: 0; }
@@ -84,7 +88,7 @@
 .opsLast { min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--mono); font-size: 11px; color: var(--ink); }
 .opsLastRun { white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 /* Evidence: a SHA on the raised surface, never a colour. */
-.opsEv { padding: 1px 6px; background: var(--surface2); color: var(--ink); white-space: nowrap; }
+.opsEv { padding: 1px 6px; background: var(--surface2); color: var(--ink); border-radius: var(--r-chip); white-space: nowrap; }
 .opsState { justify-self: start; }
 /* State chips are outlined mono, the colour on the word, the border on currentColor. Each one
    prints in sequence when the register arrives; a running unit's breathes instead. */
@@ -109,13 +113,14 @@
 .opsRow:hover .opsGo, .opsRow:focus-within .opsGo { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 
 /* ── Beneath the register: Decisions beside the Timeline ────────────────────── */
-.opsBeneath { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; min-width: 0; }
+.opsBeneath { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: stretch; min-width: 0; }
 /* The static wrapper the streamed panel arrives inside. */
 .opsDecisionsWrap { min-width: 0; }
 
 /* The inverted panel: the inbox as the one region that reverses the ground, because it is the
    one region asking a person for something. Every colour inside is an --inv-* token. */
-.opsDecisions { position: relative; min-width: 0; padding: 18px 20px 8px; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px; box-shadow: var(--cast); animation: cx-rise 460ms var(--ease) 210ms backwards; }
+/* The streamed skeleton still reserves enough room for one usable Timeline entry. */
+.opsDecisions { position: relative; min-height: 160px; min-width: 0; padding: 18px 20px 8px; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-radius: var(--r); box-shadow: var(--cast); animation: cx-rise 460ms var(--ease) 210ms backwards; }
 .opsDecisionsHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--inv-line); flex-wrap: wrap; }
 .opsDecisions .opsTagLabel { background: var(--inv-chip); color: var(--inv-fg); }
 .opsDecisionsMeta { font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
@@ -142,8 +147,12 @@
 .opsQuiet { padding: 12px 0; font-family: var(--mono); font-size: 11px; color: var(--inv-faint); }
 
 /* The timeline: receipts newest first, a rule with the date opening each day. */
-.opsTimeline { position: relative; min-width: 0; padding: 18px 20px 8px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; box-shadow: var(--well); animation: cx-rise 460ms var(--ease) 280ms backwards; }
-.opsReceipts { list-style: none; margin: 0; padding: 0; min-width: 0; }
+/* Decisions sets the desktop row height; an ever-longer audit trail must not grow it.
+   Only entries scroll, so the heading stays visible without sticky positioning or JS. */
+.opsTimeline { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); contain: size; min-height: 0; min-width: 0; padding: 18px 20px 8px; background: var(--band); background-image: radial-gradient(var(--grain) 0.6px, transparent 0.7px); background-size: 3px 3px; border-radius: var(--r); box-shadow: var(--well); animation: cx-rise 460ms var(--ease) 280ms backwards; }
+.opsReceipts { list-style: none; margin: 0; padding: 0 8px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--muted) transparent; }
+.opsReceipts .opsReceipt { min-height: 44px; }
+.opsReceipts .opsMark { white-space: normal; }
 .opsDay { padding: 14px 0 4px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); }
 .opsReceipt { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: baseline; width: calc(100% + 8px); text-align: left; padding: 10px 0 10px 8px; margin-left: -8px; border: 0; border-bottom: 1px solid var(--hair); border-radius: 0 var(--r-chip) var(--r-chip) 0; background: transparent; color: var(--ink); cursor: pointer; font: inherit; transition: transform 200ms var(--ease), background-color 200ms var(--ease), box-shadow 220ms var(--ease); }
 .opsReceipt::before { content: ""; position: absolute; left: 0; top: 0; bottom: -1px; width: 3px; background: transparent; transition: background-color 200ms var(--ease); }
@@ -191,11 +200,18 @@
 .opsActPrimary, .opsActPrimary:hover { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
 .opsAct-working { background: var(--surface2); border-color: var(--line); color: var(--muted); }
 .opsAct-working::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--accent); animation: cx-load 700ms var(--ease) forwards; }
+.opsAct.inkControl:not(.opsAct-working) { overflow: visible; }
+.conRoot .opsAct:is(.opsAct-working, .opsAct-done, .opsAct-failed) > .inkSweep::before { animation: none; }
+.conRoot :is(.opsCommands, .opsRegister) {
+  background-image: var(--ink-pool), radial-gradient(var(--grain) .6px, transparent .7px);
+  background-size: 100% 100%, 3px 3px;
+}
+@media (forced-colors: active) { .conRoot :is(.opsCommands, .opsRegister) { background-image: none; } }
 .opsAct-done, .opsAct-done:hover { background: var(--ok); border-color: var(--ok); color: var(--accent-on); }
 .opsAct-failed, .opsAct-failed:hover { background: var(--crit); border-color: var(--crit); color: var(--accent-on); }
 /* Inert says so in the inert ink, never in opacity; aria-disabled keeps the focus where it was. */
 .opsAct[aria-disabled="true"], .opsAct:disabled { color: var(--disabled); border-color: var(--hair); background: transparent; cursor: default; transform: none; }
-.opsReceiptChip { padding: 6px 10px; background: var(--surface2); font-family: var(--mono); font-size: 11px; color: var(--ok); white-space: nowrap; animation: cx-pop 300ms var(--ease); }
+.opsReceiptChip { padding: 6px 10px; background: var(--surface2); border-radius: var(--r-chip); font-family: var(--mono); font-size: 11px; color: var(--ok); white-space: nowrap; animation: cx-pop 300ms var(--ease); }
 .opsErr { font-family: var(--mono); font-size: 11px; color: var(--crit); overflow-wrap: anywhere; }
 .opsLensNote { font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--faint); }
 .opsQueued { display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px; border: 1px dashed var(--line); border-radius: var(--r-chip); font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
@@ -210,6 +226,7 @@
 /* ── Narrower ───────────────────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
   .opsBeneath { grid-template-columns: minmax(0, 1fr); }
+  .opsTimeline { contain: none; max-height: clamp(360px, 65svh, 680px); overflow: hidden; }
 }
 @media (max-width: 900px) {
   .opsStripIn { padding: 0 14px; }

@@ -54,7 +54,7 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
   const markAll = async () => { const top = data.notices[0]?.id ?? 0; await fetch(`/s/${secret}/console/ops/notices`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ upTo: top }) }); setData({ ...data, unread: 0, notices: data.notices.map((n) => ({ ...n, unread: false })) }); };
   return (
     <>
-      <button ref={bell} type="button" className="ntBell" aria-label={`Notices · ${data.unread} unread`} aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button ref={bell} type="button" className="inkControl ntBell" aria-label={`Notices · ${data.unread} unread`} aria-expanded={open} onClick={() => setOpen(!open)}><span className="inkSweep" aria-hidden="true" />
         Notices
         {data.unread > 0 && <span className="ntBadge">{data.unread}</span>}
       </button>
@@ -73,18 +73,18 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
               <span className="secTag"><span className="secTagN">05</span><span className="secTagLabel">Notices</span></span>
               <span className="mono ntCount">{data.unread} unread · {data.notices.length} in 7 d</span>
               <span style={{ flex: 1 }} />
-              <button type="button" className="ntClose" aria-label="Close" onClick={() => setOpen(false)}><Glyph name="close" /></button>
+              <button type="button" className="inkControl ntClose" aria-label="Close" onClick={() => setOpen(false)}><span className="inkSweep" aria-hidden="true" /><Glyph name="close" /></button>
             </div>
             <div className="ntTabs">
               {/* Mark all read lives here, with the filters, as the canvas has it — in the head it
                   shared a no-wrap flex row with the counter and broke its own label in half. */}
               {(["all", "needs_you", "runs", "receipts", "mail"] as NoticeTab[]).map((t) => (
-                <button key={t} type="button" className={`ntTab ${tab === t ? "ntTabOn" : ""}`} onClick={() => setTab(t)}>
+                <button key={t} type="button" className={`inkControl ntTab ${tab === t ? "ntTabOn" : ""}`} onClick={() => setTab(t)}><span className="inkSweep" aria-hidden="true" />
                   {t === "needs_you" ? "Needs you" : t[0].toUpperCase() + t.slice(1)}
                 </button>
               ))}
               <span className="ntSpacer" />
-              <button type="button" className="opsBtn opsTertiary" onClick={markAll}>Mark all read</button>
+              <button type="button" className="inkControl opsBtn opsTertiary" onClick={markAll}><span className="inkSweep" aria-hidden="true" />Mark all read</button>
             </div>
             {data.mode !== "live" && <p className="opsDegraded">{data.mode === "unconfigured" ? "ops ledger not configured · env" : "unreachable this render"}</p>}
             <ol className="ntList">
@@ -95,14 +95,14 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
                       target inside the first and left that button blending into its own row.
                       Every notice carries a unit, so every row has somewhere to go. */}
                   <a
-                    className={`ntItem ${n.tab === "needs_you" ? "ntItemCrit" : ""} ${n.unread ? "ntUnread" : ""}`}
+                    className={`inkControl ntItem ${n.tab === "needs_you" ? "ntItemCrit" : ""} ${n.unread ? "ntUnread" : ""}`}
                     href={`/s/${secret}/console/ops#${n.unit}`}
                     // The tray is a disclosure over the page, not a route: following a row while
                     // already on /console/ops is a same-document fragment jump, so nothing
                     // remounts and nothing would otherwise close this. The drawer and its scrim
                     // would stay over the row the operator just asked to see.
                     onClick={() => setOpen(false)}
-                  >
+                  ><span className="inkSweep" aria-hidden="true" />
                     {/* The unread mark, not a decoration: the glyph that used to sit here was the
                         same on every row whether read or not, so the row had no way of showing the
                         one piece of state the tray exists to clear. */}
@@ -127,7 +127,7 @@ export function NoticesBell({ secret }: Readonly<{ secret: string }>) {
             </ol>
             <div className="ntFoot mono">
               Notices are receipts with a read mark. Nothing here is a second source of truth.
-              <a className="opsBtn opsTertiary" href={`/s/${secret}/console/ops`}>Open the register</a>
+              <a className="inkControl opsBtn opsTertiary" href={`/s/${secret}/console/ops`}><span className="inkSweep" aria-hidden="true" />Open the register</a>
             </div>
           </aside>
         </div>

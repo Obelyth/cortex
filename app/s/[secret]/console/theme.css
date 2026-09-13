@@ -3,7 +3,7 @@
  *
  * v2 (from the Claude Design canvas "Cortex Console v2"): the console lives
  * on the OBELYTH dark ink world by default, and paper is a setting. Both dictionaries below are
- * the canvas's own (its applyTheme() and root style), verbatim. The names are the semantic
+ * derived from the canvas, with the approved softer paper refinement (2026-09-12). The names are the semantic
  * layer the dark world always had (app/globals.css) plus v2's additions — surface2, accent-on,
  * band, the inv-* set for inverted regions, grain, elev1, cast, well, glass, wordmark, modebg,
  * bezel, trough, mast. Screens read these names; the ground swaps underneath them.
@@ -28,8 +28,14 @@
   --display-normal: "wdth" 100;
   --tracking-display: 0.01em;
   --tracking-label: 0.18em;
-  --r: 4px;        /* instrument panels, troughs, inputs */
-  --r-chip: 3px;   /* chips, buttons, steppers */
+  --r: 6px;        /* instrument panels, troughs, inputs */
+  --r-chip: 4px;   /* chips, buttons, steppers */
+  /* Half-speed ink, never a delay on the action itself. */
+  --ink-sweep-duration: 440ms;
+  --ink-sweep-compact: 360ms;
+  --ink-edge: linear-gradient(90deg, transparent, var(--hair) 8%, var(--line) 50%, var(--hair) 92%, transparent);
+  --ink-pool: linear-gradient(178deg, var(--grain), transparent 46%, var(--grain));
+  --ink-dots: color-mix(in srgb, currentColor 24%, transparent);
   --radius-sm: var(--r-chip);
   --radius-md: var(--r);
   --dur: 220ms;
@@ -64,16 +70,16 @@
   --crit: #e8695f;
   --ok: #4cc08a;
   --band: #151b22;
-  --inv-bg: #dde2e8;
+  --inv-bg: #e4e2de;
   --inv-fg: #111315;
   --inv-muted: #3a3f44;
-  --inv-faint: #5f666d;
+  --inv-faint: #505860;
   --inv-line: rgba(17,19,21,.3);
   --inv-hair: rgba(17,19,21,.12);
-  --inv-accent: #0f7f91;
-  --inv-crit: #b8412f;
-  --inv-warn: #8a6410;
-  --inv-ok: #227a4e;
+  --inv-accent: #096475;
+  --inv-crit: #a43729;
+  --inv-warn: #75540e;
+  --inv-ok: #1c693f;
   --grain: rgba(255,255,255,.035);
   --inv-grain: rgba(17,19,21,.11);
   --inv-chip: rgba(17,19,21,.1);
@@ -131,33 +137,30 @@
 /* —— Paper, the setting (v2 dictionary) —————————————————— */
 .conRoot[data-ground="paper"] {
   color-scheme: light;
-  --ground: #eeedeb;
-  --surface: #f7f6f4;
-  --surface2: #e4e2de;
-  --sunk: #e2e0dc;
+  --ground: #e4e2de;
+  --surface: #eeece8;
+  --surface2: #d9d6d0;
+  --sunk: #dad7d1;
   --ink: #111315;
   --bright: #111315;
   --muted: #3a3f44;
-  --faint: #5f666d;
+  --faint: #505860;
   --disabled: #7c848c;
   --line: rgba(17,19,21,.28);
   --hair: rgba(17,19,21,.1);
-  --accent: #0f7f91;
-  --accent-hi: #0b6a79;
-  /* Derived from THIS ground's accent (#0f7f91), not the ink brand cyan. The prior paper-ground
-     fill used the ink accent and washed out to a cyan that matched nothing beside it. */
-  --accent-soft: rgba(15,127,145,.18);
-  /* Lower alpha than ink's .55 and a STRONGER scrim, because alpha does not compare across
-     grounds — only the composite does. Over paper's #eeedeb, .28 darkens the page 49% and leaves
-     the lens surface reading at 2.01:1 against it; over ink's near-black #0f1318, .55 darkens it
-     19% for 1.10:1, and the drawer separates there by being lighter than the page instead. */
+  --accent: #096475;
+  --accent-hi: #075565;
+  /* Darker pen ink preserves text contrast on the dimmed paper and recessed fields. */
+  --accent-soft: rgba(9,100,117,.14);
+  /* Alpha alone does not compare across grounds: paper needs a lighter scrim while the
+     raised lens remains distinct from the dimmed page. Ink separates by surface lightness. */
   --dim: rgba(17,19,21,.28);
   --accent-on: #ffffff;
-  --warn: #8a6410;
-  --crit: #b8412f;
-  --ok: #227a4e;
-  --band: #e4e2de;
-  --inv-bg: #1c2229;
+  --warn: #75540e;
+  --crit: #a43729;
+  --ok: #1c693f;
+  --band: #d9d6d0;
+  --inv-bg: #181d23;
   --inv-fg: #eef0f2;
   --inv-muted: #c3c8ce;
   --inv-faint: #98a0a8;
@@ -173,21 +176,21 @@
   --elev1: 0 1px 2px rgba(17,19,21,.10),0 3px 10px rgba(17,19,21,.05);
   --cast: 0 2px 3px rgba(17,19,21,.2),0 14px 34px rgba(17,19,21,.12);
   --well: inset 0 1px 3px rgba(17,19,21,.14);
-  --glass: rgba(255,255,255,.55);
+  --glass: rgba(17,19,21,.04);
   --wordmark: rgba(11,14,18,.71);
   --modebg: rgba(204,204,204,.31);
   --bezel: inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(17,19,21,.09),inset 1px 0 0 rgba(255,255,255,.2),inset -1px 0 0 rgba(17,19,21,.04),0 1px 0 rgba(17,19,21,.03),0 2px 6px rgba(17,19,21,.04);
   --trough: inset 0 2px 4px rgba(17,19,21,.08),inset 0 0 0 1px rgba(17,19,21,.05),0 1px 0 rgba(255,255,255,.3);
   --mast: 0 4px 14px rgba(17,19,21,.06);
 
-  /* —— Compatibility aliases → the paper world, as it was ———— */
-  --paper: #f0efed;
-  --paper-raised: #f7f6f4;
-  --paper-sunk: #e6e4e0;
+  /* —— Compatibility aliases → the softer paper world —————— */
+  --paper: var(--ground);
+  --paper-raised: var(--surface);
+  --paper-sunk: var(--sunk);
   --ink-900: #111315;
   --ink-700: #3a3f44;
   --ink-600: #4a5057;
-  --ink-500: #5f666d;
+  --ink-500: var(--faint);
   --ink-400: #7c848c;
   --rule: #111315;
   --rule-soft: rgba(17, 19, 21, 0.16);
@@ -198,8 +201,8 @@
   --field-ok: #4cc08a;
   --field-crit: #e8695f;
   --field-on: #111315;
-  --band-paper: #f0efed;
-  --band-grey: #e4e2de;
+  --band-paper: var(--ground);
+  --band-grey: var(--band);
   --band-ink: #14171a;
   --band-ink-on: #f0efed;
   --elev-1: 0 1px 2px rgba(17, 19, 21, 0.10), 0 3px 10px rgba(17, 19, 21, 0.05);
@@ -212,7 +215,7 @@
 /* The ground has to reach past .conRoot's own box: the root layout paints body from the dark
    :root ground, and overscroll would show it. The fixed layer covers overscroll on both. */
 html:has(.conRoot), body:has(.conRoot) { background: #0f1318; }
-html:has(.conRoot[data-ground="paper"]), body:has(.conRoot[data-ground="paper"]) { background: #eeedeb; }
+html:has(.conRoot[data-ground="paper"]), body:has(.conRoot[data-ground="paper"]) { background: #e4e2de; }
 .conRoot::before {
   content: "";
   position: fixed;

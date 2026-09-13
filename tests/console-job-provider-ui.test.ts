@@ -1,12 +1,12 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
-import type {ReactElement} from "react";
+import {createElement,type ReactElement} from "react";
 const h=vi.hoisted(()=>({states:[] as unknown[],refs:[] as Array<{current:unknown}>,effects:[] as Array<()=>void|(()=>void)>,state:0,ref:0,lens:{id:"existing"} as {id:string}|null,open:vi.fn()}));
 vi.mock("react",async(original)=>({...await original<typeof import("react")>(),useState:<T,>(initial:T)=>{const i=h.state++;if(!(i in h.states))h.states[i]=initial;return[h.states[i],(v:T|((x:T)=>T))=>{h.states[i]=typeof v==="function"?(v as (x:T)=>T)(h.states[i] as T):v;}];},useRef:<T,>(v:T)=>h.refs[h.ref++]??(h.refs[h.ref-1]={current:v}),useEffect:(fn:()=>void|(()=>void))=>h.effects.push(fn),useCallback:<T,>(fn:T)=>fn}));
 vi.mock("../app/s/[secret]/console/lens",()=>({useLens:()=>({lens:h.lens,open:h.open,close:vi.fn()})}));
 const {CommandPanel,JobConfirmation}=await import("../app/s/[secret]/console/ops/command-panel");
-type Node=ReactElement<{children?:unknown;onClick?:()=>void;onChange?:(e:{target:{checked:boolean}})=>void;disabled?:boolean;isCurrent?:()=>boolean}>;
+type Node=ReactElement<{children?:unknown;"aria-hidden"?:boolean|string;onClick?:()=>void;onChange?:(e:{target:{checked:boolean}})=>void;disabled?:boolean;isCurrent?:()=>boolean}>;
 function nodes(value:unknown):Node[]{if(Array.isArray(value))return value.flatMap(nodes);if(!value||typeof value!=="object"||!("props" in value))return[];const n=value as Node;return[n,...nodes(n.props.children)];}
-function text(value:unknown):string{if(Array.isArray(value))return value.map(text).join(" ");if(typeof value==="string")return value;if(value&&typeof value==="object"&&"props" in value)return text((value as Node).props.children);return "";}
+function text(value:unknown):string{if(Array.isArray(value))return value.map(text).join("");if(typeof value==="string")return value;if(value&&typeof value==="object"&&"props" in value){const node=value as Node;return node.props["aria-hidden"]===true||node.props["aria-hidden"]==="true"?"":text(node.props.children);}return "";}
 function render<T>(component:()=>T):T{h.state=0;h.ref=0;h.effects=[];return component();}
 const preparation={operation:"checks" as const,requestKey:"22222222-2222-4222-8222-222222222222",sourceSha:"b".repeat(40),target:"github:fixture/app",pendingDigest:null,expiresAt:"2026-09-08T01:00:00Z",intent:"fixed.synthetic.intent",warning:"Review source and target"};
 const job={id:"11111111-1111-4111-8111-111111111111",operation:"checks",state:"running",requestedAt:"2026-09-08T00:00:00Z",updatedAt:"2026-09-08T00:00:00Z",sourceSha:preparation.sourceSha,target:preparation.target,summary:"accepted",providerId:"123",checks:[]};
@@ -16,6 +16,10 @@ afterEach(()=>vi.unstubAllGlobals());
 function controls(secret="secret"){const panel=render(()=>CommandPanel({secret}));const child=nodes(panel).find(n=>typeof n.type==="function"&&n.type.name==="ProviderCommandControls")!;h.states=[[{operation:"checks",configured:true,detail:"configured"}],"",false,"ready"];h.refs=[];return()=>render(()=> (child.type as (p:unknown)=>ReactElement)(child.props));}
 const flush=async()=>{for(let i=0;i<20;i++)await Promise.resolve();};
 describe("provider presentation ownership",()=>{
+  it("keeps aria-hidden false labels while excluding decorative true labels",()=>{
+    for(const hidden of [false,"false",undefined])expect(text(createElement("span",{"aria-hidden":hidden as false},"Prepare"))).toBe("Prepare");
+    for(const hidden of [true,"true"])expect(text(createElement("span",{"aria-hidden":hidden as true},"Decoration"))).toBe("");
+  });
   it.each([
     {catalog:{operation:"deploy.production",configured:false,detail:"Missing configuration",setupRequirement:"vercel"},anchor:"setOperations-vercel"},
     {catalog:{operation:"checks",configured:false,detail:"Missing configuration"},anchor:"setOperations"},

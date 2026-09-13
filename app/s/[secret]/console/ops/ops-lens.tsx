@@ -94,7 +94,7 @@ export function UnitLensBody({ row, receipts, total, controls, busy, receipt, op
         {/* Outlives the done hold on purpose: this link is the whole outcome of a link-kind Run
             now. Never window.open — after an await the browser no longer counts it as the
             operator's click. */}
-        {opened && <a className="opsAct" href={opened} target="_blank" rel="noopener">Open on claude.ai ↗</a>}
+        {opened && <a className="inkControl opsAct" href={opened} target="_blank" rel="noopener"><span className="inkSweep" aria-hidden="true" />Open on claude.ai ↗</a>}
         {error && <span className="opsErr">{error}</span>}
       </div>
       <div className="opsLensNote">every control writes its receipt before anything else that could fail · state is derived from the latest run, the latest ack and the clock — never stored as a reporter&apos;s adjective</div>
@@ -116,7 +116,7 @@ export function ReceiptLensBody({ e, unitName, onUnit }: Readonly<{ e: { id: num
       ]} />
       {onUnit && (
         <div className="opsLensActs">
-          <button type="button" className="opsAct opsActPrimary" onClick={onUnit}>Open unit</button>
+          <button type="button" className="inkControl opsAct opsActPrimary" onClick={onUnit}><span className="inkSweep" aria-hidden="true" />Open unit</button>
         </div>
       )}
     </>
@@ -142,7 +142,7 @@ export function TriageLensBody({ item: q, busy, error, copied, onAct, onCopy }: 
   const fixable = stale || q.kind === "superseded-link" || q.kind === "coaccess-gap" || q.kind === "correction-chain";
   const pair = q.loc.includes(" ↔ ");
   const fix = (a: VerifyAction, label: string, primary: boolean) => (
-    <button type="button" className={`opsAct${primary ? " opsActPrimary" : ""}${busy === a ? " opsAct-working" : ""}`} aria-disabled={busy !== null && busy !== a ? true : undefined} onClick={() => onAct(a)}>
+    <button type="button" className={`inkControl opsAct${primary ? " opsActPrimary" : ""}${busy === a ? " opsAct-working" : ""}`} aria-disabled={busy !== null && busy !== a ? true : undefined} onClick={() => onAct(a)}><span className="inkSweep" aria-hidden="true" />
       {busy === a ? "committing…" : label}
     </button>
   );
@@ -159,9 +159,9 @@ export function TriageLensBody({ item: q, busy, error, copied, onAct, onCopy }: 
       <div className="opsLensActs">
         {/* A pending migration is a finding about the database, not about a note: there is no
             page to open and nothing the brain can be asked. Copy carries the command. */}
-        {!migration && <a className="opsAct" href={`corpus?note=${encodeURIComponent(path)}`}>Open the note</a>}
-        {!migration && <a className="opsAct" href={`ask?q=${encodeURIComponent(`${q.title} — ${path}. ${q.action}`)}`}>Ask the brain about it</a>}
-        <button type="button" className="opsAct" onClick={onCopy}>{copied ? "copied" : "Copy for a session"}</button>
+        {!migration && <a className="inkControl opsAct" href={`corpus?note=${encodeURIComponent(path)}`}><span className="inkSweep" aria-hidden="true" />Open the note</a>}
+        {!migration && <a className="inkControl opsAct" href={`ask?q=${encodeURIComponent(`${q.title} — ${path}. ${q.action}`)}`}><span className="inkSweep" aria-hidden="true" />Ask the brain about it</a>}
+        <button type="button" className="inkControl opsAct" onClick={onCopy}><span className="inkSweep" aria-hidden="true" />{copied ? "copied" : "Copy for a session"}</button>
       </div>
       {fixable && (
         <div className="opsLensActs" aria-busy={busy !== null}>
@@ -205,8 +205,8 @@ export function ProposalLensBody({ p, busy, error, onDecide }: Readonly<{ p: Pro
         <pre className="opsPre">{p.content}</pre>
       </div>
       <div className="opsLensActs" aria-busy={busy}>
-        <button type="button" className={`opsAct opsActPrimary${busy ? " opsAct-working" : ""}`} aria-disabled={busy ? true : undefined} onClick={() => onDecide("accept")}>{busy ? "…" : `Accept · commit to ${p.path}`}</button>
-        <button type="button" className="opsAct" aria-disabled={busy ? true : undefined} onClick={() => onDecide(p.state === "accepting" ? "cancel" : "reject")}>{p.state === "accepting" ? "Cancel acceptance" : "Reject · leaves no trace"}</button>
+        <button type="button" className={`inkControl opsAct opsActPrimary${busy ? " opsAct-working" : ""}`} aria-disabled={busy ? true : undefined} onClick={() => onDecide("accept")}><span className="inkSweep" aria-hidden="true" />{busy ? "…" : `Accept · commit to ${p.path}`}</button>
+        <button type="button" className="inkControl opsAct" aria-disabled={busy ? true : undefined} onClick={() => onDecide(p.state === "accepting" ? "cancel" : "reject")}><span className="inkSweep" aria-hidden="true" />{p.state === "accepting" ? "Cancel acceptance" : "Reject · leaves no trace"}</button>
       </div>
       <div className="opsLensNote">{error ?? (p.state === "accepting"
         ? "Cancel acceptance leaves the target note unchanged if the cancel lands first. If the commit already landed, you get that commit's result instead."

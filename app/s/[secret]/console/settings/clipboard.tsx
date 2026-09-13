@@ -34,7 +34,7 @@ export function ClipboardFailure({ text = null }: Readonly<{ text?: string | nul
           copy failed · {text ? (shown ? "select the exact text below and copy it by hand · hide it before a screenshot" : "reveal to select the exact text by hand") : "select the exact text shown above"}
         </span>
         {text && (
-          <button type="button" className="setBtn" aria-expanded={shown} onClick={() => setShown((s) => !s)}>
+          <button type="button" className="inkControl setBtn" aria-expanded={shown} onClick={() => setShown((s) => !s)}><span className="inkSweep" aria-hidden="true" />
             {shown ? "hide" : "reveal"}
           </button>
         )}

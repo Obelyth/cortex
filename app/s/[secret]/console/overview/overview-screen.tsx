@@ -64,7 +64,7 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
     <div className="ovRoot">
       {/* 00 — the thesis viewport: one count at a scale nothing else approaches, its identity
           beside it, and whether the thing is alive. */}
-      <header className="ovMast" data-cx="rise">
+      <header id="overview-summary" className="ovMast" data-cx="rise" data-cx-section tabIndex={-1}>
         <div className="ovMastN">{p.notes}</div>
         <div className="ovMastMeta">
           <h1 className="ovMastLead">notes in the brain</h1>
@@ -91,12 +91,12 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
         </div>
       </header>
 
-      <section id="working-context" className="ovPanel ovWorkingContext" aria-labelledby="ov-working">
+      <section id="working-context" className="ovPanel ovWorkingContext" aria-labelledby="ov-working" data-cx-section data-cx="rise" tabIndex={-1}>
         <WorkingState now={p.now} />
       </section>
 
       {/* 01 — the corpus. Not decoration: one mark per block, solid where retracted. */}
-      <section className="ovCorpus" data-cx="rise" aria-labelledby="ov-corpus">
+      <section id="overview-corpus" className="ovCorpus" data-cx="rise" aria-labelledby="ov-corpus" data-cx-section tabIndex={-1}>
         <div className="ovCorpusHead">
           <span className="ovTag" data-cx="print">
             <span className="ovTagN">01</span>
@@ -107,9 +107,8 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
         <CorpusField field={p.field} sha={p.sha} />
       </section>
 
-      <div className="ovPanels">
-        <div className="ovPanelColumn">
-          <section className="ovPanel" data-cx="rise" aria-labelledby="ov-boot">
+      <div id="overview-instruments" className="ovPanels" data-cx-section tabIndex={-1} aria-label="Instruments" role="region">
+        <section className="ovPanel" data-cx="rise" aria-labelledby="ov-boot">
           <div className="ovPanelHead">
             <h2 className="ovPanelTitle" id="ov-boot">Session boot cost</h2>
             <span className="ovPanelFig">{p.boot ? `${p.boot.pct}%` : "unreadable"}</span>
@@ -128,86 +127,83 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
               <div className="ovBootNote">{p.reader.note}</div>
             </div>
           </div>
-          </section>
+        </section>
 
-          <section className="ovPanel ovD3" data-cx="rise" aria-labelledby="ov-pipeline">
-            <div className="ovPanelHead">
-              <h2 className="ovPanelTitle" id="ov-pipeline">Memory pipeline</h2>
-              <span className={`ovChip ovChip-${p.pipeline.tone}`}>{p.pipeline.state}</span>
-            </div>
-            {p.pipeline.rows.map((r) => (
-              <div key={r.k} className="ovKv">
-                <span className="ovKvK">{r.k}</span>
-                <span className="ovKvV">{r.v}</span>
-              </div>
-            ))}
-            {p.pipeline.notes.map((n) => <div key={n} className="ovPanelFoot">{n}</div>)}
-          </section>
-        </div>
+        <section className="ovPanel ovD1" data-cx="rise" aria-labelledby="ov-activity">
+          <ActivityChart a={p.activity} />
+        </section>
 
-        <div className="ovPanelColumn">
-          <section className="ovPanel ovD1" data-cx="rise" aria-labelledby="ov-activity">
-            <ActivityChart a={p.activity} />
-          </section>
-
-          <section className="ovPanel ovD4" data-cx="rise" aria-labelledby="ov-doors">
-            <div className="ovPanelHead">
-              <h2 className="ovPanelTitle" id="ov-doors">Doors · last call</h2>
-              <a className="ovLink" href="settings">settings ›</a>
-            </div>
-            {p.doors.map((d) => (
-              <div key={d.key} className="ovDoor">
-                <i className={`ovDoorDot${d.live ? " ovDoorDotLive" : ""}`} aria-hidden />
-                <span className="ovDoorBody">
-                  <span className="ovDoorName">{d.name}</span>
-                  <span className="ovDoorSub">{d.sub}</span>
-                </span>
-                <span className={`ovChip ovChip-${d.grant === "ask only" ? "warn" : "muted"}`}>{d.grant}</span>
-              </div>
-            ))}
-            <div className="ovPanelFoot">a live dot is a call in the last 24 h · this environment's log, {p.logWindow}</div>
-          </section>
-
-          <section className="ovPanel ovD2" data-cx="rise" aria-labelledby="ov-checked">
-            <div className="ovPanelHead">
-              <h2 className="ovPanelTitle" id="ov-checked">Answer evidence · {p.checkedWindow}</h2>
-              <span className="ovPanelNote">{p.checked.asks} ask{p.checked.asks === 1 ? "" : "s"}</span>
-            </div>
-            {p.checked.asks === 0 ? (
-              <div className="ovEmpty">no asks in the last {p.checkedWindow} on this environment — the stamps return with the next brain_ask</div>
-            ) : (
-              <>
-                <svg className="ovStack" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden data-cx="flood">
-                  {p.checked.rows.reduce<{ x: number; els: React.ReactNode[] }>((acc, r) => {
-                    if (r.n > 0) acc.els.push(<rect key={r.k} className={`ovTone-${r.tone}`} x={acc.x} y={0} width={r.pct} height={8} />);
-                    return { x: acc.x + r.pct, els: acc.els };
-                  }, { x: 0, els: [] }).els}
-                </svg>
-                <div className="ovStats">
-                  {p.checked.rows.map((r) => (
-                    <div key={r.k}>
-                      <div className="ovStatN"><i className={`ovTone-${r.tone}`} aria-hidden />{r.n}</div>
-                      <div className="ovStatK">{r.k}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="ovPanelFoot">
-                  the bar covers {p.checked.rows.reduce((a, r) => a + r.n, 0)} of {p.checked.asks} evidence outcomes · source verified = VERIFIED + CORRECTED · unverified is not a wrong-answer judgment · {p.checked.stamps.filter((s) => s.n > 0).map((s) => `${s.s} ${s.n}`).join(" · ")} · SUPERSEDED and PARTIALLY VERIFIED are listed separately, not in the bar · answer correctness was not measured{p.checked.rows.some((r) => r.k === "cut off by the platform" && r.n > 0) ? ` · ${CUT_OFF_CAVEAT}` : ""}
-                </div>
-              </>
-            )}
-          </section>
-        </div>
-
-        <div className="ovPanelColumn">
-          <section className="ovPanel ovD1" data-cx="rise" aria-labelledby="ov-saves">
-            <div className="ovPanelHead">
-              <h2 className="ovPanelTitle" id="ov-saves">Recent saves</h2>
-              <span className="ovPanelNote">{p.saves.length ? `newest ${p.saves.length} · ` : ""}every write is a commit</span>
-            </div>
+        <section className="ovPanel ovD1" data-cx="rise" aria-labelledby="ov-saves">
+          <div className="ovPanelHead">
+            <h2 className="ovPanelTitle" id="ov-saves">Recent saves</h2>
+            <span className="ovPanelNote">{p.saves.length ? `newest ${p.saves.length} · ` : ""}every write is a commit</span>
+          </div>
+          <div className="ovSavesViewport" role="region" aria-labelledby="ov-saves" tabIndex={0}>
             <Saves saves={p.saves} commitBase={p.commitBase} now={p.now} sha={p.sha} />
-          </section>
-        </div>
+          </div>
+        </section>
+
+        <section className="ovPanel ovD3" data-cx="rise" aria-labelledby="ov-pipeline">
+          <div className="ovPanelHead">
+            <h2 className="ovPanelTitle" id="ov-pipeline">Memory pipeline</h2>
+            <span className={`ovChip ovChip-${p.pipeline.tone}`}>{p.pipeline.state}</span>
+          </div>
+          {p.pipeline.rows.map((r) => (
+            <div key={r.k} className="ovKv">
+              <span className="ovKvK">{r.k}</span>
+              <span className="ovKvV">{r.v}</span>
+            </div>
+          ))}
+          {p.pipeline.notes.map((n) => <div key={n} className="ovPanelFoot">{n}</div>)}
+        </section>
+
+        <section className="ovPanel ovD4" data-cx="rise" aria-labelledby="ov-doors">
+          <div className="ovPanelHead">
+            <h2 className="ovPanelTitle" id="ov-doors">Doors · last call</h2>
+            <a className="ovLink" href="settings">settings ›</a>
+          </div>
+          {p.doors.map((d) => (
+            <div key={d.key} className="ovDoor">
+              <i className={`ovDoorDot${d.live ? " ovDoorDotLive" : ""}`} aria-hidden />
+              <span className="ovDoorBody">
+                <span className="ovDoorName">{d.name}</span>
+                <span className="ovDoorSub">{d.sub}</span>
+              </span>
+              <span className={`ovChip ovChip-${d.grant === "ask only" ? "warn" : "muted"}`}>{d.grant}</span>
+            </div>
+          ))}
+          <div className="ovPanelFoot">a live dot is a call in the last 24 h · this environment's log, {p.logWindow}</div>
+        </section>
+
+        <section className="ovPanel ovD2" data-cx="rise" aria-labelledby="ov-checked">
+          <div className="ovPanelHead">
+            <h2 className="ovPanelTitle" id="ov-checked">Answer evidence · {p.checkedWindow}</h2>
+            <span className="ovPanelNote">{p.checked.asks} ask{p.checked.asks === 1 ? "" : "s"}</span>
+          </div>
+          {p.checked.asks === 0 ? (
+            <div className="ovEmpty">no asks in the last {p.checkedWindow} on this environment — the stamps return with the next brain_ask</div>
+          ) : (
+            <>
+              <svg className="ovStack" viewBox="0 0 100 8" preserveAspectRatio="none" aria-hidden data-cx="flood">
+                {p.checked.rows.reduce<{ x: number; els: React.ReactNode[] }>((acc, r) => {
+                  if (r.n > 0) acc.els.push(<rect key={r.k} className={`ovTone-${r.tone}`} x={acc.x} y={0} width={r.pct} height={8} />);
+                  return { x: acc.x + r.pct, els: acc.els };
+                }, { x: 0, els: [] }).els}
+              </svg>
+              <div className="ovStats">
+                {p.checked.rows.map((r) => (
+                  <div key={r.k}>
+                    <div className="ovStatN"><i className={`ovTone-${r.tone}`} aria-hidden />{r.n}</div>
+                    <div className="ovStatK">{r.k}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="ovPanelFoot">
+                the bar covers {p.checked.rows.reduce((a, r) => a + r.n, 0)} of {p.checked.asks} evidence outcomes · source verified = VERIFIED + CORRECTED · unverified is not a wrong-answer judgment · {p.checked.stamps.filter((s) => s.n > 0).map((s) => `${s.s} ${s.n}`).join(" · ")} · SUPERSEDED and PARTIALLY VERIFIED are listed separately, not in the bar · answer correctness was not measured{p.checked.rows.some((r) => r.k === "cut off by the platform" && r.n > 0) ? ` · ${CUT_OFF_CAVEAT}` : ""}
+              </div>
+            </>
+          )}
+        </section>
       </div>
     </div>
   );

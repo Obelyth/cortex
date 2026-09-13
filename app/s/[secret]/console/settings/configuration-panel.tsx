@@ -294,8 +294,8 @@ export function ConfigurationEditor({ capability, initialView }: Readonly<{ capa
   };
 
   const recoveryControls = <div className="setConfigActions">
-    <button className="setBtn" type="button" disabled={busy} onClick={() => void refresh()}>Refresh save receipt</button>
-    {(record?.status === "running" || record?.status === "uncertain" && !record.acknowledged) && <button className="setBtn" type="button" disabled={busy} onClick={() => void acknowledge()}>Acknowledge unresolved</button>}
+    <button className="inkControl setBtn" type="button" disabled={busy} onClick={() => void refresh()}><span className="inkSweep" aria-hidden="true" />Refresh save receipt</button>
+    {(record?.status === "running" || record?.status === "uncertain" && !record.acknowledged) && <button className="inkControl setBtn" type="button" disabled={busy} onClick={() => void acknowledge()}><span className="inkSweep" aria-hidden="true" />Acknowledge unresolved</button>}
   </div>;
 
   const targetSelector = <label className="setConfigLabel">Deployment target
@@ -320,7 +320,7 @@ export function ConfigurationEditor({ capability, initialView }: Readonly<{ capa
         ? "The database that records configuration saves is not connected. Connect Supabase and install its receipt tables through the initial provider setup; this form cannot create its own receipt store."
         : "The receipt store did not answer (it records that a save happened, never the values). The secret form stays closed until it does. Reload Settings after the connection is restored."
       }</p>
-    <a className="setBtn" href="https://vercel.com/dashboard" target="_blank" rel="noreferrer">Open Vercel provider UI</a>
+    <a className="inkControl setBtn" href="https://vercel.com/dashboard" target="_blank" rel="noreferrer"><span className="inkSweep" aria-hidden="true" />Open Vercel provider UI</a>
     {recoveryControls}
     <p className="setConfigStatus" role="status">{status}</p>
   </div>;
@@ -359,10 +359,10 @@ export function ConfigurationEditor({ capability, initialView }: Readonly<{ capa
     </label>)}
     <p className="setConfigWarn">Write-only: values are sent directly to the fixed provider project and are never read back, stored in Cortex receipts, placed in URLs, or logged. Save never deploys.</p>
     <div className="setConfigActions">
-      <button className="setBtn" type="submit" disabled={busy || pending?.values === null}>{busy ? "Saving…" : pending ? "Retry this same save" : "Save provider environment"}</button>
-      <button className="setBtn" type="button" disabled={busy} onClick={() => { setDraft(Object.fromEntries(names.map((name) => [name, ""]))); setFieldErrors({}); setPending((current) => current ? { ...current, values: null } : null); setNeedsFreshKey(false); setStatus("Draft discarded on this device. Any unresolved receipt remains available for status or acknowledgment."); }}>Discard draft</button>
+      <button className="inkControl setBtn" type="submit" disabled={busy || pending?.values === null}><span className="inkSweep" aria-hidden="true" />{busy ? "Saving…" : pending ? "Retry this same save" : "Save provider environment"}</button>
+      <button className="inkControl setBtn" type="button" disabled={busy} onClick={() => { setDraft(Object.fromEntries(names.map((name) => [name, ""]))); setFieldErrors({}); setPending((current) => current ? { ...current, values: null } : null); setNeedsFreshKey(false); setStatus("Draft discarded on this device. Any unresolved receipt remains available for status or acknowledgment."); }}><span className="inkSweep" aria-hidden="true" />Discard draft</button>
       {recoveryControls.props.children}
-      {needsFreshKey && <button className="setBtn" type="button" disabled={busy} onClick={() => { setPending(null); setNeedsFreshKey(false); setStatus("Fresh request prepared explicitly; the draft is unchanged."); }}>Start fresh request</button>}
+      {needsFreshKey && <button className="inkControl setBtn" type="button" disabled={busy} onClick={() => { setPending(null); setNeedsFreshKey(false); setStatus("Fresh request prepared explicitly; the draft is unchanged."); }}><span className="inkSweep" aria-hidden="true" />Start fresh request</button>}
     </div>
     <Link className="setConfigDeploy" href={opsHref} prefetch={false}>Review deployment actions in Ops</Link>
     <p className="setConfigState">Ops prepares a deployment for separate approval. This save receipt does not yet track which deployment uses these values.</p>

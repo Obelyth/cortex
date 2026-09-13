@@ -22,7 +22,25 @@
 }
 
 /* ── The masthead (v2): identity · tabs · mode · notices. No clock, no second search. ───── */
-.conMast { position: sticky; top: 0; z-index: 40; height: 52px; display: flex; align-items: stretch; background: var(--ground); border-bottom: 1px solid var(--line); box-shadow: var(--mast); overflow: hidden; }
+.conMast { position: sticky; top: 0; z-index: 40; isolation: isolate; height: 52px; display: flex; align-items: stretch; background: var(--ground); border-bottom: 1px solid var(--line); box-shadow: var(--mast); overflow: hidden; }
+/* A shallow frosted layer separates navigation from the content passing beneath it.
+   It lives on an empty pseudo-element: backdrop-filter on the masthead itself makes that
+   ancestor the containing block for the fixed Notices tray, then overflow clips it to 52px.
+   Unsupported browsers and accessibility alternatives keep the opaque ground above. */
+@supports (backdrop-filter: blur(8px)) {
+  .conMast { background: transparent; }
+  .conMast::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: color-mix(in srgb, var(--ground) 88%, transparent); backdrop-filter: blur(8px);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .conMast { background: var(--ground); backdrop-filter: none; }
+  /* Chromium can retain the previously computed pseudo filter when this media query changes
+     after first paint. Important is confined to the accessibility override so it invalidates
+     that value without changing the ordinary cascade. */
+  .conMast::before { background: var(--ground); backdrop-filter: none !important; }
+}
 /* The CX block: the one place the mark is worn rather than measured. */
 .conCx { display: flex; align-items: center; justify-content: center; width: 44px; flex: none; background: linear-gradient(623deg, #d8500f, #ff914a); color: #fff; font-family: var(--sans); font-weight: 800; font-size: 15px; font-variation-settings: var(--display-wide); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -2px 0 rgba(0, 0, 0, 0.28), inset 1px 0 0 rgba(255, 255, 255, 0.08); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); }
 .conWordmark { display: flex; align-items: center; padding: 0 18px 0 14px; font-family: var(--sans); font-weight: 700; font-size: 16px; font-variation-settings: var(--display-wide); text-transform: uppercase; letter-spacing: 0.06em; color: var(--wordmark); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.06); flex: none; white-space: nowrap; }
@@ -217,10 +235,64 @@
    region at this scale reads as a hole in the page rather than a material. */
 .bandInk::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-image: radial-gradient(var(--grain) 1px, transparent 1px);
   background-size: 3px 3px;
 }
 .bandInner { position: relative; z-index: 1; }
+
+/* Premium ink: one optional child clips only the moving texture. Control content,
+   focus outlines, tab underlines and genuine running bars keep their ownership. */
+.conRoot .inkControl { position: relative; border-radius: var(--r-chip); }
+.conRoot .inkSweep { position: absolute; inset: 0; overflow: clip; border-radius: inherit; pointer-events: none; }
+.conRoot .inkSweep::before {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 42%; opacity: 0;
+  background-image: radial-gradient(var(--ink-dots) .7px, transparent .8px);
+  background-size: 3px 3px;
+  mask-image: linear-gradient(90deg, transparent, black 24%, black 76%, transparent);
+  transform: translateX(-110%);
+}
+@keyframes ink-swipe {
+  0% { transform: translateX(-110%); opacity: 0; }
+  18% { opacity: .75; }
+  78% { opacity: .75; }
+  100% { transform: translateX(340%); opacity: 0; }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .conRoot .inkControl:where(:not(:disabled):not([aria-disabled="true"]):not([aria-busy="true"])):hover > .inkSweep::before {
+    animation: ink-swipe var(--ink-sweep-duration) var(--ease) 1;
+  }
+  .conRoot :is(.ntTab, .ntClose) { --ink-sweep-duration: var(--ink-sweep-compact); }
+  .conRoot [aria-busy="true"] .inkControl > .inkSweep::before { animation: none; }
+}
+@media (prefers-reduced-motion: reduce), (forced-colors: active), (hover: none), (pointer: coarse) {
+  .conRoot .inkSweep { display: none; }
+}
+
+/* Material stays behind content. The static feather is a one-pixel background
+   rule, never a mask or opacity on a readable/interactive container. */
+.conRoot :is(.card, .ovPanelWell, .ntTray, .lens) { border-radius: var(--r); }
+.conRoot :is(.opsBtn, .triActGo, .triActAsk, .triActCopy, .triActPrimary, .triActSecondary) { border-radius: var(--r-chip); }
+/* Joined labels keep their seam square; only the exposed ends are softened.
+   Round painted row highlights too, without clipping their external focus ring. */
+.conRoot :is(.secTagN, .ovTagN, .trTagN) { border-radius: var(--r-chip) 0 0 var(--r-chip); }
+.conRoot :is(.secTagLabel, .ovTagLabel, .trTagLabel) { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
+.conRoot :is(.ovWs, .ovSave, .setRecRow, .setConfigRow) { border-radius: var(--r-chip); }
+.conRoot .ovPanelWell {
+  background-image: var(--ink-pool), radial-gradient(var(--grain) .6px, transparent .7px);
+  background-size: 100% 100%, 3px 3px;
+}
+.conRoot :is(.ovCorpus, .trInv) {
+  background-image: linear-gradient(178deg, var(--inv-grain), transparent 46%, var(--inv-grain)), radial-gradient(var(--inv-grain) .6px, transparent .7px);
+  background-size: 100% 100%, 3px 3px;
+}
+.conRoot :is(.ovPanelHead, .trSecHead, .lensHead) {
+  border-bottom-color: transparent;
+  background-image: var(--ink-edge); background-position: bottom; background-size: 100% 1px; background-repeat: no-repeat;
+}
+@media (forced-colors: active) {
+  .conRoot :is(.ovPanelHead, .trSecHead, .lensHead) { border-bottom-color: CanvasText; background-image: none; }
+  .conRoot :is(.card, .ovPanelWell, .ntTray, .lens, .ovCorpus, .trInv) { background-image: none; }
+}
 
 /* ── Section headers: chip, then a real headline ──────────────────────────── */
 /* `[03] PROCESS` as two filled chips, then the heading at display scale in sentence case. The
@@ -1107,19 +1179,15 @@
    the finished sheet with nothing armed at all. Vocabulary matches the corpus of
    cx-* keyframes above: rise (a numeral out of its rule), print (a chip stamped),
    rule (a hairline drawn), flood (a field filled left to right). */
-.conRoot.cxReady [data-cx]:not(.cxIn) { opacity: 0; }
-.conRoot.cxReady [data-cx="rise"]:not(.cxIn) { transform: translateY(22px); }
-.conRoot.cxReady [data-cx="print"]:not(.cxIn) { transform: scale(0.72); }
-.conRoot.cxReady [data-cx="rule"]:not(.cxIn) { transform: scaleX(0); transform-origin: left; }
-.conRoot.cxReady [data-cx="flood"]:not(.cxIn) { opacity: 1; clip-path: inset(0 100% 0 0); }
-.conRoot.cxReady [data-cx].cxIn {
-  opacity: 1;
-  transform: none;
-  clip-path: inset(0 0 0 0);
-  transition:
-    opacity 0.7s var(--ease-out) var(--cx-d, 0ms),
-    transform 0.7s var(--ease-out) var(--cx-d, 0ms),
-    clip-path 0.8s var(--ease-out) var(--cx-d, 0ms);
+/* No hidden/armed state on data: failed observers and tall streamed panels remain readable.
+   Motion is limited to the heading of a section, once, with no stagger or access delay. */
+@keyframes cx-section-arrive { from { transform: translateY(3px); } to { transform: none; } }
+.conRoot.cxReady [data-cx].cxIn > :is(h1, h2, .ovPanelHead, .ovCorpusHead) {
+  animation: cx-section-arrive 220ms var(--ease-out);
+}
+.conRoot [data-cx-section] { scroll-margin-top: 80px; }
+@media (prefers-reduced-motion: reduce) {
+  .conRoot.cxReady [data-cx].cxIn > :is(h1, h2, .ovPanelHead, .ovCorpusHead) { animation: none; }
 }
 
 /* ── The CX mark ──────────────────────────────────────────────────────────── */
@@ -1220,6 +1288,12 @@
 /* nowrap: at 520px the counter was breaking after "7" and leaving "d" on its own line. */
 .ntCount { white-space: nowrap; }
 .ntClose { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; background: none; border: 0; cursor: pointer; color: var(--ink); }
+@media (max-width: 360px) {
+  /* Keep the close target inside the tray while preserving the complete seven-day count. */
+  .ntHead { flex-wrap: wrap; column-gap: 10px; row-gap: 0; padding: 14px 14px 0; }
+  .ntCount { order: 2; flex: 0 0 100%; }
+  .ntClose { flex: 0 0 44px; }
+}
 /* The filters row carries Mark all read, as the canvas has it: wrapping moves the button to a
    line of its own instead of breaking its label in half. */
 /* --hair, --line and --muted rather than --rule-soft, --rule and --ink-700. On ink the aliases

@@ -50,13 +50,25 @@
 .trCellSpark { margin-top: 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; min-width: 0; }
 .trSparkNote { font: 400 10px var(--mono); color: var(--inv-faint); white-space: nowrap; }
 .trSpark { display: block; flex: none; }
-.trSparkLine { fill: none; stroke: var(--inv-fg); stroke-width: 1.6; stroke-linejoin: round; }
+.trSparkLine { fill: none; stroke: var(--inv-fg); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .94; }
 .trSparkDot { fill: var(--inv-fg); }
+/* A continuous gel-pen line: no dash gaps, altered coordinates or drawing motion.
+   Only the strip's decorative cell rule feathers; marks keep full geometry. */
+.trCell { border-right-color: transparent; background-image: linear-gradient(180deg, var(--inv-hair), var(--inv-hair) 62%, transparent 94%); background-position: right; background-size: 1px 100%; background-repeat: no-repeat; }
+.trCell:last-child { background-image: none; }
+@media (forced-colors: active) {
+  .trSparkLine { stroke: CanvasText; stroke-opacity: 1; }
+  .trSparkDot { fill: CanvasText; }
+  .trCell { background-image: none; border-right-color: CanvasText; }
+}
 
 /* ── The body: the pulse, then the 2 × 2 grid ─────────────────────────────── */
 .trBody { max-width: 1440px; margin: 0 auto; padding: 44px 0 24px; display: flex; flex-direction: column; gap: 48px; }
 .trGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 48px 56px; }
 .trSecWrap { min-width: 0; }
+.trGrid > .trSecWrap { display: grid; grid-row: span 2; grid-template-rows: subgrid; row-gap: 0; }
+.trGrid > .trSecWrap > .trSec { display: grid; grid-row: 1 / -1; grid-template-rows: subgrid; row-gap: 0; }
+.trSectionBody { min-width: 0; }
 /* The four grid instruments rise in sequence after the pulse — the delay the kinetic layer reads. */
 .trGrid > .trSecWrap:nth-child(1) { --cx-d: 70ms; }
 .trGrid > .trSecWrap:nth-child(2) { --cx-d: 140ms; }
@@ -275,7 +287,7 @@
 .conRoot.cxReady [data-cx].cxIn .trWedge { animation: cx-pop 420ms var(--ease) 100ms backwards; }
 .conRoot.cxReady [data-cx].cxIn .trArc { animation: cx-ring 900ms var(--ease) 200ms backwards; }
 .conRoot.cxReady [data-cx].cxIn .trHeatCell { animation: cx-pop 320ms var(--ease) 80ms backwards; }
-.conRoot.cxReady [data-cx].cxIn .trSparkLine { animation: cx-flood 900ms var(--ease) 300ms backwards; }
+/* Strip strokes remain fully readable even during their section's entrance. */
 @media (prefers-reduced-motion: reduce) {
   .trBar, .trWedge, .trArc, .trHeatCell, .trSparkLine { animation: none !important; }
   .trRow, .trRow > *, .trHeatCell, .trArc, .trWinClear, .conRoot .trLensAct { transition: none; }

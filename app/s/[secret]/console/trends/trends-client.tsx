@@ -297,28 +297,30 @@ export function MemoryVsTyping() {
         <span className="trSw"><i className="trSwSnow" />▲ from memory</span>
         <span className="trSw"><i className="trSwAmber" />▼ not in memory</span>
       </Head>
-      {asks === 0 ? (
-        <div className="trNone">no asks in {c.span} yet — the chart fills from the first stamped answer</div>
-      ) : (
-        <div className="trTrough trMemTrough" ref={ref}>
-          <MirrorChart
-            id="mem"
-            W={W}
-            H={210}
-            up={{ vals: buckets.map((b) => b.memory), label: "from memory", tone: "snow", hoverTone: "accent" }}
-            down={{ vals: buckets.map((b) => b.fresh), label: "not in memory", tone: "amber", hoverTone: "bright" }}
-            ticks={buckets.map((b) => b.label)}
-            hover={hover}
-            hit={{
-              label: line,
-              onHover: (i) => { setHover(i); setReadout(line(i)); },
-              onLeave: () => { setHover(null); setReadout(""); },
-              onClick: (i) => c.toggleWin(buckets[i].from, buckets[i].to, fmtWin(buckets[i].from, buckets[i].to, c.now)),
-            }}
-          />
-        </div>
-      )}
-      <div className="trReadout" aria-live="polite">{readout || "▲ answered from memory · ▼ not in memory · click a window to open it"}</div>
+      <div className="trSectionBody">
+        {asks === 0 ? (
+          <div className="trNone">no asks in {c.span} yet — the chart fills from the first stamped answer</div>
+        ) : (
+          <div className="trTrough trMemTrough" ref={ref}>
+            <MirrorChart
+              id="mem"
+              W={W}
+              H={210}
+              up={{ vals: buckets.map((b) => b.memory), label: "from memory", tone: "snow", hoverTone: "accent" }}
+              down={{ vals: buckets.map((b) => b.fresh), label: "not in memory", tone: "amber", hoverTone: "bright" }}
+              ticks={buckets.map((b) => b.label)}
+              hover={hover}
+              hit={{
+                label: line,
+                onHover: (i) => { setHover(i); setReadout(line(i)); },
+                onLeave: () => { setHover(null); setReadout(""); },
+                onClick: (i) => c.toggleWin(buckets[i].from, buckets[i].to, fmtWin(buckets[i].from, buckets[i].to, c.now)),
+              }}
+            />
+          </div>
+        )}
+        <div className="trReadout" aria-live="polite">{readout || "▲ answered from memory · ▼ not in memory · click a window to open it"}</div>
+      </div>
     </section>
   );
 }
@@ -337,17 +339,19 @@ export function Patterns() {
   return (
     <section className="trSec" aria-label="Patterns">
       <Head label="Patterns"><span className="trSecMeta">read from {label}</span></Head>
-      {patterns.map((p) => (
-        <button key={p.title} type="button" className="trRow trPat" onClick={() => c.openPattern(p)}>
-          <span className={`trPatArrow ${p.pop ? "trAmber" : "trSteel"}`} aria-hidden>{p.up ? "↗" : "↘"}</span>
-          <span className="trRowBody">
-            <span className="trRowTitle">{p.title}</span>
-            <span className="trRowSub">{p.sub}</span>
-          </span>
-          <span className={`trChip ${p.pop ? "trAmber" : "trSteel"}`}>{p.chip}</span>
-        </button>
-      ))}
-      {patterns.length === 0 && <div className="trNone">no patterns the window can back — they appear as calls accrue</div>}
+      <div className="trSectionBody">
+        {patterns.map((p) => (
+          <button key={p.title} type="button" className="trRow trPat" onClick={() => c.openPattern(p)}>
+            <span className={`trPatArrow ${p.pop ? "trAmber" : "trSteel"}`} aria-hidden>{p.up ? "↗" : "↘"}</span>
+            <span className="trRowBody">
+              <span className="trRowTitle">{p.title}</span>
+              <span className="trRowSub">{p.sub}</span>
+            </span>
+            <span className={`trChip ${p.pop ? "trAmber" : "trSteel"}`}>{p.chip}</span>
+          </button>
+        ))}
+        {patterns.length === 0 && <div className="trNone">no patterns the window can back — they appear as calls accrue</div>}
+      </div>
     </section>
   );
 }
@@ -366,36 +370,38 @@ export function BusyHours() {
       <Head label="Busy hours · by hour of day">
         <span className="trSecMeta">{c.covers < 7 * 24 * HOUR ? "a sketch until a week accrues" : "full week"} · {c.tzLabel}</span>
       </Head>
-      <div className="trHeat" role="grid" aria-label="calls by weekday and four-hour band">
-        <span />
-        {DAYS.map((d) => <span key={d} className="trHeatDay">{d}</span>)}
-        {heat.map((band, bi) => (
-          <HeatRow key={BANDS[bi]} band={BANDS[bi]}>
-            {band.map((v, di) => {
-              const title = `${DAYS[di]} ${BANDS[bi]} · ${n(v, "call")}`;
-              return (
-                <button
-                  key={DAYS[di]}
-                  type="button"
-                  className={`trHeatCell ${level(v)}`}
-                  aria-label={title}
-                  onMouseEnter={() => setReadout(title + (v && v === heatMax ? " · peak" : ""))}
-                  onFocus={() => setReadout(title + (v && v === heatMax ? " · peak" : ""))}
-                  onClick={() => c.openCalls(`Calls · ${DAYS[di]} ${BANDS[bi]}–${BANDS[(bi + 1) % 6]}`, `${DAYS[di]} · band ${bi} · ${c.tzLabel}`, cellRows(bi, di), c.hoursN >= 168)}
-                />
-              );
-            })}
-          </HeatRow>
-        ))}
-      </div>
-      <div className="trHeatKey">
-        <span className="trKey"><i className="trHeatNone" />none</span>
-        <span className="trKey"><i className="trHeatLow" />low</span>
-        <span className="trKey"><i className="trHeatMid" />mid</span>
-        <span className="trKey"><i className="trHeatHigh" />high</span>
-        <span className="trKey"><i className="trHeatPeak" />peak</span>
-        <span className="trSpacer" />
-        <span className="trHeatRead" aria-live="polite">{readout || "hover an hour · click to list its calls"}</span>
+      <div className="trSectionBody">
+        <div className="trHeat" role="grid" aria-label="calls by weekday and four-hour band">
+          <span />
+          {DAYS.map((d) => <span key={d} className="trHeatDay">{d}</span>)}
+          {heat.map((band, bi) => (
+            <HeatRow key={BANDS[bi]} band={BANDS[bi]}>
+              {band.map((v, di) => {
+                const title = `${DAYS[di]} ${BANDS[bi]} · ${n(v, "call")}`;
+                return (
+                  <button
+                    key={DAYS[di]}
+                    type="button"
+                    className={`trHeatCell ${level(v)}`}
+                    aria-label={title}
+                    onMouseEnter={() => setReadout(title + (v && v === heatMax ? " · peak" : ""))}
+                    onFocus={() => setReadout(title + (v && v === heatMax ? " · peak" : ""))}
+                    onClick={() => c.openCalls(`Calls · ${DAYS[di]} ${BANDS[bi]}–${BANDS[(bi + 1) % 6]}`, `${DAYS[di]} · band ${bi} · ${c.tzLabel}`, cellRows(bi, di), c.hoursN >= 168)}
+                  />
+                );
+              })}
+            </HeatRow>
+          ))}
+        </div>
+        <div className="trHeatKey">
+          <span className="trKey"><i className="trHeatNone" />none</span>
+          <span className="trKey"><i className="trHeatLow" />low</span>
+          <span className="trKey"><i className="trHeatMid" />mid</span>
+          <span className="trKey"><i className="trHeatHigh" />high</span>
+          <span className="trKey"><i className="trHeatPeak" />peak</span>
+          <span className="trSpacer" />
+          <span className="trHeatRead" aria-live="polite">{readout || "hover an hour · click to list its calls"}</span>
+        </div>
       </div>
     </section>
   );
@@ -421,29 +427,31 @@ export function WhoAnswered() {
   return (
     <section className="trSec" aria-label="Who answered">
       <Head label={`Who answered · ${c.span}`}><a className="trSecLink" href="settings">models ›</a></Head>
-      <div className="trWho">
-        <div className="trDonutBox">
-          <DonutChart segs={shares.map((m, i) => ({ pct: m.pct, cls: SHARE[i % SHARE.length] }))} center={String(attributed)} sub="ASKS" hover={hover} onHover={setHover} onLeave={() => setHover(null)} />
-        </div>
-        <div className="trWhoList">
-          {shares.map((m, i) => (
-            <button
-              key={m.model}
-              type="button"
-              className={`trRow trModel${hover === i ? " trRowOn" : ""}`}
-              onMouseEnter={() => setHover(i)}
-              onMouseLeave={() => setHover(null)}
-              onClick={() => c.openReader(m.model, asks.filter((r) => r.model === m.model))}
-            >
-              <i className={`trDot ${SHARE[i % SHARE.length]}`} aria-hidden />
-              <span className="trRowBody">
-                <span className="trModelName">{m.model}</span>
-                <span className="trRowSub">{n(m.n, "ask")} · {m.ok} proven · p50 {m.p50}</span>
-              </span>
-              <span className="trPct">{m.pct}%</span>
-            </button>
-          ))}
-          {shares.length === 0 && <div className="trNone">no attributed asks in the window</div>}
+      <div className="trSectionBody">
+        <div className="trWho">
+          <div className="trDonutBox">
+            <DonutChart segs={shares.map((m, i) => ({ pct: m.pct, cls: SHARE[i % SHARE.length] }))} center={String(attributed)} sub="ASKS" hover={hover} onHover={setHover} onLeave={() => setHover(null)} />
+          </div>
+          <div className="trWhoList">
+            {shares.map((m, i) => (
+              <button
+                key={m.model}
+                type="button"
+                className={`trRow trModel${hover === i ? " trRowOn" : ""}`}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+                onClick={() => c.openReader(m.model, asks.filter((r) => r.model === m.model))}
+              >
+                <i className={`trDot ${SHARE[i % SHARE.length]}`} aria-hidden />
+                <span className="trRowBody">
+                  <span className="trModelName">{m.model}</span>
+                  <span className="trRowSub">{n(m.n, "ask")} · {m.ok} proven · p50 {m.p50}</span>
+                </span>
+                <span className="trPct">{m.pct}%</span>
+              </button>
+            ))}
+            {shares.length === 0 && <div className="trNone">no attributed asks in the window</div>}
+          </div>
         </div>
       </div>
     </section>

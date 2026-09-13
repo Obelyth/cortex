@@ -275,7 +275,7 @@ export function OpsClient({ board, secret, decisions, initialOpenId = null }: Re
             </span>
             <span className="opsHeadMeta">receipts · newest first · 30 d</span>
           </div>
-          <ol className="opsReceipts">
+          <ol className="opsReceipts" tabIndex={0} aria-label="Timeline receipts">
             {withDays(board.timeline).map((x) =>
               "day" in x ? (
                 <li key={`day-${x.day}`} className="opsDay">{x.day}</li>

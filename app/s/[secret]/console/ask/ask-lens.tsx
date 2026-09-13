@@ -109,13 +109,13 @@ function PinTrough({ pin }: Readonly<{ pin: PinVM }>) {
             pinned {pin.state.temperature}
             {pin.state.reason ? ` — “${pin.state.reason}”` : ""}
           </span>
-          <button type="button" className="askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin(null)}>Unpin</button>
+          <button type="button" className="inkControl askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin(null)}><span className="inkSweep" aria-hidden="true" />Unpin</button>
           <span className="askLensNote">unpinning restores the computed temperature exactly</span>
         </>
       ) : (
         <>
-          <button type="button" className="askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin("hot")}>Pin hot</button>
-          <button type="button" className="askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin("cold")}>Pin cold</button>
+          <button type="button" className="inkControl askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin("hot")}><span className="inkSweep" aria-hidden="true" />Pin hot</button>
+          <button type="button" className="inkControl askBtn askBtnSm" disabled={pin.busy} onClick={() => pin.onPin("cold")}><span className="inkSweep" aria-hidden="true" />Pin cold</button>
           <span className="askLensNote">a pin outranks the computed score until removed — hot keeps it in the seat and rides handoff bundles cited “pinned”; cold keeps it out</span>
         </>
       )}
@@ -250,7 +250,7 @@ export function NoteLensBody({ note, heat, sha, stamp, scoring, retracted, conne
                       <div className="askEdgeEvi">
                         <span>{e.evidence}</span>
                         <div className="askActions">
-                          <button type="button" className="askBtn askBtnSm" onClick={() => onOpenNote(e.other)}>Open {e.other}</button>
+                          <button type="button" className="inkControl askBtn askBtnSm" onClick={() => onOpenNote(e.other)}><span className="inkSweep" aria-hidden="true" />Open {e.other}</button>
                         </div>
                       </div>
                     )}
@@ -262,9 +262,9 @@ export function NoteLensBody({ note, heat, sha, stamp, scoring, retracted, conne
       )}
 
       <div className="askActions">
-        <button type="button" className="askBtn askBtnPrimary" onClick={onAsk}>Ask about it</button>
-        {onHandoff && <button type="button" className="askBtn" onClick={onHandoff}>Open working context</button>}
-        {github && <a className="askBtn" href={github} target="_blank" rel="noopener">Open on GitHub at {sha8}</a>}
+        <button type="button" className="inkControl askBtn askBtnPrimary" onClick={onAsk}><span className="inkSweep" aria-hidden="true" />Ask about it</button>
+        {onHandoff && <button type="button" className="inkControl askBtn" onClick={onHandoff}><span className="inkSweep" aria-hidden="true" />Open working context</button>}
+        {github && <a className="inkControl askBtn" href={github} target="_blank" rel="noopener"><span className="inkSweep" aria-hidden="true" />Open on GitHub at {sha8}</a>}
       </div>
       <div className="askLensNote">the lens is the glance; the answer is the proof · opening a note here reads nothing into the access log</div>
     </>
@@ -283,8 +283,8 @@ export function ToolLensBody({ tool, onAsk }: Readonly<{ tool: ToolFacts; onAsk:
         ["calls · 30 d", tool.calls === null ? "this instance's count only — no durable call store" : tool.calls === 0 ? "none here — never called from this environment, not unavailable" : num(tool.calls)],
       ]} />
       <div className="askActions">
-        <button type="button" className="askBtn askBtnPrimary" onClick={onAsk}>Ask about it</button>
-        <a className="askBtn" href="settings">Open settings</a>
+        <button type="button" className="inkControl askBtn askBtnPrimary" onClick={onAsk}><span className="inkSweep" aria-hidden="true" />Ask about it</button>
+        <a className="inkControl askBtn" href="settings"><span className="inkSweep" aria-hidden="true" />Open settings</a>
       </div>
       <div className="askLensNote">a guest sees a smaller toolset, not a refused one — nothing else is registered on that handler, so nothing else appears in its tools/list</div>
     </>

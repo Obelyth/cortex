@@ -132,7 +132,8 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
       <h2 className="ovPanelTitle" id="ov-working">Working context</h2>
       <span className="ovPanelNote">{page ? page.total + " open in this view" : loading ? "reading…" : "unavailable"}</span>
     </div>
-    <p className={context.intro}>Keep the next session up to date. Save short working notes here, then preview the bounded context a model receives when it resumes a project.</p>
+    <h3 className={context.heading}>Leave a working note</h3>
+    <p className={context.intro}>Save a quick note or project handoff for the next session. Preview a project to see the bounded context it would receive.</p>
     <div className={context.controls}>
       <label className={styles.field} htmlFor="working-project">Project for handoff
         <select id="working-project" value={project} onChange={e => selectProject(e.target.value)}>
@@ -140,15 +141,15 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
           {projects.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
       </label>
-      <button type="button" className={styles.button + " " + styles.primary} onClick={() => edit()}>{project ? "Add project handoff" : "Add general note"}</button>
-      <button type="button" className={styles.button} disabled={!project || preview?.kind === "loading"} onClick={() => void openPreview()}>{preview?.kind === "loading" ? "Assembling…" : "Preview context"}</button>
-      {preview && <button type="button" className={styles.button} onClick={clearPreview}>Close preview</button>}
+      <button type="button" className={styles.button + " " + styles.primary} onClick={() => edit()}><span className="inkSweep" aria-hidden="true" />{project ? "Add project handoff" : "Add general note"}</button>
+      <button type="button" className={styles.button} disabled={!project || preview?.kind === "loading"} onClick={() => void openPreview()}><span className="inkSweep" aria-hidden="true" />{preview?.kind === "loading" ? "Assembling…" : "Preview context"}</button>
+      {preview && <button type="button" className={styles.button} onClick={clearPreview}><span className="inkSweep" aria-hidden="true" />Close preview</button>}
     </div>
     <p className={context.description}>{project
       ? "Selection alone saves nothing. Add a handoff to save notes; Preview context shows the current bundle without a model call or access-log entry."
       : "No project selected. General notes remain available at session boot. Choosing None never removes saved notes or changes a model’s current conversation."}</p>
     {projectsLoading && <p className={context.description} role="status">Loading project choices…</p>}
-    {projectsError && <p className={context.description} role="alert">Project choices are unavailable. Your saved notes are separate and can still be managed. <button type="button" className={styles.button} onClick={() => void loadProjects()}>Retry project choices</button></p>}
+    {projectsError && <p className={context.description} role="alert">Project choices are unavailable. Your saved notes are separate and can still be managed. <button type="button" className={styles.button} onClick={() => void loadProjects()}><span className="inkSweep" aria-hidden="true" />Retry project choices</button></p>}
     {!projectsLoading && !projectsError && !projects.length && <p className={context.description}>No project pages yet. You can save general notes now; a project preview needs a project page in the corpus.</p>}
     {truncated && <p className={context.description}>Showing the first 500 project choices. Other saved notes are still available below under All projects.</p>}
     {arrivalMissing && <p className={context.description} role="status">That project is not in the available choices. Nothing was selected or saved.</p>}
@@ -168,7 +169,7 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
         </label>
       </div>
       <div role="status" className="ovPanelFoot">{status}</div>
-      {error && <div role="alert" className="ovEmpty">Working notes did not answer. Sessions can still boot using their fallback context. {/did not answer|is unavailable/i.test(error) ? "" : error} <button type="button" className={styles.button} onClick={() => void load()}>Retry loading</button></div>}
+      {error && <div role="alert" className="ovEmpty">Working notes did not answer. Sessions can still boot using their fallback context. {/did not answer|is unavailable/i.test(error) ? "" : error} <button type="button" className={styles.button} onClick={() => void load()}><span className="inkSweep" aria-hidden="true" />Retry loading</button></div>}
       {page?.items.length === 0 && <div className="ovEmpty">{cursors.length > 1 ? "No more open items. Previous page goes back." : "No open working notes for " + scopeLabel + ". Add a note when there is something to carry forward."}</div>}
       <div aria-busy={loading || undefined}>
         {page?.items.map(it => <button key={it.id} type="button" className="ovWs" onClick={() => edit(it)}>
@@ -177,9 +178,9 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
         </button>)}
       </div>
       <div className={styles.tools}>
-        {cursors.length > 1 && <button type="button" className={styles.button} disabled={loading} onClick={() => setCursors(c => c.slice(0, -1))}>Previous page</button>}
-        {page?.next && <button type="button" className={styles.button} disabled={loading} onClick={() => setCursors(c => [...c, page.next])}>Next page</button>}
-        <button type="button" className={styles.button} disabled={loading} onClick={() => { clearPreview(); if (before === null) void load(); else setCursors([null]); }}>Refresh saved notes</button>
+        {cursors.length > 1 && <button type="button" className={styles.button} disabled={loading} onClick={() => setCursors(c => c.slice(0, -1))}><span className="inkSweep" aria-hidden="true" />Previous page</button>}
+        {page?.next && <button type="button" className={styles.button} disabled={loading} onClick={() => setCursors(c => [...c, page.next])}><span className="inkSweep" aria-hidden="true" />Next page</button>}
+        <button type="button" className={styles.button} disabled={loading} onClick={() => { clearPreview(); if (before === null) void load(); else setCursors([null]); }}><span className="inkSweep" aria-hidden="true" />Refresh saved notes</button>
       </div>
       <p className="ovPanelFoot">Untouched notes age out after 14 days. To remove one sooner, open it and choose Drop item; confirmation is required and its history stays. General notes join session boot, not a project-only handoff.</p>
     </section>

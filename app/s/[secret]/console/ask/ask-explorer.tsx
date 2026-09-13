@@ -456,11 +456,12 @@ export function AskBand() {
 /* ── The explorer: header, columns, the tree, the legend ───────────────────────────────── */
 
 function TempCells({ temp, off }: Readonly<{ temp: ExplorerRow["temp"]; off: boolean }>) {
-  const lit = temp === "hot" ? 3 : temp === "warm" ? 2 : temp === "cold" ? 1 : 0;
+  const temperature = off ? "unscored" : temp ?? "unscored";
+  const lit = temperature === "hot" ? 3 : temperature === "warm" ? 2 : temperature === "cold" ? 1 : 0;
   const word = off ? "outside the reader tier — no temperature" : temp ?? "unscored";
   return (
-    <span className="askTemp" title={word} aria-label={`temperature ${word}`}>
-      {[0, 1, 2].map((i) => <i key={i} className={i < lit ? (temp === "hot" ? "on hot" : "on") : undefined} />)}
+    <span className={`askTemp askTemp-${temperature}`} title={word} aria-label={`temperature ${word}`}>
+      {[0, 1, 2].map((i) => <i key={i} className={i < lit ? "on" : undefined} />)}
     </span>
   );
 }
@@ -611,7 +612,7 @@ export function AskTree() {
         {tree.groups.length === 0 && <div className="askNone">no note matches — units and tools, if any matched, are under the input</div>}
       </div>
       <div className="askLegend">
-        <span><b>temp</b> ■■■ hot · ■■□ warm · ■□□ cold · □□□ unscored — from note_scores</span>
+        <span><b>temp</b> <span className="askLegendTemp askLegendTemp-hot"><i aria-hidden>■■■</i> hot</span> · <span className="askLegendTemp askLegendTemp-warm"><i aria-hidden>■■□</i> warm</span> · <span className="askLegendTemp askLegendTemp-cold"><i aria-hidden>■□□</i> cold</span> · <span className="askLegendTemp askLegendTemp-unscored"><i aria-hidden>□□□</i> unscored</span> — from note_scores</span>
         <span><b>seat</b> ■ loaded by every boot call</span>
         <span><b>stamp</b> days since <i>_Facts last verified_</i> · amber past {STALE_DAYS} d · dim when decays: false · rec = a dated record · — none</span>
         <span><b>ret</b> retracted passages, kept on the page</span>
@@ -739,8 +740,8 @@ function Answer({ a }: Readonly<{ a: AskAnswer }>) {
           {c.superseded && <div className="askReason">this passage is retracted — the quote is real and the claim is not current</div>}
           {!c.verified && <div className="askReason">{c.reason}</div>}
           <div className="askActions">
-            {noteBy.has(c.path) && <button type="button" className="askBtn askBtnPrimary" onClick={() => openNote(c.path)}>Open the note</button>}
-            {github && <a className="askBtn" href={github} target="_blank" rel="noopener">Open on GitHub at {c.commit.slice(0, 8)}</a>}
+            {noteBy.has(c.path) && <button type="button" className="inkControl askBtn askBtnPrimary" onClick={() => openNote(c.path)}><span className="inkSweep" aria-hidden="true" />Open the note</button>}
+            {github && <a className="inkControl askBtn" href={github} target="_blank" rel="noopener"><span className="inkSweep" aria-hidden="true" />Open on GitHub at {c.commit.slice(0, 8)}</a>}
           </div>
         </section>
       ) : (
@@ -836,7 +837,7 @@ export function AskReadout() {
       {busy ? <Busy /> : answer ? <Answer a={answer} /> : <Empty />}
       <div className="askContextLink">
         <span>Preparing the next session? Saved notes and project handoffs live together in Overview.</span>
-        <button type="button" className="askBtn" onClick={() => openWorkingContext()}>Manage working context</button>
+        <button type="button" className="inkControl askBtn" onClick={() => openWorkingContext()}><span className="inkSweep" aria-hidden="true" />Manage working context</button>
       </div>
     </>
   );
