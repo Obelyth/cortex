@@ -12,7 +12,7 @@ The original proposal is retained below for development history only.
 
 **Decided 2026-08-11 by the deployment owner:** the brain learns as we go and thinks ahead, but stays
 **passive**. The decision approved usage-learning (layer 1) and structure-learning (layer 2) and
-rejected the proactive/push layer outright — "no AI slop." This spec is those two layers,
+rejected the proactive/push layer outright. This spec is those two layers,
 plus the response-caching work, because they share one insight: *the corpus at a commit is
 immutable, so anything derived from it — a ranking, a graph, an answer — can be cached,
 replayed, and rebuilt without ever becoming a second source of truth.*

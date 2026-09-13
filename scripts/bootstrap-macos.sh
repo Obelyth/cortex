@@ -23,7 +23,7 @@ act()  { local s="$1"; printf '  \033[33m→\033[0m %s\n' "$s"; return 0; }
 # macOS ships — no ${var,,}, which arrived in bash 4.
 confirm() {
   local q="$1" a
-  read -r -p "  $q [Y/n] " a
+  read -r -p "  $q [Y/n] " a || return 1
   if [[ "$a" == [Nn]* ]]; then
     return 1
   fi
@@ -39,7 +39,7 @@ printf '\n  CORTEX by OBELYTH — macOS setup\n  One memory, every surface. This
 bold "1 · Homebrew — the standard macOS package manager"
 # Both Apple silicon and Intel install locations, for a brew installed earlier
 # in this same run or in a previous shell that never touched this PATH.
-for p in /opt/homebrew/bin /usr/local/bin; do [[ -d "$p" ]] && PATH="$p:$PATH"; done
+for p in /opt/homebrew/bin /usr/local/bin; do [[ -d "$p" ]] && PATH="$PATH:$p"; done
 if command -v brew >/dev/null 2>&1; then
   ok "Homebrew installed"
 else
@@ -49,7 +49,7 @@ else
   # HTTPS only, redirects included — the fetched script runs with this user's rights.
   /bin/bash -c "$(curl -fsSL --proto '=https' --proto-redir '=https' https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
     || fail "Homebrew install did not finish — re-run this after fixing what it printed."
-  for p in /opt/homebrew/bin /usr/local/bin; do [[ -d "$p" ]] && PATH="$p:$PATH"; done
+  for p in /opt/homebrew/bin /usr/local/bin; do [[ -d "$p" ]] && PATH="$PATH:$p"; done
   command -v brew >/dev/null 2>&1 || fail "brew still not on PATH — open a new Terminal window and re-run."
   ok "Homebrew installed"
 fi
@@ -58,18 +58,32 @@ fi
 bold "2 · The tools Cortex needs"
 node_ok() {
   command -v node >/dev/null 2>&1 || return 1
-  local major
-  major="$(node -e 'console.log(process.versions.node.split(".")[0])')" || return 1
-  [[ "$major" -ge 20 ]] || return 1
-  return 0
+  # Match package.json engines: >=22.18.0 <23, excluding prereleases.
+  node -e 'const v = /^22\.(\d+)\.(\d+)$/.exec(process.versions.node); process.exit(v && Number(v[1]) >= 18 ? 0 : 1)'
 }
-if node_ok; then ok "Node $(node -v) (needs 20+)"
+if node_ok; then ok "Node $(node -v) (needs 22.18+ within Node 22)"
 else
-  confirm "Install Node (via brew)?" || fail "Cortex needs Node 20+. Stopped."
-  brew install node || fail "brew install node failed — re-run after fixing what it printed."
-  node_ok || fail "Node is still missing or older than 20 — open a new Terminal and re-run."
+  confirm "Install Node 22 (via brew node@22)?" || fail "Cortex needs Node 22.18+ within Node 22. Stopped."
+  brew install node@22 || fail "brew install node@22 failed — re-run after fixing what it printed."
+  NODE_PREFIX="$(brew --prefix node@22)" || fail "could not locate Homebrew node@22. Stopped."
+  # node@22 is keg-only. Select it for this run without brew link, changing
+  # shell startup files, or replacing the user's global Node configuration.
+  export PATH="$NODE_PREFIX/bin:$PATH"
+  hash -r
+  node_ok || fail "Node is still missing or unsupported — Cortex needs Node 22.18+ within Node 22."
   ok "Node $(node -v) installed"
 fi
+# Resolve version-manager shims to the actual runtime, and keep its npm and
+# child processes on that same Node. Do not fall back to another npm on PATH.
+NODE_BIN="$(node -p 'require("node:path").dirname(process.execPath)')" || fail "could not locate the selected Node runtime."
+export PATH="$NODE_BIN:$PATH"
+hash -r
+node_ok || fail "the selected Node runtime is unsupported — Cortex needs Node 22.18+ within Node 22."
+NPM="$NODE_BIN/npm"
+[[ -x "$NPM" ]] || fail "npm is missing beside the selected Node — repair your Node 22 installation and re-run."
+NPM_VERSIONS="$("$NPM" version --json)" || fail "npm could not start — repair your Node 22 installation and re-run."
+node -e 'try { const v = JSON.parse(process.argv[1]); process.exit(v.node === process.versions.node && typeof v.npm === "string" && v.npm.length > 0 ? 0 : 1); } catch { process.exit(1); }' "$NPM_VERSIONS" \
+  || fail "npm is using a different Node runtime — repair your Node 22 installation and re-run."
 if command -v gh >/dev/null 2>&1; then ok "GitHub CLI (gh) installed"
 else
   confirm "Install the GitHub CLI, gh (via brew)?" || fail "Cortex needs gh to create your private brain repo. Stopped."
@@ -133,7 +147,7 @@ act "installing the exact pinned dependencies (a minute or two)…"
 # --ignore-scripts: no dependency lifecycle script runs on this machine, same
 # policy as the release workflow — which proves on every tag that the suite and
 # build pass without them. The deploy builds on Vercel's side either way.
-npm ci --ignore-scripts || fail "npm ci failed — re-run after fixing what it printed."
+"$NPM" ci --ignore-scripts || fail "npm ci failed — re-run after fixing what it printed."
 ok "dependencies installed"
 act "starting the onboarding wizard — it creates your private brain, deploys, and verifies."
-exec npm run onboard
+exec "$NPM" run onboard

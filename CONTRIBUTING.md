@@ -66,24 +66,44 @@ A release is a provenance snapshot of `main`, nothing more. Updates still ship
 from `main`, and `npm run update` is how a running copy takes them. See
 [Updates and recovery](README.md#updates-and-recovery). To cut one:
 
-```
-git checkout main && git pull
-npm version <major|minor|patch> --no-git-tag-version
-git commit -am "release: v<X.Y.Z>" && git push   # via a PR, per the rules above
-git tag v<X.Y.Z> && git push origin v<X.Y.Z>
-```
+1. Fetch `origin` and create a release branch from the current `origin/main`.
+   Do not make release commits directly on `main`.
+2. Set the intended version in `package.json` and both root version fields in
+   `package-lock.json`, for example with `npm version major --no-git-tag-version`.
+   Keep them consistent: the update helper uses this version to locate the tag
+   when recovering Git history for an extracted source archive.
+3. Write `docs/releases/v<version>.md` with changes, installation instructions,
+   compatibility limits, and required operator actions. Update README links and
+   `.github/RELEASE_HEADER.md`, including its version-specific guide link. The
+   renderer pins those links to the packaged commit.
+4. Run the portable checks above, any changed launcher regressions, release-header
+   rendering, and applicable privacy checks. Commit only the intended source files,
+   push the release branch, and open a PR targeting `main`. Apply `action-required`
+   when needed. Wait for all required checks and review before merging.
+5. Fetch the merged result and identify the PR's exact merge commit. Confirm it is
+   on `origin/main` and its package version is the intended version. Create the
+   matching annotated `v<version>` tag at that commit and push only that tag. Never
+   move an existing published tag or tag an unmerged release branch.
+6. Wait for the tag's release workflow. Download its published archive, inspect its
+   contents and blank template, and verify the provenance with
+   `gh attestation verify <archive> --repo Obelyth/cortex`. A pushed tag alone is
+   not a published or verified release. Remove the merged remote release branch
+   once its work is preserved on `main`.
 
 The `release` workflow re-runs typecheck, tests and the build at the tag, then
-publishes the GitHub Release with generated notes behind a fixed setup header
-(`.github/RELEASE_HEADER.md`). A tag whose checks fail publishes nothing.
+publishes the reviewed release text in `.github/RELEASE_HEADER.md` with links pinned
+to that commit. Keep its changes and operator requirements current for each release.
+The workflow does not append automatic author credits or contributor lists. A tag
+whose checks fail publishes nothing.
 
 ### The action-required label
 
 Before merging, label any PR whose change needs operator action beyond
 `npm run update`, such as a new environment variable, a migration (`scripts/migrate.ts`), or rewiring
 a client, with `action-required`. Generated release notes group those PRs into
-an "Action required" section at the top (`.github/release.yml`), which is the
-only place an operator is told about manual steps before updating. The header
-promises that no section means no manual steps, so a missing label on a PR that
-needed one makes the next release lie. Treat the label as part of the change,
-exactly like the docs the honest-data rule covers.
+an "Action required" section when manually generating notes (`.github/release.yml`).
+The publishing workflow uses reviewed notes instead. State required actions
+directly in the release header and version-specific guide. Do not rely on historic
+PR labels being complete. Audit changes since the previous release for runtime,
+authentication, database and provider compatibility before publishing. Treat these
+instructions as part of the change, exactly like the docs the honest-data rule covers.

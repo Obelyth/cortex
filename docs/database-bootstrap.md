@@ -37,9 +37,41 @@ The service-role key bypasses row-level security. Never put it in browser code, 
 
 ## Existing Cortex database
 
+**Existing v1.2.0 databases are not supported by the automatic apply path.** They
+predate the Ops migration baseline. Preserve the database and obtain an
+administrator-reviewed integration plan before deploying the new source against
+it. This release does not include that legacy integration. Pristine bootstrap,
+invented ledger rows, or inserting a pristine-install marker are not workarounds.
+
+The current apply runner requires the existing migration ledger to record both
+`20260902120000_ops_ledger.sql` and `20260902140000_agent_units.sql`, and checks the
+corresponding notes, mirror and Ops schema. Those records must describe migrations
+that actually ran. Missing, empty, pre-Ops, or incompatible databases stop with
+`Administrator integration required`. A successful read-only check only reports
+the plan; it does not certify this apply prerequisite. See the
+[v2.0.0 upgrade requirements](releases/v2.0.0.md#action-required-for-existing-installations).
+
 Back up the database and verify the exact target before any schema change. Use the migration check workflow first, inspect its immutable-file checksums and plan, and explicitly approve only pending forward migrations. Published migration files are not edited in place.
 
 The optional dashboard workflow uses the `cortex-database` GitHub environment. Store `SUPABASE_DB_URL` there as an environment secret and, if the connection needs one, store its trusted PEM certificate as `CORTEX_DATABASE_CA`. Require environment review and restrict the approved source branch. Never disable TLS certificate verification. `CORTEX_MIGRATION_TARGET` identifies the intended database but does not authorize access to it.
+
+### Historical rows without checksums
+
+This is a separate condition from the pre-Ops layout above. A database can have
+the required Ops tables while older migration records still lack checksums.
+Dashboard apply refuses a legacy ledger or any missing historical checksum, even
+when a read-only check can list pending files. This warning alone does not mean
+those historical migrations failed or that data was lost.
+
+The release does not include an automatic reconciliation tool. An administrator
+must preserve the existing ledger, establish the exact historical SQL and schema
+state using deployment records or other reliable evidence, and review the
+integration before changing records. Do not simply hash the current migration
+files and insert those values: that would assert unproven historical execution.
+If the history cannot be established, stop rather than manufacture a passing
+ledger. Do not use the command-line apply path to bypass dashboard reconciliation.
+
+### Read-only check
 
 The command-line runner is dry-run by default:
 

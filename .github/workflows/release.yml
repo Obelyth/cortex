@@ -3,8 +3,9 @@ name: release
 # Releases are provenance snapshots of main, cut by pushing a v* tag. The full check suite
 # re-runs AT THE TAG before anything is published — a release that skipped the checks would
 # be a claim the repo cannot back. Updates still ship from main; redeploy to update
-# (SECURITY.md). The release body is .github/RELEASE_HEADER.md followed by GitHub's
-# generated notes, so every release opens with the same update-first path.
+# (SECURITY.md). The release body is the reviewed .github/RELEASE_HEADER.md,
+# including current changes and explicit upgrade requirements. Publication does
+# not append generated author credits or contributor lists.
 
 on:
   push:
@@ -54,12 +55,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          {
-            CORTEX_RELEASE_COMMIT="$(git rev-parse HEAD)" node scripts/release-header.mjs
-            echo
-            gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-              -f tag_name="${GITHUB_REF_NAME}" --jq .body
-          } > /tmp/notes.md
+          CORTEX_RELEASE_COMMIT="$(git rev-parse HEAD)" node scripts/release-header.mjs > /tmp/notes.md
           # The Announcements thread is a nicety; a release must never fail because
           # Discussions is toggled off, so the flag gets one try and is then dropped.
           publish() {
