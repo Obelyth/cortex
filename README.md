@@ -34,6 +34,11 @@ stored at that same tag.
 
 **Documentation:** [Environment variables](.env.example) · [Database setup](docs/database-bootstrap.md) · [Dependencies and CI](.github/DEPENDENCIES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](ROADMAP.md) · [Design reference](DESIGN.md)
 
+**v2.0.0:** [Release notes, Linux/macOS setup, and upgrade requirements](docs/releases/v2.0.0.md).
+Existing v1.2.0 databases need an administrator-reviewed integration plan before
+deploying this source against them. The ordinary migration apply path does not
+support that older database layout.
+
 ## The dashboard
 
 The protected dashboard has five tabs:
@@ -65,6 +70,19 @@ Saving an environment variable does not update an already-running deployment. De
 
 ### Optional setup wizard
 
+Linux and macOS use the same source package and hosted dashboard. Cortex is a web
+application, not a native desktop binary. You can use the browser-based setup above
+without installing local tools.
+
+For the packaged release, download `cortex-v2.0.0.tar.gz` from
+[v2.0.0](https://github.com/Obelyth/cortex/releases/tag/v2.0.0), extract it, and enter
+the extracted directory. On Linux, run `bash "Cortex Setup.sh"`; on macOS, open
+`Cortex Setup.command`. Linux checks your existing tools and offers the same
+interactive wizard; it does not run `sudo` or choose a distribution's package
+manager. Missing prerequisites stop setup before sign-in or installation. The
+[release guide](docs/releases/v2.0.0.md#linux-and-macos-setup) explains the prerequisites
+and the manual alternative.
+
 The wizard performs the repository and Vercel steps interactively. It requires
 Node **22.18.0 or newer and earlier than 23**, Git, an authenticated
 [GitHub CLI](https://cli.github.com/), and an authenticated
@@ -74,9 +92,9 @@ browser-based steps above do not require Node, local Git, either CLI, or a local
 Git identity.
 
 ```bash
-git clone https://github.com/Obelyth/cortex.git
+git clone --branch v2.0.0 --single-branch https://github.com/Obelyth/cortex.git
 cd cortex
-npm ci
+npm ci --ignore-scripts
 npm run onboard
 ```
 
@@ -165,6 +183,12 @@ Ordinary tests use synthetic data, not your notes or live provider credentials. 
 ## Updates and recovery
 
 Read the release's **Action required** section before updating, especially for existing-database changes. Back up the brain repository and database separately. An update does not replace that backup plan.
+
+For v2.0.0, read the [upgrade requirements](docs/releases/v2.0.0.md#action-required-for-existing-installations)
+before deploying. An existing v1.2.0 database predates the supported Ops migration
+baseline and cannot use the ordinary automatic apply path. A migration check can
+list pending files without proving that an apply is supported. Never use pristine
+bootstrap or manufacture migration records to get past this boundary.
 
 `npm run update` is an optional interactive source-update and deployment helper. Review its planned merge and any local changes before confirming. It does not apply database migrations. Follow release-specific manual steps, then check the deployment and its Ops receipts; a successful build alone does not prove every configured integration works.
 
