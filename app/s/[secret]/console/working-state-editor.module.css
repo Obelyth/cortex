@@ -6,7 +6,8 @@
 .field input,.field select,.field textarea { width:100%; min-height:44px; box-sizing:border-box; padding:10px; border:1px solid var(--line); border-radius:var(--r); background:var(--sunk); color:var(--ink); box-shadow:var(--well); font-family:var(--mono); font-size:12px; }
 .field textarea { min-height:160px; resize:vertical; line-height:1.6; }
 .actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.button { min-height:44px; max-width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-chip); background:transparent; color:var(--ink); font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; text-align:left; cursor:pointer; }
+.button { composes: inkControl from global; min-height:44px; max-width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-chip); background:transparent; color:var(--ink); font-family:var(--mono); font-size:11px; letter-spacing:0.1em; text-transform:uppercase; text-align:left; cursor:pointer; }
+.button:not(.primary):hover:enabled { background:var(--glass); border-color:var(--muted); }
 .primary { background:var(--accent); border-color:var(--accent); color:var(--accent-on); }
 .button:disabled { background:transparent; border-color:var(--hair); color:var(--disabled); cursor:default; }
 .note { font-size:12px; line-height:1.6; color:var(--muted); }

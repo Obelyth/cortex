@@ -19,21 +19,21 @@ colors:
   amber: "#e0ad48"
   red: "#e8695f"
   green: "#4cc08a"
-  paper-ground: "#eeedeb"
-  paper-surface: "#f7f6f4"
-  paper-surface-raised: "#e4e2de"
-  paper-sunk: "#e2e0dc"
+  paper-ground: "#e4e2de"
+  paper-surface: "#eeece8"
+  paper-surface-raised: "#d9d6d0"
+  paper-sunk: "#dad7d1"
   paper-text: "#111315"
   paper-muted: "#3a3f44"
-  paper-faint: "#5f666d"
+  paper-faint: "#505860"
   paper-disabled: "#7c848c"
   paper-line: "rgba(17,19,21,.28)"
   paper-hair: "rgba(17,19,21,.1)"
-  paper-cyan: "#0f7f91"
-  paper-cyan-high: "#0b6a79"
-  paper-amber: "#8a6410"
-  paper-red: "#b8412f"
-  paper-green: "#227a4e"
+  paper-cyan: "#096475"
+  paper-cyan-high: "#075565"
+  paper-amber: "#75540e"
+  paper-red: "#a43729"
+  paper-green: "#1c693f"
 typography:
   masthead:
     fontFamily: "Archivo, system-ui, sans-serif"
@@ -64,8 +64,8 @@ typography:
     lineHeight: 1.4
     letterSpacing: "0.14em"
 rounded:
-  control: "3px"
-  instrument: "4px"
+  control: "4px"
+  instrument: "6px"
   switch-track: "13px"
   circle: "50%"
 spacing:
@@ -133,7 +133,7 @@ The console is authenticated and operational, not a public landing page. Its fiv
 
 - Ink by default, with a complete Paper token dictionary rather than a separate layout
 - Archivo for display and interface text, with JetBrains Mono for labels and functional values
-- Compact 3px controls inside 4px instruments, with the switch as the intentional pill exception
+- Compact 4px controls inside 6px instruments, with the switch as the intentional pill exception
 - Cyan for live state and primary action, orange for structural markers, and status colors for operational meaning
 - Hairlines, sunk troughs, restrained shadows, and fine dot or graph-paper texture
 - Five primary tabs with one working-context editor on Overview
@@ -212,13 +212,13 @@ Depth is restrained and structural. Instruments use a close ambient elevation, i
 
 ## Shapes
 
-The default form language is compact and slightly softened. Instrument panels, troughs, and inputs use 4px corners. Buttons, chips, steppers, and inset row ends use 3px corners. The 46px by 26px switch is the deliberate pill exception, with a circular 18px knob. Hairline borders and partial-radius rows remain valid when they clarify direction or selection.
+The default form language is compact and slightly softened. Instrument panels, troughs, and inputs use 6px corners. Buttons, chips, steppers, and inset row ends use 4px corners. The 46px by 26px switch is the deliberate pill exception, with a circular 18px knob. Hairline borders and partial-radius rows remain valid when they clarify direction or selection.
 
 ## Components
 
 ### Buttons
 
-- **Shape:** Compact 3px corners with a 44px standard target.
+- **Shape:** Compact 4px corners with a 44px standard target.
 - **Primary:** Cyan field with the ground-appropriate on-accent text.
 - **Secondary:** Transparent surface with a semantic line border and current text color.
 - **Hover / Active:** Borders move toward accent, interactive buttons may move 1px, and disabled controls remain still with explicit disabled color.
@@ -226,19 +226,19 @@ The default form language is compact and slightly softened. Instrument panels, t
 
 ### Chips
 
-- **Style:** Compact mono uppercase labels with 3px corners and a 1px current-color border.
+- **Style:** Compact mono uppercase labels with 4px corners and a 1px current-color border.
 - **State:** Selected chips fill with cyan. Warning, critical, healthy, and live chips use their semantic state color.
 
 ### Cards / Containers
 
-- **Corner Style:** 4px for instrument panels. Ruled regions may remain square when they are table-like rather than container-like.
+- **Corner Style:** 6px for instrument panels. Ruled regions may remain square when they are table-like rather than container-like.
 - **Background:** Semantic surface or band color, with the opposite-ground dictionary reserved for inverted regions.
 - **Shadow Strategy:** Ambient, cast, trough, or bezel according to material role.
 - **Border:** Semantic line for section boundaries and hair for internal divisions.
 
 ### Inputs / Fields
 
-- **Style:** Sunk ground, semantic line border, 4px corners, mono values, and at least a 44px target.
+- **Style:** Sunk ground, semantic line border, 6px corners, mono values, and at least a 44px target.
 - **Focus:** Global accent-high outline. Compound fields may also strengthen their enclosing border.
 - **Disabled:** Explicit disabled text and hairline border. Do not use opacity as the only disabled cue.
 
@@ -256,16 +256,40 @@ The settings switch is a 46px by 26px pill on a sunk trough. Its 18px circular k
 
 - **Do** use the semantic token dictionary so one component remains legible on Ink and Paper.
 - **Do** reserve cyan for active interaction and live state, orange for structure, and status colors for their named states.
-- **Do** use 4px corners for instruments and 3px corners for inset controls.
+- **Do** use 6px corners for instruments and 4px corners for inset controls.
 - **Do** keep paths, IDs, metrics, timestamps, and compact control labels in JetBrains Mono.
 - **Do** keep working-context editing on Overview, including the explicit None state, and link to it from Ask.
 - **Do** make reduced-motion output readable in its finished state.
 
 ### Don't:
 
-- **Don't** restore a zero-radius-only rule. The shipped system uses 4px instruments, 3px controls, and a pill switch.
+- **Don't** restore a zero-radius-only rule. The shipped system uses 6px instruments, 4px controls, and a pill switch.
 - **Don't** introduce a second working-context editor or treat None as deletion.
 - **Don't** present Map as a current screen. Authenticated Map addresses are compatibility redirects to Ask.
 - **Don't** treat the anonymous root as a public product page. It intentionally returns 404.
 - **Don't** add generic card names or dark slab variants as system primitives when the shipped surfaces use semantic panels, bands, troughs, and ruled regions.
 - **Don't** use shadow as the only focus indicator or opacity as the only disabled indicator.
+
+## Material and motion
+
+Paper uses a dim warm ground and darker cyan text. Both grounds keep fine dot textures behind content, shallow pooled shading, and softly feathered structural rules. Rounded caps finish joined labels; inset interactive rows retain their directional border.
+
+The masthead uses an 8px backdrop blur on its empty pseudo-element. The masthead itself stays free of a backdrop filter so the fixed Notices tray remains attached to the viewport. An opaque ground replaces the effect when reduced transparency or forced colors is requested. Notices retains a native backdrop button, Escape dismissal, and focus restoration.
+
+Section headings may move three pixels once over 220ms after entering the viewport. Data and controls remain readable before hydration, if observation fails, and under reduced motion. Selected controls carry one optional dot sweep on pointer hover; disabled, busy, touch, reduced-motion, and forced-color states suppress it. Chart strokes keep their full geometry.
+
+Cursor accent is off by default and saved for the current browser. When enabled on a wide desktop with a fine mouse pointer, a hollow orange and teal outline turns slowly around the native pointer. It is decorative, has no hit area, and disappears during editing, selection, drag, keyboard use, hidden-page states, reduced motion, or forced colors.
+
+The public Overview keeps its existing working notes and project preview. Instruments share a reading grid, Recent saves has a keyboard-focusable bounded viewport, and the Ops Timeline scrolls within the height set by Decisions. Reader rows expose all metrics in narrow layouts rather than hiding columns.
+
+## Verification boundary
+
+This presentation port was checked against a production build using the unchanged blank starter corpus and synthetic provider responses. Browser checks cover all five screens in Ink and Paper at desktop and narrow widths, Notices containment and focus restoration, the optional cursor and reduced motion, and anonymous-route rejection. These checks validate layout and client behavior; they are not proof of live provider writes, production migrations, or a deployed account's data state.
+
+The September 13 confirmation passed 30 layout/theme/viewport scenarios at 320, 390
+and 1440 CSS pixels, plus cursor opt-in, reduced-motion and anonymous/wrong-secret
+404 checks, with no page errors. Node 22 typechecking and the production build passed.
+The unit suite passed 2,947 tests with 177 environment-gated skips. A separate enforced
+private-corpus export gate passed all 11 tests with zero skips and blocked test network
+access; the default suite's skips are not privacy evidence. The blank template and
+backend, authorization, migration and provider configuration remain unchanged.

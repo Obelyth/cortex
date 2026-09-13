@@ -10,6 +10,7 @@
  */
 
 .ovRoot { max-width: 1440px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; min-width: 0; }
+.ovRoot { position: relative; }
 
 /* ── 00 · the masthead figure ──────────────────────────────────────────────── */
 .ovMast { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: end; position: relative; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
@@ -56,8 +57,9 @@
 
 /* ── The instrument panels ─────────────────────────────────────────────────── */
 .ovPanels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 32px 40px; align-items: start; }
-.ovPanelColumn { display: flex; flex-direction: column; gap: 32px; min-width: 0; }
 .ovWorkingContext { scroll-margin-top:90px; min-width:0; }
+.ovSavesViewport { max-height: 280px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding-inline: 3px; margin-inline: -3px; }
+@media (max-width: 900px) { .ovSavesViewport { max-height: none; overflow: visible; } }
 /* Bare, like every grid section in the canvas: no fill, no border, no radius, no bezel and
    no padding of its own. The header's rule is the only structure an instrument gets, and the
    two ported screens already on main draw theirs the same way (trends .trSec, settings
@@ -170,9 +172,10 @@
 .ovTone-muted { fill: var(--muted); background: var(--muted); }
 .ovTone-warn { fill: var(--warn); background: var(--warn); }
 .ovStats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 14px; }
+.ovStats > div { min-width: 0; }
 .ovStatN { display: flex; align-items: center; gap: 8px; font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: 26px; line-height: 1; color: var(--bright); font-variant-numeric: tabular-nums; }
 .ovStatN i { width: 8px; height: 8px; display: inline-block; flex: none; }
-.ovStatK { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 6px; white-space: nowrap; }
+.ovStatK { font-family: var(--mono); font-size: 11px; color: var(--faint); margin-top: 6px; overflow-wrap: anywhere; }
 
 /* ── The lens bodies this screen provides (L1 · L8 · L9 · W11) ───────────── */
 /* The shell's body is a grid, which would stretch the eyebrow chip to the drawer's width. */
@@ -208,10 +211,7 @@
 .ovD10 { --cx-d: 700ms; } .ovD11 { --cx-d: 770ms; } .ovD12 { --cx-d: 840ms; }
 /* The chip stamps, marks pop, bars grow from the axis, the arc draws — once, after the section
    has arrived, never before hydration and never under reduced motion (the root is not armed). */
-.conRoot.cxReady [data-cx].cxIn .ovMark { animation: cx-pop 400ms var(--ease) var(--cx-d, 0ms) backwards; }
-.conRoot.cxReady [data-cx].cxIn .ovBarUp,
-.conRoot.cxReady [data-cx].cxIn .ovBarDown { animation: cx-bar 520ms var(--ease) var(--cx-d, 0ms) backwards; }
-.conRoot.cxReady [data-cx].cxIn .ovRingArc { animation: cx-ring 1100ms var(--ease) 200ms backwards; }
+/* Section headings acknowledge arrival. Data marks, chart bars and measured arcs stay still. */
 @media (prefers-reduced-motion: reduce) {
   .ovFloodDot, .ovMark, .ovBarUp, .ovBarDown, .ovRingArc { animation: none !important; }
   .ovMark:hover, .ovMarkHot, .conRoot .ovLensAct:hover, .conRoot .ovLensAct:active { transform: none; }

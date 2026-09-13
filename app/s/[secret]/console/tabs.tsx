@@ -37,9 +37,9 @@ export function Tabs({ badge }: Readonly<{ badge?: number }> = {}) {
           key={t.seg}
           href={`${prefix}${t.seg}`}
           prefetch={false}
-          className={`conTab${t.seg === active ? " on" : ""}`}
+          className={`inkControl conTab${t.seg === active ? " on" : ""}`}
           aria-current={t.seg === active ? "page" : undefined}
-        >
+        ><span className="inkSweep" aria-hidden="true" />
           {t.label}
           {t.seg === "ops" && badge != null && badge > 0 && <span className="conTabN">{badge}</span>}
         </Link>

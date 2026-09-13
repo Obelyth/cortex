@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Children, createElement, isValidElement, type ReactElement, type ReactNode } from "react";
 import { WorkingStateEditor } from "../app/s/[secret]/console/working-state-editor";
 import type { WorkingItem } from "../lib/working-state-contract";
 
@@ -26,6 +26,14 @@ function elements(node: ReactNode): Element[] {
   return Children.toArray(node).flatMap(child => isValidElement<Record<string, any>>(child)
     ? [child, ...elements(child.props.children)] : []);
 }
+function labelText(node: ReactNode): string {
+  return Children.toArray(node).map(child => isValidElement<Record<string, any>>(child)
+    ? child.props["aria-hidden"] === true || child.props["aria-hidden"] === "true" ? "" : labelText(child.props.children) : String(child)).join("");
+}
+it("keeps aria-hidden false labels while excluding decorative true labels", () => {
+  for (const hidden of [false, "false", undefined]) expect(labelText(createElement("span", { "aria-hidden": hidden as false }, "Save"))).toBe("Save");
+  for (const hidden of [true, "true"]) expect(labelText(createElement("span", { "aria-hidden": hidden as true }, "Decoration"))).toBe("");
+});
 const ordinary: WorkingItem = { id: 7, version: 2, kind: "handoff", project: "harbor", body: "Original notes", bodyRedacted: false, projectRedacted: false, status: "open", touchedAt: "2026-09-08T12:00:00Z" };
 const masked: WorkingItem = { ...ordinary, version: 3, project: "token=<redacted>", body: "password=<redacted>", bodyRedacted: true, projectRedacted: true };
 beforeEach(() => {
@@ -36,7 +44,7 @@ beforeEach(() => {
 function editor(item: WorkingItem) {
   const render = () => { hooks.cursor = 0; return elements(WorkingStateEditor({ item, onSaved: vi.fn() })); };
   const field = (name: "body" | "project") => render().find(el => el.type === (name === "body" ? "textarea" : "input"))!;
-  const click = (label: string) => render().find(el => el.type === "button" && el.props.children === label)!.props.onClick();
+  const click = (label: string) => render().find(el => el.type === "button" && labelText(el.props.children) === label)!.props.onClick();
   const submit = () => render().find(el => el.type === "form")!.props.onSubmit({ preventDefault() {} });
   const idle = () => vi.waitFor(() => expect(field("body").props.disabled).toBe(false));
   const status = () => String(render().find(el => el.props.role === "status")!.props.children);

@@ -16,6 +16,13 @@
  * markup names to a rule here.
  */
 
+/* The shared ink material, kept here so the legacy Ask selectors stay separate. */
+.conRoot .askBand {
+  background-image: linear-gradient(178deg, var(--inv-grain), transparent 46%, var(--inv-grain)), radial-gradient(var(--inv-grain) .6px, transparent .7px);
+  background-size: 100% 100%, 3px 3px;
+}
+.conRoot .askBtnSm { --ink-sweep-duration: var(--ink-sweep-compact); }
+@media (forced-colors: active) { .conRoot .askBand { background-image: none; } }
 /* ── 01 · the ask band, on the inverted ground ─────────────────────────────── */
 /* Full-bleed like the console's bands; the −44px lifts it into .conBody's top air so it touches
    the masthead, as the concept draws it. */
@@ -32,6 +39,8 @@
 .askChipNo { display: inline-flex; flex: none; margin-bottom: 14px; }
 .askChipNo b { background: var(--signal); color: var(--signal-on); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; padding: 5px 9px; white-space: nowrap; }
 .askChipNo span { background: var(--inv-chip); color: var(--inv-fg); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.18em; text-transform: uppercase; padding: 5px 11px; white-space: nowrap; }
+.askChipNo b { border-radius: var(--r-chip) 0 0 var(--r-chip); }
+.askChipNo span { border-radius: 0 var(--r-chip) var(--r-chip) 0; }
 .askForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--ground); color: var(--ink); border: 1px solid var(--inv-line); border-radius: var(--r); box-shadow: var(--well); transition: border-color 160ms var(--ease); }
 .askForm:focus-within { border-color: var(--inv-accent); }
 /* Controls on the inverted slab take the slab's accent: the foundation's ring is --accent-hi
@@ -75,7 +84,7 @@
 
 /* ── The explorer ──────────────────────────────────────────────────────────── */
 .askExplorer { --cx-d: 60ms; position: static; max-height: none; overflow: visible; background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r); box-shadow: var(--bezel); min-width: 0; }
-.askExHead { background: var(--surface); border-bottom: 1px solid var(--line); padding: 14px 16px 10px; }
+.askExHead { background: var(--surface); border-radius: var(--r) var(--r) 0 0; border-bottom: 1px solid var(--line); padding: 14px 16px 10px; }
 .askExTitle { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .askLbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--bright); white-space: nowrap; flex: none; }
 .askLblSm { font-size: 10px; letter-spacing: 0.14em; color: var(--faint); }
@@ -138,9 +147,12 @@
 .askPin-warm { color: var(--muted); }
 .askPin-cold { color: var(--faint); }
 .askTemp { display: inline-flex; gap: 2px; align-items: center; justify-self: start; }
-.askTemp i { width: 6px; height: 6px; display: inline-block; background: transparent; border: 1px solid var(--line); }
-.askTemp i.on { background: var(--muted); border-color: var(--muted); }
-.askTemp i.hot { background: var(--warn); border-color: var(--warn); }
+.askTemp-hot { color: var(--signal); }
+.askTemp-warm { color: color-mix(in srgb, var(--signal) 64%, var(--muted)); }
+.askTemp-cold { color: var(--accent); }
+.askTemp-unscored { color: var(--muted); }
+.askTemp i { width: 6px; height: 6px; display: inline-block; background: transparent; border: 1px solid currentColor; }
+.askTemp i.on { background: currentColor; }
 .askSeat { display: inline-flex; justify-self: center; }
 .askSeat i { width: 7px; height: 7px; display: inline-block; border: 1px solid var(--line); background: transparent; }
 .askSeat.on i { background: var(--accent); border-color: var(--accent); }
@@ -160,6 +172,11 @@
 .askLegend { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px 14px; border-top: 1px solid var(--line); font-family: var(--mono); font-size: 10px; color: var(--faint); line-height: 1.6; }
 .askLegend b { color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; margin-right: 4px; }
 .askLegend i { font-style: normal; color: var(--muted); }
+.askLegendTemp { white-space: nowrap; }
+.askLegendTemp-hot i { color: var(--signal); }
+.askLegendTemp-warm i { color: color-mix(in srgb, var(--signal) 64%, var(--muted)); }
+.askLegendTemp-cold i { color: var(--accent); }
+.askLegendTemp-unscored i { color: var(--muted); }
 
 /* ── The readout ───────────────────────────────────────────────────────────── */
 .askReadout { --cx-d: 120ms; min-width: 0; }

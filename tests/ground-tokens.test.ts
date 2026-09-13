@@ -57,7 +57,7 @@ describe("the two grounds", () => {
   });
   it("ink is the default: the bare .conRoot block carries the dark ground", () => {
     expect(block(theme, ".conRoot {")).toMatch(/--ground:\s*#0f1318/);
-    expect(block(theme, '.conRoot[data-ground="paper"]')).toMatch(/--ground:\s*#eeedeb/);
+    expect(block(theme, '.conRoot[data-ground="paper"]')).toMatch(/--ground:\s*#e4e2de/);
   });
 });
 
