@@ -55,7 +55,7 @@ match.
 
 ## Codespaces
 
-The [development container](../.devcontainer/devcontainer.json) configures a
+The [development container](https://github.com/Obelyth/cortex/blob/d78d74921ba6988bede7782c66137fd6ac45e8d7/.devcontainer/devcontainer.json) configures a
 Node workspace with locked dependency installation. Read the
 [Codespaces guide](codespaces.md) for startup, access settings and stopping the
 workspace. Opening it can consume your GitHub Codespaces allowance; it is not a

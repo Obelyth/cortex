@@ -21,8 +21,8 @@ synthetic test suite, and production build. These checks do not require
 application, cloud-provider, private-notes, or deployed-server credentials. CI
 also runs every native integration suite against disposable PostgreSQL 17 and
 Valkey 8 services and rejects skipped tests or incomplete file coverage. See
-[Dependency and CI maintenance](.github/DEPENDENCIES.md) and the source-of-truth
-[CI workflow](.github/workflows/ci.yml). Use `npm run test:watch` while iterating.
+[Dependency and CI maintenance](https://github.com/Obelyth/cortex/blob/d78d74921ba6988bede7782c66137fd6ac45e8d7/.github/DEPENDENCIES.md) and the source-of-truth
+[CI workflow](https://github.com/Obelyth/cortex/blob/d78d74921ba6988bede7782c66137fd6ac45e8d7/.github/workflows/ci.yml). Use `npm run test:watch` while iterating.
 
 ## The honest-data rule
 
