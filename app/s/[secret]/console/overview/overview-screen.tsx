@@ -65,6 +65,7 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
       {/* 00 — the thesis viewport: one count at a scale nothing else approaches, its identity
           beside it, and whether the thing is alive. */}
       <header id="overview-summary" className="ovMast" data-cx="rise" data-cx-section tabIndex={-1}>
+        <div className="ovMastIn">
         <div className="ovMastN">{p.notes}</div>
         <div className="ovMastMeta">
           <h1 className="ovMastLead">notes in the brain</h1>
@@ -88,6 +89,7 @@ export function OverviewScreen(p: Readonly<OverviewProps>) {
             session boot cost <b>{p.boot ? `${p.boot.pct}%` : "unknown"}</b>
             {p.boot ? ` · ~${p.boot.tokens.toLocaleString()} estimated boot tokens of ~${p.tokens.toLocaleString()} estimated body tokens` : " — boot path unreadable this render"}
           </div>
+        </div>
         </div>
       </header>
 
