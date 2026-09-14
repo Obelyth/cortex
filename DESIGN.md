@@ -310,7 +310,12 @@ tests passed; 177 environment-gated tests remain explicitly skipped. The design 
 ramp advisories concern unchanged font sizes. These are presentation and synthetic behavior
 checks, not live provider or migration evidence.
 
-The additional enforced export gate passed 11 tests and failed one existing note-name
-collision in an unchanged generated workflow. That gate remains unresolved; neither its
-assertion nor the workflow was changed by this visual port. A successful default unit suite
-must not be presented as a passing export check.
+The additional enforced export gate initially passed 11 tests and failed one existing
+note-name collision in an unchanged generated workflow. A follow-up, exact-occurrence
+policy now recognizes independently verified public repository references without
+exempting the workflow or its other content. The enforced check now passes all 12 tests
+with zero skips. Thirty-three policy tests and six synthetic real-gate cases verify the
+exception's boundaries, including injected paths, names, prose and credentials. The full
+suite passes 3,055 tests with 177 environment-gated skips, and typechecking passes. The
+generated workflow and runtime application remain unchanged by this follow-up. See
+[Export privacy checks](docs/export-gate.md) for the policy and verification limits.
