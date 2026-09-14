@@ -132,7 +132,8 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
       <h2 className="ovPanelTitle" id="ov-working">Working context</h2>
       <span className="ovPanelNote">{page ? page.total + " open in this view" : loading ? "reading…" : "unavailable"}</span>
     </div>
-    <h3 className={context.heading}>Leave a working note</h3>
+    <section className={context.notes} aria-labelledby="working-note">
+    <h3 className={context.heading} id="working-note">Leave a working note</h3>
     <p className={context.intro}>Save a quick note or project handoff for the next session. Preview a project to see the bounded context it would receive.</p>
     <div className={context.controls}>
       <label className={styles.field} htmlFor="working-project">Project for handoff
@@ -183,6 +184,7 @@ export function WorkingState({ now }: Readonly<{ now: number }>) {
         <button type="button" className={styles.button} disabled={loading} onClick={() => { clearPreview(); if (before === null) void load(); else setCursors([null]); }}><span className="inkSweep" aria-hidden="true" />Refresh saved notes</button>
       </div>
       <p className="ovPanelFoot">Untouched notes age out after 14 days. To remove one sooner, open it and choose Drop item; confirmation is required and its history stays. General notes join session boot, not a project-only handoff.</p>
+    </section>
     </section>
   </>;
 }

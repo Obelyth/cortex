@@ -1,0 +1,8 @@
+[
+  {
+    "file": ".github/workflows/ci-autofix.yml",
+    "repository": "Obelyth/obelyth-autoci-fixer",
+    "workflow": ".github/workflows/autofix.yml",
+    "ref": "main"
+  }
+]

@@ -1,8 +1,9 @@
+.notes { min-width:0; padding:24px; background:var(--surface); border:1px solid var(--hair); border-radius:var(--r); }
 .intro { margin:12px 0 20px; max-width:74ch; font-size:15px; line-height:1.6; color:var(--muted); }
 .controls { display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
 .controls label { flex:1 1 240px; max-width:480px; }
 .description { margin:8px 0; color:var(--muted); font-size:12px; line-height:1.6; overflow-wrap:anywhere; }
-.saved { margin-top:28px; }
+.saved { margin-top:24px; padding-top:24px; border-top:1px solid var(--line); }
 .savedHead { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; }
 .filter { display:flex; align-items:center; flex-wrap:wrap; gap:8px; font:11px var(--mono); color:var(--muted); }
 .filter select { min-height:44px; max-width:100%; padding:10px; border:1px solid var(--line); border-radius:var(--r); color:var(--ink); background:var(--sunk); font:12px var(--mono); }
@@ -18,6 +19,7 @@
 .piece p { grid-column:1/-1; margin:0; color:var(--muted); line-height:1.6; }
 .excluded summary { min-height:44px; padding:12px 0; box-sizing:border-box; cursor:pointer; font:12px var(--mono); }
 @media(max-width:700px) {
+  .notes { padding:16px; }
   .controls { align-items:stretch; }
   .controls label { flex-basis:100%; max-width:none; }
   .piece { grid-template-columns:minmax(0,1fr); }

@@ -13,19 +13,24 @@
 .ovRoot { position: relative; }
 
 /* ── 00 · the masthead figure ──────────────────────────────────────────────── */
-.ovMast { display: flex; flex-wrap: wrap; gap: 20px 40px; align-items: end; position: relative; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
-.ovMastN { font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: clamp(80px, 10vw, 160px); line-height: 0.85; letter-spacing: -0.02em; color: var(--bright); font-variant-numeric: tabular-nums; }
+.ovMast { position: relative; margin: -44px calc(50% - 50vw) 0; width: 100vw; background: var(--inv-bg); color: var(--inv-fg); background-image: radial-gradient(var(--inv-grain) .6px, transparent .7px); background-size: 3px 3px; border-bottom: 1px solid var(--inv-line); }
+/* 1440px content plus the console's two 28px gutters. */
+.ovMastIn { max-width: 1496px; box-sizing: border-box; margin: 0 auto; padding: 36px 28px; display: flex; flex-wrap: wrap; gap: 24px 40px; align-items: center; }
+.ovMastN { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-family: var(--sans); font-weight: 800; font-variation-settings: var(--display-wide); font-size: clamp(80px, 10vw, 160px); line-height: 0.85; letter-spacing: -0.02em; color: var(--inv-fg); font-variant-numeric: tabular-nums; }
 .ovMastMeta { flex: 1 1 260px; min-width: 0; padding-bottom: 6px; }
-.ovMastLead { margin: 0; font-family: var(--sans); font-size: clamp(20px, 2vw, 26px); font-weight: 500; line-height: 1.1; color: var(--bright); }
-.ovMastLines { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.9; }
-.ovMastLines b { font-weight: 600; color: var(--ink); }
+.ovMastLead { margin: 0; font-family: var(--sans); font-size: clamp(20px, 2vw, 26px); font-weight: 500; line-height: 1.1; color: var(--inv-fg); }
+.ovMastLines { font-family: var(--mono); font-size: 12px; color: var(--inv-muted); margin-top: 10px; line-height: 1.9; overflow-wrap: anywhere; }
+.ovMastLines b { font-weight: 600; color: var(--inv-fg); }
 /* The head SHA: the accent, an underline that grows on hover. */
 .conRoot a.ovSha { color: var(--accent); font-weight: 700; text-decoration: none; background-image: linear-gradient(var(--accent-hi), var(--accent-hi)); background-size: 0% 1px; background-repeat: no-repeat; background-position: 0 100%; padding-bottom: 1px; transition: background-size 260ms var(--ease), color 160ms var(--ease); }
 .conRoot a.ovSha:hover { background-size: 100% 1px; color: var(--accent-hi); text-decoration: none; }
+.conRoot .ovMast a.ovSha { color: var(--inv-accent); background-image: linear-gradient(var(--inv-accent), var(--inv-accent)); }
+.conRoot .ovMast a.ovSha:hover { color: var(--inv-fg); }
+.conRoot .ovMast a.ovSha:focus-visible { outline-color: var(--inv-accent); }
 
 /* The live field. Cyan marks live data, and this is the largest instance on the page. */
 .ovFlood { flex: 1 1 280px; max-width: 420px; background: var(--accent); color: var(--accent-on); padding: 16px 18px; box-shadow: var(--elev1); border-radius: var(--r); }
-.ovFloodHead { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; white-space: nowrap; }
+.ovFloodHead { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; overflow-wrap: anywhere; }
 .ovFloodDot { width: 6px; height: 6px; background: var(--accent-on); display: inline-block; flex: none; animation: cx-breathe 4.5s ease-in-out infinite; }
 .ovFloodLine { font-family: var(--mono); font-size: 12px; margin-top: 10px; line-height: 1.8; }
 .ovFloodLine b { font-weight: 700; }
@@ -57,14 +62,11 @@
 
 /* ── The instrument panels ─────────────────────────────────────────────────── */
 .ovPanels { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 32px 40px; align-items: start; }
-.ovWorkingContext { scroll-margin-top:90px; min-width:0; }
+.ovWorkingContext { scroll-margin-top:90px; min-width:0; display:grid; gap:24px; }
 .ovSavesViewport { max-height: 280px; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding-inline: 3px; margin-inline: -3px; }
 @media (max-width: 900px) { .ovSavesViewport { max-height: none; overflow: visible; } }
-/* Bare, like every grid section in the canvas: no fill, no border, no radius, no bezel and
-   no padding of its own. The header's rule is the only structure an instrument gets, and the
-   two ported screens already on main draw theirs the same way (trends .trSec, settings
-   .setPanel). Boxing all eight inverted the page: the canvas floats exactly two objects — the
-   inverted corpus slab and the sunk working-state band — on otherwise bare ruled columns. */
+/* Instruments remain bare ruled columns. Package and note workspaces above have their own
+   material boundaries because they are distinct editing tasks, not passive instruments. */
 .ovPanel { min-width: 0; position: relative; }
 /* Working state sits in a well, on the band, with the grain the canvas gives it. */
 /* The one sunk object, and it carries its own padding now that .ovPanel has none. Recessed,
@@ -219,7 +221,7 @@
 
 /* ── Narrow ────────────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .ovMast { gap: 16px 24px; padding-bottom: 20px; }
+  .ovMastIn { gap: 20px 24px; padding-block: 28px; }
   .ovFlood { max-width: none; flex-basis: 100%; }
   .ovCorpus { padding: 16px 14px 18px; }
   .ovPanelWell { padding: 16px 14px 8px; }
@@ -230,3 +232,5 @@
   .ovSaveAgo { grid-column: 2; }
   .ovSaveMsg { white-space: normal; overflow-wrap: anywhere; }
 }
+@media (max-width: 900px) { .ovMastIn { padding-inline: 14px; } }
+@media (forced-colors: active) { .ovMast { background-image: none; } }

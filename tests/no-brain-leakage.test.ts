@@ -38,6 +38,8 @@ import { join } from "node:path";
 import { SECRETS } from "../lib/redact";
 import { SKIP_NAME, SKIP_PREFIX } from "../lib/corpus";
 import { substringHits, unescaped } from "./helpers/export-scan";
+import { noteNameHits } from "./helpers/export-reference-policy";
+import publicReferences from "./helpers/export-public-references.json";
 
 const BRAIN = process.env.BRAIN_DIR ?? join(process.cwd(), "..", "brain");
 const REPO = process.cwd();
@@ -317,6 +319,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
    * write). Schema paths are exempt for the reason SCHEMA_PATHS gives, and STEM_ALLOW carries
    * the names that are the product describing itself. Measured against the live brain when this
    * was written: 138 distinctive stems, one allowed, and the six real leaks all caught.
+   * Independently public repository identifiers have a separate exact-occurrence policy;
+   * it does not exempt their files or other occurrences of the same stem. See docs/export-gate.md.
    */
   const STEM_ALLOW = new Set([
     // "Cortex second-brain map — canvas renderer." The product's own term for the product.
@@ -329,16 +333,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
       .map((p) => p.split("/").pop()!.replace(/\.md$/, ""))
       .filter((stem) => stem.includes("-") && stem.length > 8)
       .filter((stem) => !STEM_ALLOW.has(stem));
-    const hits: string[] = [];
-
-    for (const [file, text] of repoSources()) {
-      for (const stem of new Set(stems)) {
-        const at = text.indexOf(stem);
-        if (at < 0) continue;
-        const line = text.slice(0, at).split("\n").length;
-        hits.push(`${file}:${line} names the real note "${stem}"`);
-      }
-    }
+    const hits = noteNameHits(repoSources(), stems, publicReferences)
+      .map(({ file, line, origin }) => `${file}:${line} names the real note "${origin}"`);
 
     expect(hits, `real brain note names found in shipped source:\n  ${hits.join("\n  ")}`).toEqual(
       []
