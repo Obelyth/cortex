@@ -1,0 +1,17 @@
+{
+  "name": "Cortex development",
+  "image": "node:22.23.2-bookworm",
+  "containerUser": "node",
+  "remoteUser": "node",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Cortex development",
+      "onAutoForward": "notify"
+    }
+  },
+  "otherPortsAttributes": {
+    "onAutoForward": "ignore"
+  },
+  "postCreateCommand": ["npm", "ci", "--ignore-scripts"]
+}

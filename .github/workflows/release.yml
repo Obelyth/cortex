@@ -20,6 +20,11 @@ jobs:
     uses: ./.github/workflows/ci.yml
   release:
     needs: verify
+    # Configure approved v* tags and a required maintainer review in this
+    # environment. Passing CI alone does not approve publication.
+    environment:
+      name: release
+      url: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

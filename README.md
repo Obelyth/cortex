@@ -34,6 +34,8 @@ stored at that same tag.
 
 **Documentation:** [Environment variables](.env.example) · [Database setup](docs/database-bootstrap.md) · [Dependencies and CI](.github/DEPENDENCIES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](ROADMAP.md) · [Design reference](DESIGN.md)
 
+**GitHub workspace:** [Documentation hub](docs/wiki/Home.md) · [Codespaces](docs/codespaces.md) · [Repository settings and environments](docs/github-project-setup.md)
+
 **v2.0.0:** [Release notes, Linux/macOS setup, and upgrade requirements](docs/releases/v2.0.0.md).
 Existing v1.2.0 databases need an administrator-reviewed integration plan before
 deploying this source against them. The ordinary migration apply path does not
@@ -163,6 +165,10 @@ The guest connection exposes only scoped `brain_ask` and `brain_propose`. `brain
 The citation verifier checks quoted text against a source file. A verified quote proves the text appears there, not that the text is true or that the answer follows from it. Corrections and superseded passages are identified separately. There is no recall or accuracy guarantee for your corpus. See [SECURITY.md](SECURITY.md) for reporting and security details.
 
 ## Local development
+
+Prefer a browser-based development workspace? See [GitHub Codespaces](docs/codespaces.md).
+It provides the Node runtime and installs locked dependencies, but does not create
+a hosted Cortex account, configure production providers or deploy anything.
 
 ```bash
 npm ci
