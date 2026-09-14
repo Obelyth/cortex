@@ -195,6 +195,14 @@ Screens combine full-width inverted bands with responsive instrument grids. Repe
 
 **The One Editor Rule.** Working context is edited only on Overview. None means no project selected and does not remove saved notes. Ask may link to this editor but must not duplicate it.
 
+Overview begins with a full-width opposite-ground introduction directly below the masthead:
+Paper on Ink, Ink on Paper. The count, metadata, links, focus and static dot grain use the
+inverse dictionary. A centered wrapper aligns with the 1440px Overview content area and the
+shell's responsive gutters. Working-note creation, project preview, saved notes and pagination
+share a distinct semantic-surface panel with 6px corners, 24px padding (16px on narrow screens)
+and a ruled internal saved-notes section. This presentation change does not add package
+functionality or change the public blank starter.
+
 ## Elevation & Depth
 
 Depth is restrained and structural. Instruments use a close ambient elevation, inset troughs hold inputs and charts, and inverted bands or drawers use a stronger cast. Fine dot grain and graph-paper lines add material texture without introducing a second palette.
@@ -293,3 +301,16 @@ The unit suite passed 2,947 tests with 177 environment-gated skips. A separate e
 private-corpus export gate passed all 11 tests with zero skips and blocked test network
 access; the default suite's skips are not privacy evidence. The blank template and
 backend, authorization, migration and provider configuration remain unchanged.
+
+The subsequent Overview-separation confirmation passed all 30 five-screen browser scenarios
+in both themes at 320, 390 and 1440 CSS pixels, with no page errors. It additionally checked
+the inverse band's full width and navigation alignment, note-panel containment and the
+unchanged empty starter interactions. Typechecking, the production build and 3,016 unit
+tests passed; 177 environment-gated tests remain explicitly skipped. The design scan's type
+ramp advisories concern unchanged font sizes. These are presentation and synthetic behavior
+checks, not live provider or migration evidence.
+
+The additional enforced export gate passed 11 tests and failed one existing note-name
+collision in an unchanged generated workflow. That gate remains unresolved; neither its
+assertion nor the workflow was changed by this visual port. A successful default unit suite
+must not be presented as a passing export check.

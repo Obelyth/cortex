@@ -46,6 +46,16 @@ async function selectProject(value: string) {
 }
 const posts = () => requests.filter(r => r.init?.method === "POST");
 
+it("contains note creation, project preview and saved notes in one named workspace", async () => {
+  await mount();
+  const workspace = host.querySelector('section[aria-labelledby="working-note"]');
+  expect(workspace, "a distinct working-note workspace").not.toBeNull();
+  expect(workspace!.contains(button("Add general note"))).toBe(true);
+  expect(workspace!.contains(button("Preview context"))).toBe(true);
+  expect(workspace!.querySelector('[aria-labelledby="working-saved"]')).not.toBeNull();
+  expect(posts()).toEqual([]);
+});
+
 it("starts with None and cannot preview or save just by selecting or clearing a project", async () => {
   await mount();
   const select = host.querySelector<HTMLSelectElement>("#working-project");
