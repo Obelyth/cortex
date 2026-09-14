@@ -1,6 +1,6 @@
 # Develop Cortex in GitHub Codespaces
 
-The [development container](../.devcontainer/devcontainer.json) provides Node
+The [development container](https://github.com/Obelyth/cortex/blob/d78d74921ba6988bede7782c66137fd6ac45e8d7/.devcontainer/devcontainer.json) provides Node
 22.23.2, npm and Git, using the [official Node image](https://github.com/nodejs/docker-node).
 Terminals and setup commands run as the unprivileged `node` user. The only
 automatic repository command is `npm ci --ignore-scripts`: it downloads locked
