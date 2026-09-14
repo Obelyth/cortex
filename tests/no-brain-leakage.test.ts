@@ -54,7 +54,7 @@ if (!present && process.env.REQUIRE_EXPORT_GATE === "1") {
 }
 
 /** Directories whose contents ship. node_modules and build output are not ours to police. */
-const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template", "public", ".github"];
+const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", "brain-template", "public", ".github", ".devcontainer"];
 /**
  * The repo root is scanned BY EXTENSION, not by allowlist. An allowlist of five names exempted
  * every root file nobody thought to add — DESIGN.md at 23 KB, package.json, the sonar and vitest
@@ -259,6 +259,10 @@ describe("CSS_VAR — the identifier shape the credential extractor excludes", (
 describe("export gate source coverage", () => {
   it("includes its own shipped source in the privacy scan", () => {
     expect(repoSources().some(([file]) => file === "tests/no-brain-leakage.test.ts")).toBe(true);
+  });
+
+  it("includes the shipped development container in the privacy scan", () => {
+    expect(repoSources().some(([file]) => file === ".devcontainer/devcontainer.json")).toBe(true);
   });
 });
 

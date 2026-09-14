@@ -80,18 +80,23 @@ from `main`, and `npm run update` is how a running copy takes them. See
    rendering, and applicable privacy checks. Commit only the intended source files,
    push the release branch, and open a PR targeting `main`. Apply `action-required`
    when needed. Wait for all required checks and review before merging.
-5. Fetch the merged result and identify the PR's exact merge commit. Confirm it is
+5. Configure the `release` environment's required maintainer approval and allowed
+   `v*` tags as described in the [repository setup guide](docs/github-project-setup.md).
+   Fetch the merged result and identify the PR's exact merge commit. Confirm it is
    on `origin/main` and its package version is the intended version. Create the
    matching annotated `v<version>` tag at that commit and push only that tag. Never
    move an existing published tag or tag an unmerged release branch.
-6. Wait for the tag's release workflow. Download its published archive, inspect its
+6. Wait for the tag's verification jobs, then review the exact tag and source
+   commit in **Actions → Review deployments** and approve the `release` environment.
+   After publishing succeeds, download the archive, inspect its
    contents and blank template, and verify the provenance with
    `gh attestation verify <archive> --repo Obelyth/cortex`. A pushed tag alone is
    not a published or verified release. Remove the merged remote release branch
    once its work is preserved on `main`.
 
 The `release` workflow re-runs typecheck, tests and the build at the tag, then
-publishes the reviewed release text in `.github/RELEASE_HEADER.md` with links pinned
+waits for the configured environment approval before publishing the reviewed
+release text in `.github/RELEASE_HEADER.md` with links pinned
 to that commit. Keep its changes and operator requirements current for each release.
 The workflow does not append automatic author credits or contributor lists. A tag
 whose checks fail publishes nothing.

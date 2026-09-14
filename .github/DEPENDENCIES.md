@@ -29,6 +29,9 @@ the native job must execute them all.
 Tag-triggered releases call the same workflow before publishing. A release tag
 must belong to the repository's default branch. Source packaging and provenance
 attestation use the repository's own GitHub token in a separate publishing job.
+That job uses the `release` GitHub environment. Before cutting a tag in your own
+repository, configure permitted release tags and required maintainer approval
+using the [repository setup guide](../docs/github-project-setup.md).
 
 ## Optional SonarQube Cloud
 
