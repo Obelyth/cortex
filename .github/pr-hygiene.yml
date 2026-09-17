@@ -21,7 +21,7 @@ copilot_review: false
 # the PROJECTS_TOKEN secret is set; number 0 switches it off.
 project:
   owner: Obelyth
-  number: 0
+  number: 1   # Obelyth Roadmap — the one board for every live repo
   status_field: Status
   status:
     opened: In Progress
