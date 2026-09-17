@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Obelyth/obelyth-pr-hygiene/main/schema/pr-hygiene.schema.json
+#
+# PR Hygiene settings for this repository. Read from the default branch, so a
+# pull request cannot change them for itself. Every key is optional; these are
+# the defaults. Full description: https://github.com/Obelyth/obelyth-pr-hygiene
+
+# quarter: the milestone "Qn YYYY" for the quarter the pull request was opened
+# in, created with the quarter's last day as its due date when missing.
+# none: milestones are left alone. Anything else: a milestone title to assign
+# verbatim, which must already exist.
+milestone: quarter
+
+# Logins to request a review from on every pull request. The author is
+# skipped: GitHub does not let anyone review their own pull request.
+reviewers: []
+
+# Also request a Copilot code review (paid feature on the account).
+copilot_review: false
+
+# The Projects v2 board to keep in step with the pull request. Only used when
+# the PROJECTS_TOKEN secret is set; number 0 switches it off.
+project:
+  owner: Obelyth
+  number: 0
+  status_field: Status
+  status:
+    opened: In Progress
+    merged: Done
+    closed: remove   # or a status option such as Cancelled
