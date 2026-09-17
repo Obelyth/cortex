@@ -1,0 +1,144 @@
+# Claude PR Review
+#
+# Reviews every non-draft pull request, once per push: one summary comment plus inline comments
+# on the lines at issue. Rolled out across ShootJackal and Obelyth on 2026-09-17, from the
+# version that has reviewed ShootJackal/cortex since #205; claude.yml, the sibling, only answers
+# @claude mentions and reviews nothing on its own.
+#
+# It reads and comments; it does not write to the tree. That is a property of the tool list in
+# claude_args, not of the permissions block: the action exchanges this job's OIDC token for the
+# Claude GitHub App's installation token, and that token carries contents: write,
+# pull-requests: write and issues: write whatever `permissions:` says (the block bounds
+# github.token only). The job stays in the action's agent mode on purpose. `track_progress: true`
+# would switch it to tag mode, which checks out the PR head, runs Claude with
+# --permission-mode acceptEdits, adds git add/commit/rm and a push wrapper to the allowed tools,
+# and prompts it to push to the PR branch. A reviewer that can push to the PR under review is
+# the CI auto-fixer's failure shape under another name.
+#
+# Pins are commit SHAs, not tags: this job hands a third-party action a subscription credential
+# and an App token that can write to this repository, and a moved tag is the one supply-chain
+# change a tag pin cannot see. The comment beside each SHA names the release it was cut from.
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+# One review per PR at a time. A new push cancels the run in flight rather than queueing a
+# review of a diff nobody will read.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    # Drafts are not asking for review yet. A PR opened by a bot (dependabot's version bumps)
+    # is one the action would refuse red rather than skip: it throws on any Bot actor not named
+    # in allowed_bots. A fork PR carries no secrets, so it would fail red at auth. Skip all three
+    # here, visibly, instead. The AUTHOR is what is tested, not the actor: the auto-fixer's push
+    # to a human's PR fires this with actor github-actions[bot], admitted by allowed_bots below.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # A review of a large diff is one long agent turn, and a job that dies on the clock reads
+    # exactly like a review that failed.
+    timeout-minutes: 30
+    permissions:
+      # Bounds github.token only, which here does the checkout and feeds the CI-status tools.
+      # The App token the action posts with is minted by the exchange below with its own, wider
+      # grants (see the header); what keeps this job read-only is the tool list in claude_args.
+      contents: read
+      pull-requests: write
+      # Not for Anthropic auth. The action exchanges the job's OIDC token for the Claude GitHub
+      # App's installation token, and that token is what posts the comments. Without it, or
+      # without the App installed on the repository, there is nothing to post with.
+      id-token: write
+      actions: read # github.token backs the github_ci tools, which read the PR's CI runs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Review PR
+        id: review
+        uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1.0.227 (where v1 pointed on 2026-09-17)
+        with:
+          # Subscription-billed. On Obelyth repositories this is the org secret (visibility: all
+          # repositories); on ShootJackal repositories it is a repository secret. If the first run
+          # fails at auth, the one-line swap is anthropic_api_key from secrets.ANTHROPIC_API_KEY.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The CI auto-fixer pushes to open PRs as github-actions[bot], and the action refuses
+          # bot actors unless named here. Those pushes are the ones a reviewer most needs to see.
+          allowed_bots: "github-actions[bot]"
+          # Post each inline comment as Claude writes it, anchored to the head it was written
+          # against. The default buffers them and replays the buffer in an always() step after
+          # the session, which runs on cancellation too: a push that cancels a review mid-flight
+          # would land the half-finished comments on the NEW head at the OLD line numbers.
+          classify_inline_comments: "false"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            You are reviewing a pull request. The PR's merge with its base is checked out in the
+            working directory. Before reading the diff, read whichever of these exist at the repo
+            root and hold the PR to them: AGENTS.md, CLAUDE.md, CONTRIBUTING.md, README.md.
+
+            Review in this priority order:
+
+            1. Silent-failure paths. Any write, deploy, sync or send that can appear to succeed
+               while doing nothing is the worst bug a codebase can have. Every changed path that
+               has a side effect must surface a real result on success and fail loudly otherwise;
+               every read of a degraded source must say so rather than return an empty result
+               that reads as "nothing there". Trace each changed path and confirm this, or flag it.
+            2. Secret handling. Flag anything that logs a credential, echoes one into an error
+               response or a redirect, commits one (a test fixture, a workflow prompt and a
+               .env.example with a real value all count), or weakens an existing auth check.
+            3. Correctness. Logic errors, unhandled edge cases, broken error handling. Give a
+               concrete failing input for every claim; do not raise a concern you cannot make
+               fail.
+            4. This repository's conventions.
+               - Never bypass red CI. Flag any change that makes a gate pass without fixing the
+                 cause: deleted or rewritten assertions, .skip or .todo, continue-on-error, a
+                 removed CI step, --no-verify, or a parser or comparator loosened until an old
+                 assertion holds. A test edited in the same PR as the code it guards needs its
+                 reason in the diff. Read the PR's CI status (mcp__github_ci__get_ci_status)
+                 before judging a change to a test or a gate.
+               - Reuse. If the PR reinvents a function, component or pattern that already exists
+                 in this repository, name the existing one.
+               - Whatever the root documents above say is a rule of this repository is a rule
+                 for this review.
+            5. Tests. Is the changed behaviour actually covered? Flag tests that cannot fail: no
+               assertion, asserting on the mock, expect(true), or a skip-when-absent that hides
+               the very case the test exists for.
+
+            Skip formatting and naming preferences unless they hurt readability.
+            Do not praise. If there is nothing to fix, say so in one line.
+            Use mcp__github_inline_comment__create_inline_comment for specific issues and one
+            top-level comment (gh pr comment) for the summary. The review lives on GitHub: post
+            it there, not in your final message.
+          claude_args: |
+            --model claude-opus-5
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,mcp__github_ci__get_ci_status,mcp__github_ci__get_workflow_run_details,mcp__github_ci__download_job_log,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+
+      # The action exits 0 when the App token exchange refuses the workflow, which it does for
+      # any PR whose copy of this file is not byte-identical to the default branch's — including
+      # the PR that adds it. The action sets `conclusion` only once Claude has actually run, so
+      # an empty one means no review happened. Green on purpose: the skip is structural for a PR
+      # that edits this file and cannot be fixed from inside it. The annotation and the summary
+      # are where "not reviewed" is written down.
+      - name: Say so when no review ran
+        if: steps.review.outputs.conclusion == ''
+        run: |
+          echo "::warning title=Claude review did not run::The action ended without running Claude, so this PR was NOT reviewed. If the PR edits .github/workflows/claude-review.yml that is expected: the Claude App token exchange refuses a workflow file that differs from the default branch's."
+          {
+            echo "### :warning: Claude review did not run"
+            echo
+            echo "The action ended without running Claude. Nothing was posted to the PR."
+            echo
+            echo "If this PR edits \`.github/workflows/claude-review.yml\` that is expected: the Claude App token exchange refuses a workflow file that is not byte-identical to the default branch's, and the first real review lands on the next PR after this one merges."
+            echo
+            echo "A green tick here means *not reviewed*, not *clean*."
+          } >> "$GITHUB_STEP_SUMMARY"
