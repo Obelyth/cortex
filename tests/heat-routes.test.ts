@@ -112,11 +112,11 @@ describe("the pin endpoint", () => {
     const store = fakePins();
     __setPinStore(store);
     const res = await call(pinPost, {
-      path: "history/harbor-2026-08.md",
+      path: "history/hotel-2026-08.md",
       pin: { temperature: "hot", reason: "the August record" },
     });
     expect(res.status).toBe(200);
-    expect(store.sets).toEqual([["history/harbor-2026-08.md", "hot", "the August record"]]);
+    expect(store.sets).toEqual([["history/hotel-2026-08.md", "hot", "the August record"]]);
   });
 
   it.each([
@@ -165,8 +165,8 @@ describe("the handoff staging endpoint", () => {
     __setCache({
       files: new Map(
         Object.entries({
-          "projects/harbor.md": "# Harbor\n\nthe page",
-          "log/2026-08-10.md": "# Log\n\n## 09:00 · harbor\n\nmoved the buoys",
+          "projects/hotel.md": "# Hotel\n\nthe page",
+          "log/2026-08-10.md": "# Log\n\n## 09:00 · hotel\n\nmoved the buoys",
         })
       ),
       sha: "deadbeefcafe0000",
@@ -177,28 +177,28 @@ describe("the handoff staging endpoint", () => {
 
   it("404s a wrong secret with the empty body", async () => {
     seed();
-    const res = await call(handoffPost, { project: "harbor" }, { secret: "b".repeat(64) });
+    const res = await call(handoffPost, { project: "hotel" }, { secret: "b".repeat(64) });
     expect(res.status).toBe(404);
     expect(await res.text()).toBe("");
   });
 
   it("stages a real project: coverage verbatim, pieces with fates", async () => {
     seed();
-    const res = await call(handoffPost, { project: "harbor" });
+    const res = await call(handoffPost, { project: "hotel" });
     expect(res.status).toBe(200);
     const view = (await res.json()) as {
       coverage: string;
       pieces: Array<{ kind: string; included: boolean }>;
     };
-    expect(view.coverage).toMatch(/^handoff · harbor @deadbeefcafe/);
+    expect(view.coverage).toMatch(/^handoff · hotel @deadbeefcafe/);
     expect(view.pieces.find((p) => p.kind === "page")!.included).toBe(true);
   });
 
   it("answers an unknown project with the honest miss, closest names attached", async () => {
     seed();
-    const res = await call(handoffPost, { project: "harbour-north" });
+    const res = await call(handoffPost, { project: "hotels-north" });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toContain("closest: harbor");
+    expect(((await res.json()) as { error: string }).error).toContain("closest: hotel");
   });
 
   it("demands a project", async () => {

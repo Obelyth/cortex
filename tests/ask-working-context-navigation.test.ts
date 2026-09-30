@@ -8,7 +8,7 @@ import type { AskModel } from "../app/s/[secret]/console/ask/ask-model";
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => nav }));
 const model: AskModel = {
-  sha: "deadbeef", notes: ["harbor", "kiln"].map(name => ({ path: `projects/${name}.md`, dir: "projects", title: name, desc: "Synthetic project", headings: [], blocks: 1, tokens: 10, retracted: 0, age: 1, decays: false })),
+  sha: "deadbeef", notes: ["hotel", "kiln"].map(name => ({ path: `projects/${name}.md`, dir: "projects", title: name, desc: "Synthetic project", headings: [], blocks: 1, tokens: 10, retracted: 0, age: 1, decays: false })),
   heat: [], skipped: [], retractedByPath: {}, connections: null, units: [], tools: [], reader: null, readerError: null,
   spent: 0, ceiling: 60, narrowing: { k: 15, maxLogs: 1, maxPartsPerPage: 2, budgetBytes: 24000 }, corpusTokens: 20,
   seat: { tokens: 5, parts: [] }, scoring: "off", coldStart: false, pinsAvailable: false,

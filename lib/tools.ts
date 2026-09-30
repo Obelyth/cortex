@@ -340,7 +340,7 @@ const MAX_PATHS = 40;
 /**
  * Bytes of note text one `brain_corpus` reply will carry — ~25k tokens.
  *
- * The old bare call had no ceiling: it packed all 83 notes, ~113k tokens, into a single reply, and
+ * The old bare call had no ceiling: it packed every note into a single reply, and
  * the tool description spent sixty words asking the model not to do that. A limit stated in prose
  * is a limit the interface does not have. This one is enforced, reported, and resumable.
  */
@@ -899,7 +899,7 @@ function registerBubbleTool(server: McpServer): void {
         body: bubbleBody
           .optional()
           .describe("add/update: the item text. Short and structured — working state, not an essay."),
-        project: bubbleProject.optional().describe("Routing key matching the brain's project names ('cortex', 'harbor'). Omit for general."),
+        project: bubbleProject.optional().describe("Routing key matching the brain's project names ('cortex', 'project-alpha'). Omit for general."),
         note: z
           .string()
           .max(200)

@@ -5,8 +5,8 @@ import { verifyQuote, retraction, retracted, splitBlocks } from "../lib/verify";
  * A banner retires a passage. An in-place correction does the opposite — house style is
  * `<current claim> (was: "<old claim>")`, so the block carrying `was:` is the block carrying the
  * truth. Both used to produce the same stamp: "It is history, not the current state. Do not
- * answer from it." Measured on the live brain, that fired on two CORRECT, CURRENT answers about
- * the most recently corrected content in the corpus.
+ * answer from it." On a real corpus, that fired on CORRECT, CURRENT answers about the most
+ * recently corrected content.
  *
  * The fix is wording, not detection. Nothing that was flagged before is silent now — these tests
  * pin both halves of that.
@@ -16,7 +16,7 @@ const CORRECTION =
   'Cortex runs on Vercel (was: "cortex runs on Fly.io" — updated 2026-07-20). The deploy is stateless.';
 
 const BANNER =
-  "> **SUPERSEDED 2026-07-25 — production is dark.**\n\nSHIPPED 2026-07-14: live in production.";
+  "> **SUPERSEDED 2025-02-17 — the demo is offline.**\n\nLAUNCHED 2025-02-03: the demo is public.";
 
 describe("a correction is not a retraction", () => {
   it("stamps the CURRENT claim beside a (was: …) marker as corrected, not dead", () => {
@@ -38,7 +38,7 @@ describe("a correction is not a retraction", () => {
   });
 
   it("leaves an explicit banner exactly as strong as it was", () => {
-    const v = verifyQuote(BANNER, "SHIPPED 2026-07-14: live in production.");
+    const v = verifyQuote(BANNER, "LAUNCHED 2025-02-03: the demo is public.");
     expect(v.verified).toBe(true);
     expect(v.retraction).toBe("banner");
     expect(v.superseded).toBe(true);
@@ -51,7 +51,7 @@ describe("a correction is not a retraction", () => {
   });
 
   it("reports no retraction on ordinary prose", () => {
-    const v = verifyQuote("The plates backlog went into a deleted database.", "plates backlog");
+    const v = verifyQuote("The import queue was written to a dropped table.", "import queue");
     expect(v.retraction).toBe("none");
     expect(v.superseded).toBeFalsy();
   });

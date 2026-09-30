@@ -98,7 +98,7 @@ describe("redact", () => {
     // Over-redaction is not free: it corrupts quotes and makes verification fail on honest
     // notes. These are the shapes this brain is full of.
     for (const line of [
-      "The deploy is dark and both URLs return 404.",
+      "The demo is offline and the preview link returns 404.",
       "Rotate the admin password before the next release.",
       "A save is only real if a tool result returned a 40-hex commit SHA.",
       "type: feedback",

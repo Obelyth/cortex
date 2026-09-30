@@ -33,8 +33,8 @@ const corpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
-    ["projects/harbor.md", "The plates backlog went into a deleted database."],
+    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["projects/hotel.md", "The import queue was written to a dropped table."],
   ]),
 };
 
@@ -106,16 +106,16 @@ function mockAnthropic(counter: { calls: number }) {
         create: async (params: { messages: Array<{ content: Array<{ text: string }> }> }) => {
           counter.calls++;
           const stable = params.messages[0].content[0].text;
-          const tag = stable.match(/FILE: projects\/beacon\.md \[tag: ([0-9a-z]+)\]/)?.[1] ?? "";
+          const tag = stable.match(/FILE: projects\/sample\.md \[tag: ([0-9a-z]+)\]/)?.[1] ?? "";
           return {
             stop_reason: "end_turn",
             content: [
               {
                 type: "text",
                 text: JSON.stringify({
-                  answer: "No — production is dark.",
+                  answer: "No — the demo is offline.",
                   tag,
-                  quote: "Production is still dark",
+                  quote: "The demo is offline",
                 }),
               },
             ],
@@ -175,10 +175,10 @@ describe("answer cache OFF", () => {
     await pinCorpus();
     const ask = await captureTool("brain_ask");
 
-    const first = await ask({ question: "is beacon live" });
+    const first = await ask({ question: "is sample live" });
     expect(first.isError).toBeUndefined();
     expect(first.content[0].text).toContain("MODEL CALL:");
-    const second = await ask({ question: "is beacon live" });
+    const second = await ask({ question: "is sample live" });
     expect(second.content[0].text).toContain("MODEL CALL:");
     expect(second.content[0].text).not.toContain("cached · answered at");
     expect(counter.calls).toBe(2); // no lookup served, no entry pinned
@@ -196,8 +196,8 @@ describe("answer cache OFF", () => {
     await pinCorpus();
     const ask = await captureTool("brain_ask", true);
 
-    await ask({ question: "is beacon live" });
-    await ask({ question: "is beacon live" });
+    await ask({ question: "is sample live" });
+    await ask({ question: "is sample live" });
     expect(counter.calls).toBe(2);
     expect(store.incrs).toBe(2); // metered both times — the pre-cache behaviour, exactly
     expect([...store.data.keys()].filter((k) => k.includes("anscache"))).toHaveLength(0);
@@ -212,7 +212,7 @@ describe("the TTL knob", () => {
     await pinCorpus();
     const ask = await captureTool("brain_ask");
 
-    await ask({ question: "is beacon live" });
+    await ask({ question: "is sample live" });
     const key = [...store.data.keys()].find((k) => k.includes("anscache"))!;
     expect(key).toBeDefined();
     expect(store.setOpts.get(key)).toEqual({ ex: 3 * 86_400 });
@@ -263,14 +263,14 @@ describe("the watch switches and the co-read floor", () => {
   const files = new Map(
     Object.entries({
       "notes/dead.md": `---\ndescription: "SUPERSEDED — retired; kept for the why"\n---\n\n# Old plan\n`,
-      "projects/harbor.md": "# Harbor\n\nThe rules live in [[dead]] still.\n",
+      "projects/hotel.md": "# Hotel\n\nThe rules live in [[dead]] still.\n",
       "projects/alpha.md": "# Alpha\n\n**CORRECTION 2026-08-01:** the port in notes/beta.md was wrong.\n",
       "notes/beta.md": '# Beta\n\nPort is 8443 (was: "9443 per projects/alpha.md, re-measured").\n',
     })
   );
   const coRow = (weight: number) =>
     JSON.stringify([
-      { src: "notes/beta.md", dst: "projects/harbor.md", kind: "coaccess", weight, evidence: `co-read in ${weight} shared one-hour windows` },
+      { src: "notes/beta.md", dst: "projects/hotel.md", kind: "coaccess", weight, evidence: `co-read in ${weight} shared one-hour windows` },
     ]);
 
   const PG_BASE = "https://x.supabase.co/rest/v1/";

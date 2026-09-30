@@ -54,8 +54,8 @@ describe("untar", () => {
 
   it("reads paths stored in the ustar prefix field", () => {
     // Regression: any path over 100 chars is split across a `prefix` field at offset 345.
-    // Reading only `name` dropped 49 entries of the real repo silently — 7 of them live
-    // notes, which the reader would then have answered "not in brain" for.
+    // Reading only `name` dropped every long-path entry silently — live notes among them,
+    // which the reader would then have answered "not in brain" for.
     const deep = "memory-2026-07/dir1--project-sample-collection-evolution-with-a-long-name.md";
     const header = Buffer.alloc(512);
     header.write(deep.split("/").pop()!, 0, 100, "utf8");            // name field
@@ -85,7 +85,7 @@ describe("corpus/brain_ask parity", () => {
 
 describe("isLive", () => {
   it("keeps notes, projects, profile and logs", () => {
-    for (const p of ["profile.md", "projects/beacon.md", "notes/x.md", "log/2026-07-28.md"]) {
+    for (const p of ["profile.md", "projects/sample.md", "notes/x.md", "log/2026-07-28.md"]) {
       expect(isLive(p)).toBe(true);
     }
   });
@@ -112,7 +112,7 @@ describe("loadCorpus", () => {
     const tarball = makeTarball({
       "tools/atlas-snapshot.json": "{\"capturedAt\":\"retired\"}",
       "profile.md": "operator",
-      "projects/beacon.md": "production is dark",
+      "projects/sample.md": "the demo is offline",
       "archive/old.md": "superseded",
       "notes/brain-index.md": "generated",
     });
@@ -129,7 +129,7 @@ describe("loadCorpus", () => {
     try {
       const c = await loadCorpus();
       expect(c.sha).toBe("deadbeef");
-      expect([...c.files.keys()].sort()).toEqual(["profile.md", "projects/beacon.md"]);
+      expect([...c.files.keys()].sort()).toEqual(["profile.md", "projects/sample.md"]);
       expect(Object.hasOwn(c, "sidecar")).toBe(false);
       expect(calls).toBe(2); // head + tarball. The old path cost ~128 per write.
 
@@ -160,18 +160,18 @@ describe("loadCorpus", () => {
 });
 
 describe("verify", () => {
-  const files = new Map([["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25)."]]);
+  const files = new Map([["projects/sample.md", "**The demo is offline** (checked 2025-02-17)."]]);
 
   it("verifies an exact quote", () => {
-    expect(checkCitation(files, "abc123def456", "projects/beacon.md", "re-checked 2026-07-25").verified).toBe(true);
+    expect(checkCitation(files, "abc123def456", "projects/sample.md", "checked 2025-02-17").verified).toBe(true);
   });
 
   it("verifies through markdown wrappers", () => {
-    expect(verifyQuote("**Production is still dark**", "Production is still dark").verified).toBe(true);
+    expect(verifyQuote("**The demo is offline**", "The demo is offline").verified).toBe(true);
   });
 
   it("rejects a fabricated quote", () => {
-    const c = checkCitation(files, "abc", "projects/beacon.md", "Beacon shipped and is fully live");
+    const c = checkCitation(files, "abc", "projects/sample.md", "The sample demo launched and is fully working");
     expect(c.verified).toBe(false);
     expect(c.reason).toMatch(/NOT FOUND/);
   });
@@ -187,38 +187,38 @@ describe("verify", () => {
   });
 
   it("does not lowercase — case is part of an identifier", () => {
-    // `By Rig` vs `By rig` is the live OTS bug; treating them as equal would hide it.
-    expect(normalise("By Rig")).not.toBe(normalise("By rig"));
-    expect(verifyQuote("the tab is named By Rig today", "named By rig today").verified).toBe(false);
+    // Case is part of an identifier; treating these as equal would hide a rename.
+    expect(normalise("Weekly Totals")).not.toBe(normalise("Weekly totals"));
+    expect(verifyQuote("the tab is named Weekly Totals today", "named Weekly totals today").verified).toBe(false);
   });
 
   it("pins the proof to a commit", () => {
-    expect(checkCitation(files, "abcdef1234567890", "projects/beacon.md", "re-checked 2026-07-25").commit)
+    expect(checkCitation(files, "abcdef1234567890", "projects/sample.md", "checked 2025-02-17").commit)
       .toBe("abcdef123456");
   });
 });
 
 describe("narrow", () => {
   const files = new Map([
-    ["projects/beacon.md", "beacon production is dark and the vercel deploy returns 404"],
-    ["projects/harbor.md", "harbor supabase plates backlog written to a dead database"],
-    ["notes/mac.md", "the mac swaps when chrome and claude are both open"],
+    ["projects/sample.md", "the sample demo is offline and the preview deploy returns 404"],
+    ["projects/hotel.md", "hotel supabase import queue written to a dropped table"],
+    ["notes/laptop.md", "the laptop swaps when the browser and the editor are both open"],
   ]);
 
   it("ranks by full text, not by filename", () => {
-    expect(rank(files, "why is the deploy returning 404")[0].path).toBe("projects/beacon.md");
+    expect(rank(files, "why is the deploy returning 404")[0].path).toBe("projects/sample.md");
   });
 
   it("drops zero-signal files rather than padding the shortlist", () => {
     // Counting zero-score entries as "retrieved" makes recall@k mean "the file exists".
-    const r = rank(files, "supabase plates");
+    const r = rank(files, "supabase queue");
     expect(r.every((x) => x.score > 0)).toBe(true);
-    expect(r.map((x) => x.path)).toContain("projects/harbor.md");
-    expect(r.map((x) => x.path)).not.toContain("notes/mac.md");
+    expect(r.map((x) => x.path)).toContain("projects/hotel.md");
+    expect(r.map((x) => x.path)).not.toContain("notes/laptop.md");
   });
 
   it("is deterministic across calls", () => {
-    expect(rank(files, "beacon deploy")).toEqual(rank(files, "beacon deploy"));
+    expect(rank(files, "sample deploy")).toEqual(rank(files, "sample deploy"));
   });
 
   it("falls back to the whole corpus when nothing matches", () => {
@@ -233,7 +233,7 @@ describe("narrow", () => {
     // Single chars are kept on purpose. Dropping them made "is R installed" unanswerable —
     // `r` was the only distinguishing term. Noise is handled by IDF instead: `a` occurs in
     // every note so it scores ~0, while a rare `r` scores high.
-    expect(tokenize("Beacon's deploy.yml -- a 404!")).toEqual(["beacon", "s", "deploy", "yml", "a", "404"]);
+    expect(tokenize("Sample's deploy.yml -- a 404!")).toEqual(["sample", "s", "deploy", "yml", "a", "404"]);
   });
 
   it("folds names that are mostly punctuation into spellable tokens", () => {

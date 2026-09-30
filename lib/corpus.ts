@@ -29,7 +29,7 @@ const gunzip = promisify(zlib.gunzip);
 // of "the live corpus" that disagree is the dual-implementation drift this rebuild exists to
 // delete; when they diverge, an answer can silently miss a note. Exported for parity checks: the live
 // differential in tests/no-brain-leakage.test.ts reads the real python source from the brain
-// checkout and runs in the brain-gate; tests/corpus.test.ts pins the shape brain-free.
+// checkout and runs where a brain checkout exists; tests/corpus.test.ts pins the shape brain-free.
 // ".claude/" is the nested-worktree guard: Claude Code's EnterWorktree checks out at
 // .claude/worktrees/<name>/ INSIDE the repo, a full second copy of every file. That can duplicate
 // the reader corpus and re-admit retired archive content as current. Cortex reads the committed
@@ -156,7 +156,7 @@ export function untar(buf: Buffer, keep: (path: string) => boolean = () => true)
     // will not split into name(100)+prefix(155) at a "/" — notably ANY basename over 100
     // bytes. The data entry that follows is then named "<oid>.data", which has no "/", so the
     // wrapper-strip produced "" and the note was thrown away. Same silent-drop class as the
-    // prefix bug, still latent here only because the longest basename in the brain is 47.
+    // prefix bug, latent only for as long as every basename stays under 100 bytes.
     if (type === "x" || type === "g" || type === "L") {
       const payload = buf.toString("utf8", off, payloadEnd);
       if (type === "L") {
@@ -204,7 +204,7 @@ async function headSha(deadline?: Deadline): Promise<string> {
  *  objects for the same commit. Sharing the promise makes the second a free await. */
 const inFlight = new Map<string, Promise<Corpus>>();
 
-/** 64 MB of decompressed tar. The brain is 325 KB; this is a zip-bomb ceiling, not a budget. */
+/** 64 MB of decompressed tar. A brain is far smaller; this is a zip-bomb ceiling, not a budget. */
 const MAX_TAR_BYTES = 64 * 1024 * 1024;
 
 /**

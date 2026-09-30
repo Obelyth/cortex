@@ -255,7 +255,7 @@ describe("write-recency provenance", () => {
   // It is not the same bound: the patch path's rows are exactly the files that commit touched,
   // a full sync's rows are the whole corpus, and sync_apply's coalesce let the non-null date win.
   // Every rebuild, force-push or >PATCH_LIMIT commit therefore re-warmed the entire corpus, and
-  // nothing ever went cold (measured 2026-09-04: hot 17, warm 139, cold 0 of 156). The version
+  // nothing ever went cold (every note read hot or warm, none cold). The version
   // before THAT sent nothing and note_scores coalesced NULL to mirrored_at, resetting age through
   // a different column. The fix is not a third guess: the store's rule is now that content
   // decides (migration 20260905100000), and the dater below learns the true date within a tick.

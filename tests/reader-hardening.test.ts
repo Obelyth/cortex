@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ask, render } from "../lib/ask";
 import type { Corpus } from "../lib/corpus";
 
-const sentence = "The deployment is still dark."; // 29 ASCII bytes
+const sentence = "The deployment is not online."; // 29 ASCII bytes
 function corpusOf(entries: Array<[string, string]>): Corpus {
   return { files: new Map(entries), sha: "a".repeat(40), bytes: 0, fetchedAt: 0 };
 }
@@ -23,10 +23,10 @@ describe("reader protocol and coverage", () => {
   });
   it.each([
     ["blank answer", (tag: string) => JSON.stringify({ answer: " \n ", tag, quote: sentence })],
-    ["tag without quote", (tag: string) => JSON.stringify({ answer: "It is dark", tag, quote: "" })],
-    ["quote without tag", () => JSON.stringify({ answer: "It is dark", tag: "", quote: sentence })],
-    ["positive prose", () => "It is dark."],
-    ["positive uncited object", () => JSON.stringify({ answer: "It is dark", tag: "", quote: "" })],
+    ["tag without quote", (tag: string) => JSON.stringify({ answer: "It is offline", tag, quote: "" })],
+    ["quote without tag", () => JSON.stringify({ answer: "It is offline", tag: "", quote: sentence })],
+    ["positive prose", () => "It is offline."],
+    ["positive uncited object", () => JSON.stringify({ answer: "It is offline", tag: "", quote: "" })],
     ["missing fields", () => JSON.stringify({ answer: "NOT IN BRAIN" })],
     ["wrong field type", () => JSON.stringify({ answer: "NOT IN BRAIN", tag: null, quote: "" })],
   ])("classifies %s as a protocol error", async (_name, reply) => {
@@ -40,7 +40,7 @@ describe("reader protocol and coverage", () => {
     expect(absent).toMatchObject({ protocol: "abstention", notInBrain: true });
     expect(render(absent)).toMatch(/^NOT IN BRAIN/);
     const supported = await ask("deployment", async ({ stable }) => `Here:\n\`\`\`json\n${JSON.stringify({
-      answer: "It is dark", tag: issuedTag(stable), quote: sentence,
+      answer: "It is offline", tag: issuedTag(stable), quote: sentence,
     })}\n\`\`\``, { corpus, full: true });
     expect(supported).toMatchObject({ protocol: "answer", notInBrain: false, citation: { verified: true } });
     expect(render(supported)).toMatch(/^VERIFIED/);
@@ -70,7 +70,7 @@ describe("reader protocol and coverage", () => {
     let prompt = "";
     const result = await ask("deployment", async ({ stable }) => {
       prompt = stable;
-      return positive ? JSON.stringify({ answer: "It is dark", tag: issuedTag(stable), quote: sentence }) : abstain();
+      return positive ? JSON.stringify({ answer: "It is offline", tag: issuedTag(stable), quote: sentence }) : abstain();
     }, { corpus: big, full: true });
     expect(result.candidates).toEqual(["notes/first.md", "projects/answer.md"]);
     expect(prompt).toContain(sentence);

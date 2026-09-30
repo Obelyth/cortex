@@ -270,7 +270,7 @@ async function main(): Promise<void> {
    *
    * The gate needs the arm that SHIPS. Running the six hop shapes, FTS and the hybrid to decide
    * whether the incumbent cleared a floor is nine times the work for one number, and it is what
-   * pushed brain-gate past its ten-minute ceiling the first time this ran in CI. The comparison
+   * pushed a CI gate past its ten-minute ceiling the first time this ran there. The comparison
    * arms are why this harness exists and stay the default for a human reading a run; they are
    * simply not what a red tick is about.
    */
@@ -406,8 +406,8 @@ async function main(): Promise<void> {
   /**
    * Why a label's note is not among the candidates — the distinction the old output could not
    * draw. `(not in top 100)` was printed both for a note that never ranked and for one a cap
-   * threw out of an otherwise-winning position, and that ambiguity misled the controller during
-   * task 6b badly enough to be recorded in the ledger.
+   * threw out of an otherwise-winning position, and that ambiguity misled whoever read the output
+   * into chasing the wrong cause.
    *
    * The question worth asking of a miss is: WOULD THIS LABEL HAVE BEEN A HIT WITHOUT THAT CAP?
    * That is answered by DEMONSTRATION, not inference — each cap is turned off on its own and the

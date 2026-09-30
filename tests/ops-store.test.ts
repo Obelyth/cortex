@@ -35,13 +35,13 @@ describe("opsStore", () => {
     // One limit=1 query per unit: a 15-minute heartbeat writing all day can no longer push a
     // quiet unit's newest run out of a global scan and leave it reading as "never ran".
     const f = fetchStub([
-      [/ops_runs\?select=\*&unit_id=eq\.gk&order=started_at\.desc\.nullslast&limit=1$/, () => json([{ id: 2, unit_id: "gk", started_at: "2026-09-02T09:19:00Z" }])],
-      [/ops_runs\?select=\*&unit_id=eq\.canary&order=started_at\.desc\.nullslast&limit=1$/, () => json([{ id: 3, unit_id: "canary", started_at: null }])],
+      [/ops_runs\?select=\*&unit_id=eq\.gk&order=started_at\.desc\.nullslast&limit=1$/, () => json([{ id: 2, unit_id: "gk", started_at: "2026-09-02T14:19:00Z" }])],
+      [/ops_runs\?select=\*&unit_id=eq\.nightly-check&order=started_at\.desc\.nullslast&limit=1$/, () => json([{ id: 3, unit_id: "nightly-check", started_at: null }])],
       [/ops_runs\?select=\*&unit_id=eq\.never&order=started_at\.desc\.nullslast&limit=1$/, () => json([])],
     ]);
     vi.stubGlobal("fetch", f);
-    const m = await opsStore()!.latestRuns(["gk", "canary", "never"]);
-    expect(m.get("gk")!.id).toBe(2); expect(m.get("canary")!.id).toBe(3);
+    const m = await opsStore()!.latestRuns(["gk", "nightly-check", "never"]);
+    expect(m.get("gk")!.id).toBe(2); expect(m.get("nightly-check")!.id).toBe(3);
     expect(m.has("never")).toBe(false);
     expect(f.mock.calls).toHaveLength(3);
   });

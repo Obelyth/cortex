@@ -4,10 +4,10 @@ import { parseFrontmatter } from "../lib/frontmatter";
 
 describe("applyDescription", () => {
   it("prepends a block to a note that has none, leaving the body byte-identical", () => {
-    const body = "# Quarry\n\n## Status\nRetired.\n";
-    const out = applyDescription(body, "Retired relay app", ["quarry", "retired"]);
+    const body = "# Project Beta\n\n## Status\nArchived.\n";
+    const out = applyDescription(body, "Archived prototype", ["project-beta", "archived"]);
     expect(out).toBe(
-      '---\ndescription: "Retired relay app"\ntags: [quarry, retired]\n---\n\n# Quarry\n\n## Status\nRetired.\n'
+      '---\ndescription: "Archived prototype"\ntags: [project-beta, archived]\n---\n\n# Project Beta\n\n## Status\nArchived.\n'
     );
     expect(parseFrontmatter(out).body).toBe(`\n${body}`);
   });

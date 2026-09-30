@@ -38,10 +38,10 @@ function pin(path: string, over: Partial<PinRow> = {}): PinRow {
 
 function inputs(over: Partial<HandoffInputs> = {}): HandoffInputs {
   return {
-    project: "harbor",
-    pagePath: "projects/harbor.md",
+    project: "hotel",
+    pagePath: "projects/hotel.md",
     files: files({
-      "projects/harbor.md": "# Harbor\n\nthe project page body",
+      "projects/hotel.md": "# Hotel\n\nthe project page body",
       "notes/soundings.md": "depth numbers",
       "notes/charts.md": "the standing chart conventions",
     }),
@@ -93,17 +93,17 @@ describe("renderHandoff with pins", () => {
 
   it("a pin on the page itself, or on a note the graph already carried, adds no duplicate", () => {
     const edges: EdgeRow[] = [
-      { src: "projects/harbor.md", dst: "notes/soundings.md", kind: "link", weight: 2, evidence: "L4: see [[soundings]]" },
+      { src: "projects/hotel.md", dst: "notes/soundings.md", kind: "link", weight: 2, evidence: "L4: see [[soundings]]" },
     ];
     const { decisions } = renderHandoff(
-      inputs({ edges, pins: [pin("projects/harbor.md"), pin("notes/soundings.md")] })
+      inputs({ edges, pins: [pin("projects/hotel.md"), pin("notes/soundings.md")] })
     );
     // soundings rides ONCE — as the pinned piece (operator judgement outranks the graph's
     // nomination), and the neighbour copy is skipped.
     expect(decisions.filter((d) => d.label === "notes/soundings.md")).toHaveLength(1);
     expect(decisions.find((d) => d.label === "notes/soundings.md")!.kind).toBe("pinned");
-    expect(decisions.filter((d) => d.label === "projects/harbor.md")).toHaveLength(1);
-    expect(decisions.find((d) => d.label === "projects/harbor.md")!.kind).toBe("page");
+    expect(decisions.filter((d) => d.label === "projects/hotel.md")).toHaveLength(1);
+    expect(decisions.find((d) => d.label === "projects/hotel.md")!.kind).toBe("page");
   });
 
   it("a pin whose note is gone is skipped — a piece with no body is no piece", () => {
@@ -127,13 +127,13 @@ describe("renderHandoff decisions", () => {
     const { decisions } = renderHandoff(
       inputs({
         files: files({
-          "projects/harbor.md": "# Harbor\n\nshort page",
+          "projects/hotel.md": "# Hotel\n\nshort page",
           "notes/soundings.md": big,
           "notes/charts.md": big,
         }),
         edges: [
-          { src: "projects/harbor.md", dst: "notes/soundings.md", kind: "link", weight: 2, evidence: "L4" },
-          { src: "projects/harbor.md", dst: "notes/charts.md", kind: "link", weight: 1, evidence: "L9" },
+          { src: "projects/hotel.md", dst: "notes/soundings.md", kind: "link", weight: 2, evidence: "L4" },
+          { src: "projects/hotel.md", dst: "notes/charts.md", kind: "link", weight: 1, evidence: "L9" },
         ],
         // Holds the page and one neighbour excerpt; the second neighbour must be refused BY
         // BUDGET and say so.
@@ -141,7 +141,7 @@ describe("renderHandoff decisions", () => {
       })
     );
     const included = decisions.filter((d) => d.included).map((d) => d.label);
-    expect(included).toContain("projects/harbor.md");
+    expect(included).toContain("projects/hotel.md");
     const out = decisions.filter((d) => !d.included);
     expect(out.length).toBeGreaterThan(0);
     for (const d of out) expect(d.excludedBy).toBe("budget");
@@ -153,11 +153,11 @@ describe("renderHandoff decisions", () => {
   });
 
   it("marks log pieces refused by the LOG_SHARE cap as 'log-share', not 'budget'", () => {
-    const entry = (t: string) => `## ${t} · harbor\n\n${"m".repeat(3_000)}\n`;
+    const entry = (t: string) => `## ${t} · hotel\n\n${"m".repeat(3_000)}\n`;
     const { decisions } = renderHandoff(
       inputs({
         files: files({
-          "projects/harbor.md": "# Harbor\n\nshort page",
+          "projects/hotel.md": "# Hotel\n\nshort page",
           "log/2026-08-10.md": `# Log\n\n${entry("09:00")}${entry("10:00")}${entry("11:00")}`,
         }),
         recentDates: ["2026-08-10"],
@@ -176,14 +176,14 @@ describe("previewHandoff", () => {
   function seedCorpus() {
     const neighbourEdges: EdgeRow[] = [];
     const f: Record<string, string> = {
-      "projects/harbor.md": "# Harbor\n\nthe project page body",
+      "projects/hotel.md": "# Hotel\n\nthe project page body",
     };
     // NEIGHBOUR_K + 3 linked notes, so three are cut by rank before the budget sees them.
     for (let i = 0; i < NEIGHBOUR_K + 3; i++) {
       const p = `notes/n${String(i).padStart(2, "0")}.md`;
       f[p] = `neighbour body ${i}`;
       neighbourEdges.push({
-        src: "projects/harbor.md",
+        src: "projects/hotel.md",
         dst: p,
         kind: "link",
         weight: NEIGHBOUR_K + 3 - i,
@@ -210,9 +210,9 @@ describe("previewHandoff", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const view = await previewHandoff("harbor");
-    expect(view.project).toBe("harbor");
-    expect(view.coverage).toMatch(/^handoff · harbor @deadbeefcafe/);
+    const view = await previewHandoff("hotel");
+    expect(view.project).toBe("hotel");
+    expect(view.coverage).toMatch(/^handoff · hotel @deadbeefcafe/);
     expect(view.pieces.find((d) => d.kind === "page")!.included).toBe(true);
     // Blend-ranked (scores empty): the three weakest links fall off the shortlist as RANK
     // exclusions, distinct from budget exclusions.
@@ -227,6 +227,6 @@ describe("previewHandoff", () => {
 
   it("throws the honest miss for an unknown project, closest names attached", async () => {
     seedCorpus();
-    await expect(previewHandoff("harbour-north")).rejects.toThrow(/closest: harbor/);
+    await expect(previewHandoff("hotels-north")).rejects.toThrow(/closest: hotel/);
   });
 });

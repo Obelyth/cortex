@@ -25,10 +25,10 @@ import { health } from "@/lib/health";
  * the secret check is the same fail-closed 404 every other gate here returns.
  *
  * DELIBERATELY EXEMPT from the device stamp the human console requires. This is a machine
- * door: the groundskeeper's inboxqueue.sh reads it nightly from the Mac with the path secret
- * and no cookie jar, and a passcode is exactly the thing a launchd job cannot type. What it
+ * door: an unattended caller holding CONNECTOR_PATH_SECRET (the healthcheck's secret) can read it
+ * with no cookie jar, and a passcode is exactly the thing an unattended job cannot type. What it
  * serves is stale-stamp metadata — paths and ages, never note content. Tightening this route
- * means teaching that script the stamp first; do not "fix" the asymmetry from this side.
+ * means teaching any such caller the stamp first; do not "fix" the asymmetry from this side.
  */
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

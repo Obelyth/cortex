@@ -3,7 +3,7 @@ import { __setBubbleStore } from "../lib/bubble";
 import { stampValue, STAMP_COOKIE } from "../lib/stamp";
 import { POST, GET } from "../app/s/[secret]/console/working-state/route";
 
-const item = { id: 7, version: 1, kind: "handoff", project: "harbor", body: "Next: review", status: "open", touched_at: "2026-09-08T12:00:00Z" };
+const item = { id: 7, version: 1, kind: "handoff", project: "hotel", body: "Next: review", status: "open", touched_at: "2026-09-08T12:00:00Z" };
 let writes: unknown[];
 beforeEach(() => {
   writes=[]; __setBubbleStore(undefined);
@@ -15,7 +15,7 @@ beforeEach(() => {
   });
 });
 afterEach(()=>{vi.unstubAllEnvs();vi.unstubAllGlobals();__setBubbleStore(undefined);});
-const input={action:"add",requestKey:"bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",kind:"handoff",project:" Projects/Harbor.md ",body:"Next: review"};
+const input={action:"add",requestKey:"bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb",kind:"handoff",project:" Projects/Hotel.md ",body:"Next: review"};
 function req(body: unknown=input, options: {stamp?:boolean;origin?:string;raw?:string}={}) {
   return new Request("https://console.invalid/s/synthetic-secret/console/working-state",{method:"POST",headers:{"content-type":"application/json",origin:options.origin??"https://console.invalid",...(options.stamp===false?{}:{cookie:`${STAMP_COOKIE}=${stampValue()}`})},body:options.raw??JSON.stringify(body)});
 }
@@ -23,8 +23,8 @@ const ctx={params:Promise.resolve({secret:"synthetic-secret"})};
 it("authorized add returns a validated minimal versioned DTO",async()=>{
   const res=await POST(req(),ctx);
   expect(res.status).toBe(200); expect(res.headers.get("cache-control")).toBe("no-store");
-  expect(await res.json()).toEqual({outcome:"saved",item:{id:7,version:1,kind:"handoff",project:"harbor",body:"Next: review",status:"open",touchedAt:"2026-09-08T12:00:00Z",bodyRedacted:false,projectRedacted:false}});
-  expect(writes).toEqual([{request_key:input.requestKey,item_kind:"handoff",item_body:"Next: review",project_name:"harbor"}]);
+  expect(await res.json()).toEqual({outcome:"saved",item:{id:7,version:1,kind:"handoff",project:"hotel",body:"Next: review",status:"open",touchedAt:"2026-09-08T12:00:00Z",bodyRedacted:false,projectRedacted:false}});
+  expect(writes).toEqual([{request_key:input.requestKey,item_kind:"handoff",item_body:"Next: review",project_name:"hotel"}]);
 });
 it.each([
   [()=>req(input,{stamp:false}),ctx,404],

@@ -16,7 +16,7 @@ describe("noteOf — mapping a triage loc back to its note path", () => {
 
   it("drops a real :line suffix (a credential or superseded-link loc)", () => {
     expect(noteOf("notes/creds.md:42")).toBe("notes/creds.md");
-    expect(noteOf("projects/harbor.md:3")).toBe("projects/harbor.md");
+    expect(noteOf("projects/hotel.md:3")).toBe("projects/hotel.md");
   });
 
   it("keeps a trailing colon that is not a line number", () => {

@@ -73,7 +73,7 @@ describe("the router cannot be structurally forged from a note", () => {
 
 describe("hardening does not damage honest notes", () => {
   it("leaves a normal description exactly as written", () => {
-    const d = "Redash access: base URL, data source 56, and the three places the key rotates";
+    const d = "Dashboard access: base URL, data source 12, and the three places the key rotates";
     expect(routerLine(entryFor("notes/a.md", note(`"${d}"`)))).toContain(d);
   });
 

@@ -3,12 +3,12 @@ import type { HandoffPreview } from "../lib/handoff";
 import { requestHandoffPreview } from "../lib/handoff-client";
 
 const view: HandoffPreview = {
-  project: "harbor",
-  pagePath: "projects/harbor.md",
+  project: "hotel",
+  pagePath: "projects/hotel.md",
   sha: "deadbeefcafe",
   budgetBytes: 24_000,
-  coverage: "handoff · harbor · included 1 of 1 candidate pieces",
-  pieces: [{ kind: "page", label: "projects/harbor.md", why: "the project page", bytes: 120, included: true }],
+  coverage: "handoff · hotel · included 1 of 1 candidate pieces",
+  pieces: [{ kind: "page", label: "projects/hotel.md", why: "the project page", bytes: 120, included: true }],
   rankExcluded: [],
   rankExcludedTotal: 0,
   warnings: [],
@@ -23,7 +23,7 @@ describe("requestHandoffPreview", () => {
       headers: { "content-type": "application/json" },
     }));
 
-    await expect(requestHandoffPreview("/s/localdev/console/ask", "harbor", request)).resolves.toEqual(view);
+    await expect(requestHandoffPreview("/s/localdev/console/ask", "hotel", request)).resolves.toEqual(view);
     expect(request).toHaveBeenCalledOnce();
     const [url, init] = request.mock.calls[0];
     expect(url).toBe("/s/localdev/console/heat/handoff");
@@ -31,7 +31,7 @@ describe("requestHandoffPreview", () => {
     expect(init).toMatchObject({
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ project: "harbor" }),
+      body: JSON.stringify({ project: "hotel" }),
     });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
@@ -50,6 +50,6 @@ describe("requestHandoffPreview", () => {
       headers: { "content-type": "application/json" },
     }));
 
-    await expect(requestHandoffPreview("/s/localdev/console/ask", "harbor", request)).rejects.toThrow();
+    await expect(requestHandoffPreview("/s/localdev/console/ask", "hotel", request)).rejects.toThrow();
   });
 });

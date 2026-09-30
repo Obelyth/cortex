@@ -17,7 +17,7 @@
  * actually handed — not on narrow() called with explicit parameters, because "narrow honours what
  * it is given" is exactly the claim that stayed true while the wiring was gone.
  *
- * Synthetic corpus only: `harbor` is the house placeholder, and the export gate forbids naming a
+ * Synthetic corpus only: `hotel` is the house placeholder, and the export gate forbids naming a
  * real note here.
  */
 import { describe, expect, it } from "vitest";
@@ -34,9 +34,9 @@ function corpusOf(entries: Array<[string, string]>): Corpus {
   return { files, sha: "abc0123456789def", bytes, fetchedAt: Date.now() };
 }
 
-/** `n` bytes of ASCII that all score on "harbor", so ranking never decides the outcome. */
+/** `n` bytes of ASCII that all score on "hotel", so ranking never decides the outcome. */
 function note(seed: string, bytes: number): string {
-  return `harbor ${seed} `.padEnd(bytes, "x").slice(0, bytes);
+  return `hotel ${seed} `.padEnd(bytes, "x").slice(0, bytes);
 }
 
 /**
@@ -47,7 +47,7 @@ function note(seed: string, bytes: number): string {
  */
 function wideCorpus(): Corpus {
   const wide = "…".repeat(30_000);
-  return corpusOf(Array.from({ length: 10 }, (_, i) => [`notes/harbor-${i}.md`, `harbor n${i} ${wide}`] as [string, string]));
+  return corpusOf(Array.from({ length: 10 }, (_, i) => [`notes/hotel-${i}.md`, `hotel n${i} ${wide}`] as [string, string]));
 }
 
 describe("the constants ask() ships with", () => {
@@ -66,8 +66,8 @@ describe("ask() asks for what production measured", () => {
   it("requests DEFAULT_K candidates when the caller names no k", async () => {
     // 20 small notes, all scoring, none large enough for the budget to reach: the only thing
     // that can decide the pack size is the k the caller passed.
-    const corpus = corpusOf(Array.from({ length: 20 }, (_, i) => [`notes/harbor-${i}.md`, note(`n${i}`, 200)] as [string, string]));
-    const res = await ask("harbor", silent, { corpus });
+    const corpus = corpusOf(Array.from({ length: 20 }, (_, i) => [`notes/hotel-${i}.md`, note(`n${i}`, 200)] as [string, string]));
+    const res = await ask("hotel", silent, { corpus });
     expect(res.candidates).toHaveLength(15);
     expect(res.candidates).toHaveLength(DEFAULT_K);
   });
@@ -76,15 +76,15 @@ describe("ask() asks for what production measured", () => {
     // Four parts of ONE source page plus one part of another and four ordinary notes — nine
     // scoring notes against k=15, so nothing but the cap can keep a part out.
     const corpus = corpusOf([
-      ["history/harbor-2026-06.md", note("june", 200)],
-      ["history/harbor-2026-07.md", note("july", 200)],
-      ["history/harbor-2026-08.md", note("august", 200)],
-      ["history/harbor-2026-08-2.md", note("august two", 200)],
+      ["history/hotel-2026-06.md", note("june", 200)],
+      ["history/hotel-2026-07.md", note("july", 200)],
+      ["history/hotel-2026-08.md", note("august", 200)],
+      ["history/hotel-2026-08-2.md", note("august two", 200)],
       ["history/dock-2026-08.md", note("dock", 200)],
-      ...Array.from({ length: 4 }, (_, i) => [`notes/harbor-${i}.md`, note(`n${i}`, 200)] as [string, string]),
+      ...Array.from({ length: 4 }, (_, i) => [`notes/hotel-${i}.md`, note(`n${i}`, 200)] as [string, string]),
     ]);
-    const res = await ask("harbor", silent, { corpus });
-    expect(res.candidates.filter((p) => p.startsWith("history/harbor-"))).toHaveLength(DEFAULT_MAX_PARTS_PER_PAGE);
+    const res = await ask("hotel", silent, { corpus });
+    expect(res.candidates.filter((p) => p.startsWith("history/hotel-"))).toHaveLength(DEFAULT_MAX_PARTS_PER_PAGE);
     // The cap, not a coincidence of ranking: every other scoring note is still there, and the
     // freed slots were filled from them rather than left empty or padded.
     expect(res.candidates).toContain("history/dock-2026-08.md");
@@ -95,8 +95,8 @@ describe("ask() asks for what production measured", () => {
     // Twenty 60,000-byte notes, all scoring. Under the 400,000-byte budget the pack stops after
     // six (the seventh would take the running total to 420,000); with no budget wired it would be
     // all fifteen k asked for.
-    const corpus = corpusOf(Array.from({ length: 20 }, (_, i) => [`notes/harbor-${i}.md`, note(`n${i}`, 60_000)] as [string, string]));
-    const res = await ask("harbor", silent, { corpus });
+    const corpus = corpusOf(Array.from({ length: 20 }, (_, i) => [`notes/hotel-${i}.md`, note(`n${i}`, 60_000)] as [string, string]));
+    const res = await ask("hotel", silent, { corpus });
     expect(res.candidates).toHaveLength(6);
     expect(res.candidates.length).toBeLessThan(DEFAULT_K);
     let packed = 0;
@@ -108,7 +108,7 @@ describe("ask() asks for what production measured", () => {
     // Every note is 3-byte characters, so `.length` reads a third of the truth. Ten notes of
     // 30,000 characters = 90,000 bytes each: the budget must stop at four (five would be
     // 450,000 B), where a code-unit count would see 150,000 and pack all ten.
-    const res = await ask("harbor", silent, { corpus: wideCorpus() });
+    const res = await ask("hotel", silent, { corpus: wideCorpus() });
     expect(res.candidates).toHaveLength(4);
   });
 });
@@ -116,18 +116,17 @@ describe("ask() asks for what production measured", () => {
 describe("the full-read path budgets in the same units", () => {
   // FULL_BUDGET_BYTES is the narrow budget's twin one function away, and it had the identical
   // defect: `String.length` accumulated against a ceiling whose entire justification is a token
-  // count. It happens not to overshoot on today's corpora — the live brain's full pack was
-  // 396,647 code units of 399,274 real bytes, inside the 400,000 ceiling by 726 bytes — which is
-  // precisely why it needs a test rather than a measurement: nothing about the corpus guarantees
+  // count. It may happen not to overshoot on a given corpus, which is precisely why it needs a
+  // test rather than a measurement: nothing about the corpus guarantees
   // that margin tomorrow, and a budget that is right by luck is not a budget.
   it("stops the full pack on real bytes", async () => {
-    const res = await ask("harbor", silent, { corpus: wideCorpus(), full: true });
+    const res = await ask("hotel", silent, { corpus: wideCorpus(), full: true });
     expect(res.candidates).toHaveLength(4);
   });
 
   it("omits a first note that alone exceeds the budget", async () => {
-    const corpus = corpusOf([["notes/harbor-0.md", "…".repeat(200_000)]]);
-    const res = await ask("harbor", silent, { corpus, full: true });
+    const corpus = corpusOf([["notes/hotel-0.md", "…".repeat(200_000)]]);
+    const res = await ask("hotel", silent, { corpus, full: true });
     expect(res.candidates).toHaveLength(0);
   });
 });

@@ -296,11 +296,11 @@ describe("anthropic reader", () => {
     }));
     vi.stubEnv("ANTHROPIC_API_KEY", "test-key");
     const { anthropicReader: reader } = await import("../lib/reader");
-    await reader(P("\n\nQUESTION: is beacon live", "CONTRACT + pack bytes"), "claude-sonnet-5");
+    await reader(P("\n\nQUESTION: is sample live", "CONTRACT + pack bytes"), "claude-sonnet-5");
     const p = seen as { messages: Array<{ content: unknown }> };
     expect(p.messages[0].content).toEqual([
       { type: "text", text: "CONTRACT + pack bytes", cache_control: { type: "ephemeral" } },
-      { type: "text", text: "\n\nQUESTION: is beacon live" },
+      { type: "text", text: "\n\nQUESTION: is sample live" },
     ]);
 
     // An empty stable part degrades to one uncached block — the API rejects empty text blocks.

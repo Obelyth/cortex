@@ -5,11 +5,11 @@ import { __setOpsStore, type OpsEvent } from "../lib/ops";
 import { GET } from "../app/s/[secret]/console/ops/notices/route";
 import { STAMP_COOKIE, stampValue } from "../lib/stamp";
 
-const names = new Map([["groundskeeper", "Brain groundskeeper"], ["console-secret", "Console secret"]]);
+const names = new Map([["groundskeeper", "Brain groundskeeper"], ["cert-renewal", "Certificate renewal"]]);
 const ev = (id: number, kind: OpsEvent["kind"], extra: Partial<OpsEvent> = {}): OpsEvent => ({ id, unit_id: "groundskeeper", run_id: null, at: `2026-09-02T0${id}:00:00Z`, actor: "unit", kind, body: {}, ...extra });
 
 describe("buildNotices", () => {
-  const events = [ev(5, "alert_failed", { actor: "sweep", body: { status: 502, error: "resend 502" } }), ev(4, "alert_sent", { actor: "sweep", body: { id: "m1" }, to_state: "crashed" }), ev(3, "ack", { actor: "operator", unit_id: "console-secret" }), ev(2, "finish", { to_state: "succeeded", body: { summary: "2 pages corrected", evidence: ["https://github.com/x/y/commit/abcdef12"] } }), ev(1, "transition", { actor: "sweep", unit_id: "console-secret", to_state: "needs_you" })];
+  const events = [ev(5, "alert_failed", { actor: "sweep", body: { status: 502, error: "resend 502" } }), ev(4, "alert_sent", { actor: "sweep", body: { id: "m1" }, to_state: "crashed" }), ev(3, "ack", { actor: "operator", unit_id: "cert-renewal" }), ev(2, "finish", { to_state: "succeeded", body: { summary: "2 pages corrected", evidence: ["https://github.com/x/y/commit/abcdef12"] } }), ev(1, "transition", { actor: "sweep", unit_id: "cert-renewal", to_state: "needs_you" })];
   const n = buildNotices(events, names, 2);
   // Was [id, tab, glyph]. The glyph is gone — the tray draws an unread dot where it used to sit, so
   // the field was produced and asserted but never rendered. The field's TONE replaces it rather than

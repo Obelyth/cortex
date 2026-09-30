@@ -14,7 +14,7 @@ import { CONTEXT_BUDGET_BYTES, PROFILE_BUDGET_BYTES, RECENT_BUDGET_BYTES, getCon
 
 const access = vi.mocked(logNoteAccess);
 const item = (over: Partial<BubbleItem> = {}): BubbleItem => ({
-  id: 1, kind: "focus", project: "harbor", body: "working", status: "open", filed_into: "",
+  id: 1, kind: "focus", project: "hotel", body: "working", status: "open", filed_into: "",
   surface: "terminal", touched_at: "2026-07-24T20:00:00Z", created_at: "2026-07-24T20:00:00Z", ...over,
 });
 function seed(files: Record<string, string>) {
@@ -46,7 +46,7 @@ describe("brain_context hard bounds and pure preview", () => {
     const historicalMonths = Object.fromEntries(Array.from({ length: 400 }, (_, i) => {
       const year = 1900 + Math.floor(i / 12);
       const month = String((i % 12) + 1).padStart(2, "0");
-      return [`log/${year}-${month}-01.md`, `# Log\n\n## 09:00 · harbor\n\nmonth ${i}`];
+      return [`log/${year}-${month}-01.md`, `# Log\n\n## 09:00 · hotel\n\nmonth ${i}`];
     }));
     seed({ "profile.md": "界😀e\u0301".repeat(10_000), ...historicalMonths });
     const preview = await previewContext();
@@ -67,7 +67,7 @@ describe("brain_context hard bounds and pure preview", () => {
   });
 
   it("treats an expiry-only bubble notice as no usable working memory and expands logs", async () => {
-    seed({ "profile.md": "P", "log/2026-07-24.md": "# Log\n\n## 09:00 · harbor\n\nVERBATIM STATE" });
+    seed({ "profile.md": "P", "log/2026-07-24.md": "# Log\n\n## 09:00 · hotel\n\nVERBATIM STATE" });
     __setBubbleStore(store(async () => ({ items: [], total: 0, swept: 2 })));
     const preview = await previewContext();
     expect(preview.text).toContain("2 items just aged out");
@@ -75,11 +75,11 @@ describe("brain_context hard bounds and pure preview", () => {
   });
 
   it("requests scoped rows before the 200-item limit and honestly falls back on old deployments", async () => {
-    seed({ "profile.md": "P", "log/2026-07-24.md": "# Log\n\n## 09:00 · harbor\n\nSCOPED LOG FALLBACK" });
+    seed({ "profile.md": "P", "log/2026-07-24.md": "# Log\n\n## 09:00 · hotel\n\nSCOPED LOG FALLBACK" });
     let scope: Parameters<BubbleStore["open"]>[0];
     __setBubbleStore(store(async (value) => { scope = value; throw new Error("bubble: POST rpc/bubble_open_scoped 404"); }));
-    const preview = await previewContext(" Projects/HARBOR.md ");
-    expect(scope).toEqual({ project: "harbor", includeGeneral: true });
+    const preview = await previewContext(" Projects/HOTEL.md ");
+    expect(scope).toEqual({ project: "hotel", includeGeneral: true });
     expect(preview.text).toContain("SCOPED LOG FALLBACK");
     expect(preview.text).toContain("bubble unavailable");
   });
@@ -87,9 +87,9 @@ describe("brain_context hard bounds and pure preview", () => {
   it("admits a same-day evening correction before an oversized older state", async () => {
     seed({
       "profile.md": "P",
-      "log/2026-07-24.md": `# Log\n\n## 08:00 · harbor\n\nOLD ${"x".repeat(5_000)}\n\n## 20:00 · harbor\n\nEVENING CORRECTION`,
+      "log/2026-07-24.md": `# Log\n\n## 08:00 · hotel\n\nOLD ${"x".repeat(5_000)}\n\n## 20:00 · hotel\n\nEVENING CORRECTION`,
     });
-    const preview = await previewContext("harbor");
+    const preview = await previewContext("hotel");
     expect(preview.text).toContain("EVENING CORRECTION");
     expect(preview.text).not.toContain("OLD x");
   });

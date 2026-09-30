@@ -34,7 +34,7 @@ function walk(dir: string, base = ""): string[] {
 
 describe("headingIsBanner", () => {
   it("counts a SHOUTED marker — the house style for a real banner", () => {
-    for (const h of ["SUPERSEDED 2026-07-25", "CORRECTION — the toolset was backwards", "DEPRECATED"]) {
+    for (const h of ["SUPERSEDED 2025-02-17", "CORRECTION — the toolset was backwards", "DEPRECATED"]) {
       expect(isBannerText(h), h).toBe(true);
     }
   });
@@ -52,7 +52,7 @@ describe("headingIsBanner", () => {
     // Every one of these is a real heading from the corpus. Each marked its whole section dead.
     for (const h of [
       "Correction to the guest door section above (2026-08-03, PR #39 `6f8b168`)",
-      "Framing correction (2026-07-25)",
+      "Framing correction (2025-02-17)",
       "Pipeline correction (recovered 2026-07-26)",
       "Correction and full audit 2026-07-26",
       "DEFECT — `brain_recall` can answer from a superseded archive page",

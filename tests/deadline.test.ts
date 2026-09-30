@@ -203,8 +203,8 @@ describe("ask() under the deadline", () => {
     bytes: 200,
     fetchedAt: 0,
     files: new Map([
-      ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
-      ["projects/harbor.md", "The plates backlog went into a deleted database."],
+      ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+      ["projects/hotel.md", "The import queue was written to a dropped table."],
     ]),
   };
 
@@ -222,7 +222,7 @@ describe("ask() under the deadline", () => {
       budgets.push(opts!.timeoutMs!);
       return stalled(p, m, opts);
     };
-    const pending = ask("is beacon live", spy, { corpus, deadline });
+    const pending = ask("is sample live", spy, { corpus, deadline });
     await vi.advanceTimersByTimeAsync(17_000);
     const r = await pending;
     expect(budgets).toEqual([17_000]);
@@ -232,7 +232,7 @@ describe("ask() under the deadline", () => {
     expect(r.notInBrain).toBe(false);
     const text = render(r);
     // Narrowing put one note in the pack for this question; the stamp counts what was searched.
-    expect(r.candidates).toEqual(["projects/beacon.md"]);
+    expect(r.candidates).toEqual(["projects/sample.md"]);
     expect(text).toMatch(/^UNVERIFIED — timed out: searched 1 notes; the reader was cut off after 17\.0 s, 17\.0 s into the request\./);
     expect(text).toContain("Treat this as unsearched, not as absence.");
     expect(text).toContain("(searched 1 candidate notes @eaf0a03e4849)");
@@ -243,7 +243,7 @@ describe("ask() under the deadline", () => {
     const deadline = deadlineIn(55_000);
     vi.advanceTimersByTime(49_000); // the corpus stages spent it
     let called = 0;
-    const r = await ask("is beacon live", async () => { called++; return "{}"; }, { corpus, deadline });
+    const r = await ask("is sample live", async () => { called++; return "{}"; }, { corpus, deadline });
     expect(called).toBe(0);
     expect(r.protocol).toBe("timeout");
     expect(r.timeout).toMatchObject({ reached: false, budgetMs: 0, elapsedMs: 49_000, remainingMs: 6_000 });
@@ -255,25 +255,25 @@ describe("ask() under the deadline", () => {
   it("absorbs only the deadline's own signal — every other reader failure is still an error", async () => {
     const deadline = deadlineIn(55_000);
     await expect(
-      ask("is beacon live", async () => { throw new Error("reader gpt: OpenAI returned 401"); }, { corpus, deadline })
+      ask("is sample live", async () => { throw new Error("reader gpt: OpenAI returned 401"); }, { corpus, deadline })
     ).rejects.toThrow(/returned 401/);
     // A DeadlineExceeded from another stage is not the reader's to absorb either.
     await expect(
-      ask("is beacon live", async () => { throw new DeadlineExceeded("github", 0, false); }, { corpus, deadline })
+      ask("is sample live", async () => { throw new DeadlineExceeded("github", 0, false); }, { corpus, deadline })
     ).rejects.toSatisfy((e: unknown) => isDeadlineExceeded(e) && e.stage === "github");
   });
 
   it("keeps the fast path byte-for-byte: a two-arity reader, no deadline, same verdict", async () => {
     const r = await ask(
-      "is beacon live",
+      "is sample live",
       async ({ stable }) => {
-        const tag = stable.match(/FILE: projects\/beacon\.md \[tag: ([0-9a-z]+)\]/)![1];
-        return JSON.stringify({ answer: "No — production is dark.", tag, quote: "Production is still dark" });
+        const tag = stable.match(/FILE: projects\/sample\.md \[tag: ([0-9a-z]+)\]/)![1];
+        return JSON.stringify({ answer: "No — the demo is offline.", tag, quote: "The demo is offline" });
       },
       { corpus }
     );
     expect(r.protocol).toBe("answer");
     expect(r.timeout).toBeUndefined();
-    expect(render(r)).toMatch(/^VERIFIED — this quote is verbatim in projects\/beacon\.md/);
+    expect(render(r)).toMatch(/^VERIFIED — this quote is verbatim in projects\/sample\.md/);
   });
 });

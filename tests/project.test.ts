@@ -14,7 +14,7 @@ describe("normaliseProject", () => {
     expect(normaliseProject("  sample-collection-ops  ")).toBe("sample-collection-ops");
   });
   it("strips the projects/ prefix and the .md suffix", () => {
-    expect(normaliseProject("projects/harbor.md")).toBe("harbor");
+    expect(normaliseProject("projects/hotel.md")).toBe("hotel");
     expect(normaliseProject("projects/Pier-Ops.md")).toBe("pier-ops");
   });
   it("returns empty for empty or whitespace input — the unscoped signal", () => {

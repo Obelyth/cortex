@@ -22,7 +22,7 @@ import { correctionEdges } from "../lib/edges";
 import { ORDER } from "../lib/frontmatter";
 import { isHistoryPath, monthKey } from "../lib/digest";
 
-const HISTORY = "history/harbor-2026-08.md";
+const HISTORY = "history/hotel-2026-08.md";
 
 describe("history/ is a first-class note prefix", () => {
   it("is writable and readable by exact path", () => {
@@ -42,18 +42,18 @@ describe("history/ is a first-class note prefix", () => {
     expect(isScopeEntry(HISTORY)).toBe(true);
     expect(isScopeEntry("history/")).toBe(true);
     expect(isScopeEntry("history/../x.md")).toBe(false);
-    // The trailing slash still matters: `history/harbor` would also cover harbor-private.md.
-    expect(isScopeEntry("history/harbor")).toBe(false);
+    // The trailing slash still matters: `history/hotel` would also cover hotel-private.md.
+    expect(isScopeEntry("history/hotel")).toBe(false);
   });
 
   it("is seen by the graph's prose-path scanner, so corrections can point at it", () => {
     const files = new Map<string, string>([
-      ["projects/harbor.md", `SUPERSEDED — the August detail moved to ${HISTORY}\n`],
+      ["projects/hotel.md", `SUPERSEDED — the August detail moved to ${HISTORY}\n`],
       [HISTORY, "the August detail\n"],
     ]);
     const edges = correctionEdges(files);
     expect(edges).toHaveLength(1);
-    expect(edges[0]).toMatchObject({ src: "projects/harbor.md", dst: HISTORY, kind: "correction" });
+    expect(edges[0]).toMatchObject({ src: "projects/hotel.md", dst: HISTORY, kind: "correction" });
   });
 
   it("is a known directory in the shared order, after log and before archive", () => {
@@ -66,8 +66,8 @@ describe("history/ is a first-class note prefix", () => {
 
   it("is recognised as a dated month slice, and a day log is not one", () => {
     expect(isHistoryPath(HISTORY)).toBe(true);
-    expect(isHistoryPath("history/harbor.md")).toBe(false); // undated — not a month slice
+    expect(isHistoryPath("history/hotel.md")).toBe(false); // undated — not a month slice
     expect(isHistoryPath("log/2026-08-04.md")).toBe(false);
-    expect(monthKey(HISTORY)).toBe("history/harbor-2026-08");
+    expect(monthKey(HISTORY)).toBe("history/hotel-2026-08");
   });
 });

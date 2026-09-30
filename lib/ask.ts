@@ -343,8 +343,8 @@ export function parseReply(raw: string): Parsed {
 }
 
 /** Number of corpus files containing the quote, normalised. A quote present in many files does
- *  not identify the one it was cited from — 10 lines in the real brain appear in 2-9 notes
- *  each, and boilerplate like `type: feedback` clears the length floor easily. */
+ *  not identify the one it was cited from — short lines recur across many notes in a real
+ *  brain, and boilerplate like `type: feedback` clears the length floor easily. */
 function countFiles(files: Map<string, string>, quote: string): number {
   const nq = normalise(quote);
   if (!nq) return 0;
@@ -396,9 +396,9 @@ function withinBudget(files: Map<string, string>, paths: string[]): string[] {
 
 function applyScope(corpus: Corpus, scope?: Scope): Corpus {
   if (!scope || scope.length === 0) return corpus;
-  // Segment-wise, not byte-wise. A bare startsWith let `projects/harbor` match
-  // projects/harbor-legal.md — a scope entry that reads like one project silently covering its
-  // siblings. Only an exact path, or a prefix that ends at a directory boundary, matches.
+  // Segment-wise, not byte-wise. A bare startsWith let `projects/project-alpha` match
+  // projects/project-alpha-legal.md — a scope entry that reads like one project silently covering
+  // its siblings. Only an exact path, or a prefix that ends at a directory boundary, matches.
   const files = scopedLexicalFiles(corpus.files, scope, corpus.sha);
   return { ...corpus, files };
 }
@@ -734,8 +734,8 @@ function renderFull(r: AskResult): string {
   } else if (c.superseded) {
     // The highest-value check in the whole file. This brain keeps retracted claims on the
     // page on purpose — `> **SUPERSEDED …**`, `> **CORRECTION …**`, `(was: "…")` — so the
-    // text being verbatim is exactly what a stale answer looks like. beacon-beacon.md still
-    // says "SHIPPED … live in production" two lines under a banner saying production is dark.
+    // text being verbatim is exactly what a stale answer looks like. A status page can still
+    // say "LAUNCHED … the demo is public" two lines under a banner saying the demo is offline.
     stamp = `SUPERSEDED — the quote is verbatim in ${at}, but that passage is marked as retracted or corrected. It is history, not the current state. Do not answer from it.`;
   } else if (r.quoteFileCount > 1) {
     stamp = `PARTIALLY VERIFIED — the quote is verbatim, but it appears in ${r.quoteFileCount} notes, so it does not establish that ${c.path} is the source.`;

@@ -34,7 +34,7 @@ it("keeps aria-hidden false labels while excluding decorative true labels", () =
   for (const hidden of [false, "false", undefined]) expect(labelText(createElement("span", { "aria-hidden": hidden as false }, "Save"))).toBe("Save");
   for (const hidden of [true, "true"]) expect(labelText(createElement("span", { "aria-hidden": hidden as true }, "Decoration"))).toBe("");
 });
-const ordinary: WorkingItem = { id: 7, version: 2, kind: "handoff", project: "harbor", body: "Original notes", bodyRedacted: false, projectRedacted: false, status: "open", touchedAt: "2026-09-08T12:00:00Z" };
+const ordinary: WorkingItem = { id: 7, version: 2, kind: "handoff", project: "hotel", body: "Original notes", bodyRedacted: false, projectRedacted: false, status: "open", touchedAt: "2026-09-08T12:00:00Z" };
 const masked: WorkingItem = { ...ordinary, version: 3, project: "token=<redacted>", body: "password=<redacted>", bodyRedacted: true, projectRedacted: true };
 beforeEach(() => {
   hooks.slots = []; hooks.cursor = 0;

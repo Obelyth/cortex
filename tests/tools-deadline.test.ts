@@ -21,8 +21,8 @@ const URL_KEY = "KV_REST_API_URL";
 const TOK_KEY = "KV_REST_API_TOKEN";
 const SHA = "eaf0a03e4849aaaa";
 const NOTES = {
-  "projects/beacon.md": "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404.",
-  "projects/harbor.md": "The plates backlog went into a deleted database.",
+  "projects/sample.md": "**The demo is offline** (checked 2025-02-17). The preview link returns 404.",
+  "projects/hotel.md": "The import queue was written to a dropped table.",
 };
 
 type Row = Record<string, unknown>;
@@ -94,10 +94,10 @@ function mockAnthropic(events: string[], stall: boolean) {
             });
           }
           const stable = params.messages[0].content[0].text;
-          const tag = stable.match(/FILE: projects\/beacon\.md \[tag: ([0-9a-z]+)\]/)?.[1] ?? "";
+          const tag = stable.match(/FILE: projects\/sample\.md \[tag: ([0-9a-z]+)\]/)?.[1] ?? "";
           return Promise.resolve({
             stop_reason: "end_turn",
-            content: [{ type: "text", text: JSON.stringify({ answer: "No — production is dark.", tag, quote: "Production is still dark" }) }],
+            content: [{ type: "text", text: JSON.stringify({ answer: "No — the demo is offline.", tag, quote: "The demo is offline" }) }],
           });
         },
       };
@@ -201,7 +201,7 @@ describe("brain_ask under one request deadline", () => {
     const handler = await captureAsk();
 
     const t0 = Date.now();
-    const pending = handler({ question: "is beacon live" });
+    const pending = handler({ question: "is sample live" });
     await until(() => events.includes("mirror:snapshot"), "mirror:snapshot", events);
     // The started row was dispatched before anything slow began — before the mirror was even
     // asked. This is the row a platform kill would leave behind.
@@ -210,9 +210,9 @@ describe("brain_ask under one request deadline", () => {
     expect(typeof store.rows[0].id).toBe("string");
     expect(store.rows[0].digest).toMatch(/^[0-9a-f]{8}$/);
     const { questionDigest } = await import("../lib/calls");
-    expect(store.rows[0].digest).toBe(questionDigest("is beacon live", "test-connector-secret"));
-    expect(store.rows[0].digest).not.toBe(createHash("sha256").update("is beacon live").digest("hex").slice(0, 8));
-    expect(JSON.stringify(store.rows[0])).not.toContain("beacon");
+    expect(store.rows[0].digest).toBe(questionDigest("is sample live", "test-connector-secret"));
+    expect(store.rows[0].digest).not.toBe(createHash("sha256").update("is sample live").digest("hex").slice(0, 8));
+    expect(JSON.stringify(store.rows[0])).not.toContain("sample");
 
     // The mirror gets its full 20 s (the request has 55 s, less the tarball's reserve), loses,
     // and the tarball serves.
@@ -274,11 +274,11 @@ describe("brain_ask under one request deadline", () => {
     __setStore(null);
     const handler = await captureAsk();
 
-    const pending = handler({ question: "is beacon live" });
+    const pending = handler({ question: "is sample live" });
     await until(() => events.includes("reader:start"), "reader:start", events);
     const fresh = await pending;
     expect(fresh.isError).not.toBe(true);
-    expect(fresh.content[0].text).toMatch(/^VERIFIED — this quote is verbatim in projects\/beacon\.md/);
+    expect(fresh.content[0].text).toMatch(/^VERIFIED — this quote is verbatim in projects\/sample\.md/);
     expect(fresh.content[0].text).toMatch(/MODEL CALL: claude-sonnet-5 read 1 notes/);
     // A fresh request hands the reader its full cap — the deadline only ever cuts it down.
     expect(reader.timeout).toBe(46_000);
@@ -288,7 +288,7 @@ describe("brain_ask under one request deadline", () => {
 
     // The hit path: no model call, the cached marker, and again one finished row per call.
     vi.advanceTimersByTime(1_000); // a later call gets a later ts, so the log's order is defined
-    const hit = await handler({ question: "is beacon live" });
+    const hit = await handler({ question: "is sample live" });
     expect(hit.content[0].text).toContain("no model call");
     expect(events.filter((e) => e === "reader:start")).toHaveLength(1);
     expect(store.rows).toHaveLength(4);

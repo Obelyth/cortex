@@ -138,11 +138,11 @@ describe("listTree", () => {
       tree: [
         { path: "profile.md", type: "blob" },
         { path: "projects", type: "tree" },
-        { path: "projects/harbor.md", type: "blob" },
+        { path: "projects/hotel.md", type: "blob" },
         { path: "log/.gitkeep", type: "blob" },
       ],
     });
-    expect(await listTree()).toEqual(["profile.md", "projects/harbor.md"]);
+    expect(await listTree()).toEqual(["profile.md", "projects/hotel.md"]);
   });
 });
 

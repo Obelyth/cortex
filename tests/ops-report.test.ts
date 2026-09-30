@@ -5,15 +5,15 @@ import type { Run, Unit } from "../lib/ops-state";
 import { POST } from "../app/api/ops/report/route";
 import {withAtomic} from "./ops-test-store";
 
-const NOW = new Date("2026-09-02T09:19:00Z");
+const NOW = new Date("2026-09-02T14:19:00Z");
 const gk: Unit = { id: "groundskeeper", kind: "routine", name: "gk", owner: "manager", period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: null, notes: null };
-const rog: Unit = { ...gk, id: "workstation-test", kind: "machine", period_s: 900, pages: false };
+const ws: Unit = { ...gk, id: "workstation-test", kind: "machine", period_s: 900, pages: false };
 
 function memStore(seed: Run[] = []): OpsStore & { runs: Run[]; events: OpsEvent[] } {
   const runs = [...seed]; const events: OpsEvent[] = []; let nextId = 100;
   return withAtomic({
     runs, events,
-    listUnits: async () => [gk, rog],
+    listUnits: async () => [gk, ws],
     latestRuns: async (ids) => { const m = new Map<string, Run>(); for (const r of [...runs].reverse()) if (ids.includes(r.unit_id) && !m.has(r.unit_id)) m.set(r.unit_id, r); return m; },
     findRun: async (u, k) => runs.find((r) => r.unit_id === u && r.run_key === k) ?? null,
     insertRun: async (r) => { const row = { ...r, id: nextId++ } as Run; runs.push(row); return row; },
@@ -25,7 +25,7 @@ function memStore(seed: Run[] = []): OpsStore & { runs: Run[]; events: OpsEvent[
     consecutiveFailures: async () => 0,
     latestEvent: async () => null,
     latestTransition: async () => null,
-  },[gk,rog],runs,events);
+  },[gk,ws],runs,events);
 }
 
 describe("parseReport", () => {
@@ -45,7 +45,7 @@ describe("parseReport", () => {
 describe("applyReport", () => {
   it("start opens a run with a lease of max_run_s and writes a start event", async () => {
     const s = memStore();
-    const res = await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "2026-09-02" }, NOW);
+    const res = await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "2026-09-02" }, NOW);
     expect(res.ok).toBe(true);
     const run = s.runs[0];
     expect(run.started_at).toBe(NOW.toISOString());
@@ -55,58 +55,58 @@ describe("applyReport", () => {
   });
   it("a second start for the same run_key is a replay, not a duplicate", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
-    const again = await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    const again = await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
     expect(again).toMatchObject({ ok: true, replay: true });
     expect(s.runs).toHaveLength(1);
   });
   it("start while another run holds the lease is 409 with the live run", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "a" }, NOW);
-    const res = await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "b" }, new Date(NOW.getTime() + 60_000));
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "a" }, NOW);
+    const res = await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "b" }, new Date(NOW.getTime() + 60_000));
     expect(res).toMatchObject({ ok: false, status: 409 });
     expect((res as { run: Run }).run.run_key).toBe("a");
   });
   it("finish closes the run, stores evidence, and marks unverified without it", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
     const later = new Date(NOW.getTime() + 372_000);
-    const res = await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: true, summary: "2 pages corrected", evidence: ["https://github.com/example-owner/brain/commit/abcdef12"] }, later);
+    const res = await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: true, summary: "2 pages corrected", evidence: ["https://github.com/example-owner/brain/commit/abcdef12"] }, later);
     expect(res.ok).toBe(true);
     expect(s.runs[0]).toMatchObject({ ended_at: later.toISOString(), state: "succeeded", evidence: ["https://github.com/example-owner/brain/commit/abcdef12"] });
     const s2 = memStore();
-    await applyReport(s2, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
-    await applyReport(s2, [gk, rog], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: true }, later);
+    await applyReport(s2, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s2, [gk, ws], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: true }, later);
     expect(s2.runs[0].state).toBe("unverified");
   });
   it("finish with ok:false records exit_reason code by default, question when given", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: false, error: "brain_write 409" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: false, error: "brain_write 409" }, NOW);
     expect(s.runs[0]).toMatchObject({ state: "failed", exit_reason: "code", error: "brain_write 409" });
   });
   it("finish ok:false with exit_reason question is needs_you", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: false, exit_reason: "question", error: "which reader?" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "finish", run_key: "k", ok: false, exit_reason: "question", error: "which reader?" }, NOW);
     expect(s.runs[0]).toMatchObject({ state: "needs_you", exit_reason: "question", error: "which reader?" });
     expect(s.events.at(-1)).toMatchObject({ kind: "finish", to_state: "needs_you" });
   });
   it("finish without a start is 404 for that run", async () => {
-    const res = await applyReport(memStore(), [gk, rog], { unit: "groundskeeper", verb: "finish", run_key: "nope", ok: true }, NOW);
+    const res = await applyReport(memStore(), [gk, ws], { unit: "groundskeeper", verb: "finish", run_key: "nope", ok: true }, NOW);
     expect(res).toMatchObject({ ok: false, status: 404 });
   });
   it("heartbeat on a machine upserts a seen row with facts; on a running agent it renews the lease", async () => {
     const s = memStore();
-    await applyReport(s, [gk, rog], { unit: "workstation-test", verb: "heartbeat", run_key: "hb", facts: { disk_pct: 61 } }, NOW);
+    await applyReport(s, [gk, ws], { unit: "workstation-test", verb: "heartbeat", run_key: "hb", facts: { disk_pct: 61 } }, NOW);
     expect(s.runs[0]).toMatchObject({ unit_id: "workstation-test", state: "seen", facts: { disk_pct: 61 }, trigger: "heartbeat" });
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "start", run_key: "k" }, NOW);
     const t2 = new Date(NOW.getTime() + 600_000);
-    await applyReport(s, [gk, rog], { unit: "groundskeeper", verb: "heartbeat", run_key: "k" }, t2);
+    await applyReport(s, [gk, ws], { unit: "groundskeeper", verb: "heartbeat", run_key: "k" }, t2);
     expect(s.runs[1].lease_until).toBe(new Date(t2.getTime() + 1200_000).toISOString());
   });
   it("unknown unit is 404", async () => {
-    expect(await applyReport(memStore(), [gk, rog], { unit: "ghost", verb: "start", run_key: "k" }, NOW)).toMatchObject({ ok: false, status: 404 });
+    expect(await applyReport(memStore(), [gk, ws], { unit: "ghost", verb: "start", run_key: "k" }, NOW)).toMatchObject({ ok: false, status: 404 });
   });
 });
 

@@ -44,10 +44,10 @@ it("installs from the lockfile without running lifecycle scripts or creating run
   const scratch = mkdtempSync(join(tmpdir(), "cortex-codespaces-install-"));
   try {
     const pkg = {
-      name: "codespaces-install-canary", version: "1.0.0",
+      name: "codespaces-install-sentinel", version: "1.0.0",
       scripts: Object.fromEntries([
         "preinstall", "install", "postinstall", "prepare", "dev", "start", "onboard",
-      ].map((name) => [name, "node canary.cjs"])),
+      ].map((name) => [name, "node sentinel.cjs"])),
     };
     const lock = JSON.stringify({
       name: pkg.name, version: pkg.version, lockfileVersion: 3, requires: true,
@@ -55,7 +55,7 @@ it("installs from the lockfile without running lifecycle scripts or creating run
     });
     writeFileSync(join(scratch, "package.json"), JSON.stringify(pkg));
     writeFileSync(join(scratch, "package-lock.json"), lock);
-    writeFileSync(join(scratch, "canary.cjs"), 'require("node:fs").writeFileSync("lifecycle-ran", "unexpected");');
+    writeFileSync(join(scratch, "sentinel.cjs"), 'require("node:fs").writeFileSync("lifecycle-ran", "unexpected");');
     const installed = spawnSync(command, args, {
       cwd: scratch, encoding: "utf8", timeout: 15_000,
       env: {

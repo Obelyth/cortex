@@ -19,50 +19,50 @@ const fm = (d: string) => `---\ndescription: "${d}"\ntags: [a, b]\n---\n`;
 const files = new Map<string, string>([
   ["profile.md", fm("who")],
   ["notes/x.md", fm("note x")],
-  ["log/2026-08-04.md", "## 09:00 · cortex, mocap\nbody\n\n## 10:00 · cortex\nbody"],
-  ["log/2026-08-05.md", "## 09:00 · grain\nbody"],
+  ["log/2026-08-04.md", "## 09:00 · cortex, delta\nbody\n\n## 10:00 · cortex\nbody"],
+  ["log/2026-08-05.md", "## 09:00 · alpha\nbody"],
   ["log/2026-09-01.md", "## 09:00 · cortex\nbody"],
-  ["history/harbor-2026-08.md", fm("harbor history August 2026") + "## x\n"],
+  ["history/hotel-2026-08.md", fm("hotel history August 2026") + "## x\n"],
   // A month too big for one note is written as ordered parts. Both are real, individually named
   // notes; only their MONTH is shared.
-  ["history/harbor-2026-09-1.md", fm("harbor history September 2026 part 1 of 2") + "## x\n"],
-  ["history/harbor-2026-09-2.md", fm("harbor history September 2026 part 2 of 2") + "## y\n"],
+  ["history/hotel-2026-09-1.md", fm("hotel history September 2026 part 1 of 2") + "## x\n"],
+  ["history/hotel-2026-09-2.md", fm("hotel history September 2026 part 2 of 2") + "## y\n"],
 ]);
 
 describe("month rows", () => {
   it("maps day logs and history files to month keys", () => {
     expect(monthKey("log/2026-08-04.md")).toBe("log/2026-08");
-    expect(monthKey("history/harbor-2026-08.md")).toBe("history/harbor-2026-08");
+    expect(monthKey("history/hotel-2026-08.md")).toBe("history/hotel-2026-08");
     expect(monthKey("notes/x.md")).toBeNull();
-    expect(isHistoryPath("history/harbor-2026-08.md")).toBe(true);
+    expect(isHistoryPath("history/hotel-2026-08.md")).toBe(true);
   });
 
   it("reads a part suffix as the same month, and still as a history path", () => {
     // A month that outgrew one note is split into `-1`, `-2`, … Those parts are siblings of the
     // same month, so they must answer with the month they belong to rather than with three
     // different keys that look like three different months.
-    expect(isHistoryPath("history/harbor-2026-09-1.md")).toBe(true);
-    expect(monthKey("history/harbor-2026-09-1.md")).toBe("history/harbor-2026-09");
-    expect(monthKey("history/harbor-2026-09-12.md")).toBe("history/harbor-2026-09");
+    expect(isHistoryPath("history/hotel-2026-09-1.md")).toBe(true);
+    expect(monthKey("history/hotel-2026-09-1.md")).toBe("history/hotel-2026-09");
+    expect(monthKey("history/hotel-2026-09-12.md")).toBe("history/hotel-2026-09");
     // The suffix is a part number, not a day. A dated third component is not this shape.
-    expect(isHistoryPath("history/harbor-2026-09-1x.md")).toBe(false);
+    expect(isHistoryPath("history/hotel-2026-09-1x.md")).toBe(false);
   });
 
   it("lists every part of a split month on its own row", () => {
     // Parts are reached BY NAME, like any other history note — they must not collapse into one
     // month row the way day logs do, or the second half of a month becomes unreachable.
     const r = buildRouter(files, new Map(), 28_000);
-    expect(r).toContain("- history/harbor-2026-09-1.md · harbor history September 2026 part 1 of 2");
-    expect(r).toContain("- history/harbor-2026-09-2.md · harbor history September 2026 part 2 of 2");
+    expect(r).toContain("- history/hotel-2026-09-1.md · hotel history September 2026 part 1 of 2");
+    expect(r).toContain("- history/hotel-2026-09-2.md · hotel history September 2026 part 2 of 2");
   });
   it("collapses day logs into one row per month with counts and top tags", () => {
     const r = buildRouter(files, new Map(), 28_000);
-    expect(r).toContain("- log/2026-08 · 2 day logs · 3 entries · cortex, mocap, grain");
+    expect(r).toContain("- log/2026-08 · 2 day logs · 3 entries · cortex, delta, alpha");
     expect(r).toContain("- log/2026-09 · 1 day log · 1 entry · cortex");
     expect(r).not.toContain("log/2026-08-04.md");
   });
   it("lists a history file on its own row with its description", () => {
-    expect(buildRouter(files, new Map(), 28_000)).toContain("- history/harbor-2026-08.md · harbor history August 2026");
+    expect(buildRouter(files, new Map(), 28_000)).toContain("- history/hotel-2026-08.md · hotel history August 2026");
   });
   it("groups history after log, in the directory order the router has always used", () => {
     const r = buildRouter(files, new Map(), 28_000);
@@ -75,12 +75,12 @@ describe("month rows", () => {
   it("prioritizes month discovery rows without letting them bypass the hard budget", () => {
     // Month signposts lead the walk, but a long-lived brain can accumulate hundreds of them.
     // Those that do not fit are counted and remain reachable through the named corpus route.
-    const tight = buildRouter(files, new Map(), 320);
+    const tight = buildRouter(files, new Map(), 336);
     expect(tight).toContain("- log/2026-08 ·");
     expect(tight).not.toContain("- log/2026-09 ·");
     expect(tight).toMatch(/did not fit this router's budget/);
     expect(tight).toContain("brain_corpus");
-    expect(new TextEncoder().encode(tight).byteLength).toBeLessThanOrEqual(320);
+    expect(new TextEncoder().encode(tight).byteLength).toBeLessThanOrEqual(336);
   });
   it("routes every live path or its month", () => {
     const r = buildRouter(files, new Map(), 28_000);
