@@ -7,9 +7,9 @@ import { lastVerified, stampVerified } from "../lib/health";
  * The check used to read the first match, which asked "when was the oldest section of this page
  * checked?". On a brain page that is the wrong question: pages here are append-only build logs
  * where each dated section keeps the stamp it was verified under, and the groundskeeper's written
- * convention is that the page ENDS with its current stamp. Measured 2026-08-17: two long project
- * pages were reported 16 days stale off an early section stamp while each carried a stamp five
- * days old at its foot, every night, for a fortnight. Nothing was wrong with either page.
+ * convention is that the page ENDS with its current stamp. Long project pages were reported
+ * stale off an early section stamp while each carried a recent stamp at its foot, every night.
+ * Nothing was wrong with any of them.
  *
  * The read and the write are pinned together here on purpose. If the queue reads the last stamp
  * and the console's button rewrites the first, the button commits a change, reports success,

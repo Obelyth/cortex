@@ -33,7 +33,7 @@ const mList = vi.mocked(listTree);
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubEnv("BRAIN_TZ", "America/Los_Angeles");
+  vi.stubEnv("BRAIN_TZ", "America/New_York");
   mPut.mockResolvedValue({ commitSha: "c0", content: "committed" });
   // The corpus cache is module-level and keyed on SHA, so a fixture left behind by one test would
   // be served to the next one.
@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 
 describe("validatePath", () => {
-  it.each(["profile.md", "INDEX.md", "projects/harbor.md", "notes/a-b_c.md", "log/2026-07-24.md"])(
+  it.each(["profile.md", "INDEX.md", "projects/hotel.md", "notes/a-b_c.md", "log/2026-07-24.md"])(
     "accepts %s",
     (p) => expect(() => validatePath(p)).not.toThrow()
   );
@@ -59,7 +59,7 @@ describe("validatePath", () => {
 });
 
 describe("validateReadPath", () => {
-  it.each(["profile.md", "projects/harbor.md", "archive/old/x.md"])("opens %s", (p) =>
+  it.each(["profile.md", "projects/hotel.md", "archive/old/x.md"])("opens %s", (p) =>
     expect(() => validateReadPath(p)).not.toThrow()
   );
   it.each(["../etc/passwd", "archive/../profile.md", "src/evil.ts"])("rejects %s", (p) =>
@@ -70,8 +70,19 @@ describe("validateReadPath", () => {
 describe("todayStamp", () => {
   it("formats date and time in BRAIN_TZ", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z")); // 13:30 in LA (PDT)
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z")); // 13:30 local, daylight time (UTC-4)
     expect(todayStamp()).toEqual({ date: "2026-07-24", time: "13:30" });
+    vi.useRealTimers();
+  });
+
+  it("defaults to UTC when BRAIN_TZ is unset or blank", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-24T23:30:00Z"));
+    for (const v of [undefined, ""]) {
+      vi.stubEnv("BRAIN_TZ", v as string);
+      expect(todayStamp()).toEqual({ date: "2026-07-24", time: "23:30" });
+      expect(lastNDates(2)).toEqual(["2026-07-24", "2026-07-23"]);
+    }
     vi.useRealTimers();
   });
 });
@@ -88,7 +99,7 @@ describe("getContext", () => {
 
   it("assembles profile + router + recent logs, skipping missing days", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     corpusOf({
       "profile.md": "PROFILE",
       "notes/a.md": '---\ndescription: "a described note"\n---\n\nbody',
@@ -107,7 +118,7 @@ describe("getContext", () => {
 
   it("digests a day that would blow the budget, and says how to open it", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     const huge = `# Log\n\n## 09:00 · groundskeeper, cortex\n\n${"x".repeat(9000)}`;
     corpusOf({ "profile.md": "P", "log/2026-07-24.md": huge, "log/2026-07-23.md": "# Log\n\n## 08:00 · small\n\nshort day" });
     const ctx = await getContext();
@@ -135,8 +146,8 @@ describe("getContext", () => {
 describe("lastNDates across DST boundaries", () => {
   it("spring-forward: does not skip the day after the DST jump", () => {
     vi.useFakeTimers();
-    // 00:30 America/Los_Angeles — first hour after local midnight following the Mar 8 spring-forward
-    vi.setSystemTime(new Date("2026-03-09T07:30:00Z"));
+    // 00:30 local — first hour after local midnight following the Mar 8 spring-forward
+    vi.setSystemTime(new Date("2026-03-09T04:30:00Z"));
     expect(lastNDates(7)).toEqual([
       "2026-03-09",
       "2026-03-08",
@@ -151,8 +162,8 @@ describe("lastNDates across DST boundaries", () => {
 
   it("fall-back: does not duplicate today or drop the oldest day", () => {
     vi.useFakeTimers();
-    // 23:30 America/Los_Angeles on Nov 1 — last hour of the fall-back day
-    vi.setSystemTime(new Date("2026-11-02T07:30:00Z"));
+    // 23:30 local on Nov 1 — last hour of the fall-back day
+    vi.setSystemTime(new Date("2026-11-02T04:30:00Z"));
     expect(lastNDates(7)).toEqual([
       "2026-11-01",
       "2026-10-31",
@@ -305,18 +316,18 @@ describe("writeNote", () => {
 describe("capture", () => {
   it("creates today's log with header when absent", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     mGet.mockResolvedValue(null);
     mList.mockResolvedValue(["profile.md", "INDEX.md"]);
-    await capture("first thought", ["harbor"]);
+    await capture("first thought", ["hotel"]);
     const call = mPut.mock.calls.find(([p]) => p === "log/2026-07-24.md")!;
-    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · harbor\n\nfirst thought\n");
+    expect(call[1]).toBe("# Log 2026-07-24\n\n## 13:30 · hotel\n\nfirst thought\n");
     vi.useRealTimers();
   });
 
   it("appends an entry when today's log exists", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     mGet.mockImplementation(async (p: string) =>
       p === "log/2026-07-24.md"
         ? { path: p, content: "# Log 2026-07-24\n\n## 09:00\n\nearlier\n", sha: "s" }
@@ -333,7 +344,7 @@ describe("capture", () => {
 
   it("DATA-LOSS REGRESSION: capture's merge callback re-derives from a concurrent entry instead of dropping it", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     mGet.mockImplementation(async (p: string) =>
       p === "log/2026-07-24.md"
         ? { path: p, content: "# Log 2026-07-24\n\n## 09:00\n\nearlier\n", sha: "s" }
@@ -367,7 +378,7 @@ describe("regenerateIndex resilience (FIX C)", () => {
 
   it("capture still resolves with commitSha and carries indexWarning when index regeneration fails", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     mGet.mockResolvedValue(null);
     mList.mockRejectedValue(new Error("tree fetch boom"));
     const res = await capture("a thought");
@@ -424,7 +435,7 @@ describe("getContext holds its ceiling and its ordering", () => {
   // is what stops the walk.)
   it("bounds the WHOLE recent section, not each day against the budget separately", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     seed(Object.fromEntries(
       ["2026-07-24", "2026-07-23", "2026-07-22", "2026-07-21", "2026-07-20", "2026-07-19", "2026-07-18"].map((d) => [d, 3_900])
     ));
@@ -439,7 +450,7 @@ describe("getContext holds its ceiling and its ordering", () => {
   // gets a one-line digest of the day they are actually working in.
   it("spends the budget on the NEWEST days, not the oldest", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     seed({ "2026-07-24": 3_000, "2026-07-23": 3_000, "2026-07-22": 3_000, "2026-07-21": 3_000, "2026-07-20": 3_000 });
     const ctx = await getContext();
     // The separator carries a per-request nonce, so match on the shape rather than a literal.
@@ -455,7 +466,7 @@ describe("getContext holds its ceiling and its ordering", () => {
   // byte for byte; brain_corpus had nonced fences and this did not.
   it("fences note content behind a per-request nonce and says it is data", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     seed({ "2026-07-24": 200 });
     const a = await getContext();
     const b = await getContext();
@@ -471,7 +482,7 @@ describe("getContext holds its ceiling and its ordering", () => {
   // boot call from a day the budget had just declined to expand.
   it("bounds the digest line that stands in for an oversized day", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     const files = new Map<string, string>([
       ["profile.md", "P"],
       ["log/2026-07-24.md", `# Log\n\n## 09:00 · ${"z".repeat(200_000)}\n\n${"y".repeat(9_000)}`],
@@ -502,7 +513,7 @@ describe("getContext with the bubble", () => {
 
   it("a live bubble replaces the raw log expansion — every day rides as a digest line", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     corpusOf2({
       "profile.md": "P",
       "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",
@@ -526,7 +537,7 @@ describe("getContext with the bubble", () => {
 
   it("an EMPTY bubble degrades to phase-2 behaviour — boot must never get less informative", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     corpusOf2({
       "profile.md": "P",
       "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",
@@ -547,7 +558,7 @@ describe("getContext with the bubble", () => {
 
   it("a FAILING bubble degrades the same way, out loud in the log, never in the reply", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-07-24T20:30:00Z"));
+    vi.setSystemTime(new Date("2026-07-24T17:30:00Z"));
     corpusOf2({
       "profile.md": "P",
       "log/2026-07-24.md": "# Log\n\n## 09:00 · cortex\n\nverbatim today text",

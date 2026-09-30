@@ -68,7 +68,7 @@ describe("routerCut", () => {
   const files = new Map(
     Object.entries({
       "profile.md": "the operator",
-      "projects/harbor.md": "---\ndescription: \"the harbor\"\n---\n\nbody",
+      "projects/hotel.md": "---\ndescription: \"the hotel\"\n---\n\nbody",
       "notes/soundings.md": "---\ndescription: \"depths\"\n---\n\nbody",
       "notes/frozen.md": "---\ndescription: \"old\"\n---\n\nbody",
     })
@@ -79,11 +79,11 @@ describe("routerCut", () => {
   it("keeps hot and warm, banishes cold to its own list — never silently", () => {
     const cut = routerCut(
       files,
-      temps({ "profile.md": "hot", "projects/harbor.md": "hot", "notes/soundings.md": "warm", "notes/frozen.md": "cold" })
+      temps({ "profile.md": "hot", "projects/hotel.md": "hot", "notes/soundings.md": "warm", "notes/frozen.md": "cold" })
     );
     expect(cut.rendered.map((e) => e.path)).toEqual([
       "profile.md",
-      "projects/harbor.md",
+      "projects/hotel.md",
       "notes/soundings.md",
     ]);
     expect(cut.cold.map((e) => e.path)).toEqual(["notes/frozen.md"]);
@@ -134,13 +134,13 @@ describe("assembleHeat seat parity", () => {
     vi.setSystemTime(new Date("2026-08-11T20:00:00Z"));
     seed({
       "profile.md": "# Profile\n\nthe operator, at length ".repeat(20),
-      "projects/harbor.md": "---\ndescription: \"the harbor project\"\n---\n\nbody text",
+      "projects/hotel.md": "---\ndescription: \"the hotel project\"\n---\n\nbody text",
       "notes/soundings.md": "---\ndescription: \"depth notes\"\n---\n\nmore body",
-      "log/2026-08-10.md": "# Log 2026-08-10\n\n## 09:00 · harbor\n\nmoved the buoys",
+      "log/2026-08-10.md": "# Log 2026-08-10\n\n## 09:00 · hotel\n\nmoved the buoys",
     });
     const rows: ScoreRow[] = [
       { path: "profile.md", temperature: "hot", score: 0.9, reads: 4 },
-      { path: "projects/harbor.md", temperature: "hot", score: 0.8, reads: 3 },
+      { path: "projects/hotel.md", temperature: "hot", score: 0.8, reads: 3 },
       { path: "notes/soundings.md", temperature: "warm", score: 0.3, reads: 1 },
       { path: "log/2026-08-10.md", temperature: "warm", score: 0.3, reads: 0 },
     ];
@@ -176,7 +176,7 @@ describe("assembleHeat seat parity", () => {
 describe("assembleHeat tiles", () => {
   const files = {
     "profile.md": "the operator",
-    "projects/harbor.md": "---\ndescription: \"the harbor\"\n---\n\nbody",
+    "projects/hotel.md": "---\ndescription: \"the hotel\"\n---\n\nbody",
     "notes/soundings.md": "---\ndescription: \"depths\"\n---\n\nbody",
     "notes/frozen.md": "---\ndescription: \"old\"\n---\n\nbody",
   };
@@ -185,14 +185,14 @@ describe("assembleHeat tiles", () => {
     seed(files);
     __setHeatScores(async () => [
       scoreRow("profile.md", { temperature: "hot", reads: 5, access_score: 1 }),
-      scoreRow("projects/harbor.md", { temperature: "hot", reads: 2 }),
+      scoreRow("projects/hotel.md", { temperature: "hot", reads: 2 }),
       scoreRow("notes/soundings.md", { temperature: "warm", reads: 1 }),
       scoreRow("notes/frozen.md", { temperature: "cold" }),
     ]);
     const heat = await assembleHeat();
     const by = new Map(heat.tiles.map((t) => [t.path, t]));
     expect(by.get("profile.md")!.seat).toBe("profile");
-    expect(by.get("projects/harbor.md")!.seat).toBe("router");
+    expect(by.get("projects/hotel.md")!.seat).toBe("router");
     expect(by.get("notes/soundings.md")!.seat).toBe("router");
     // Cold is OUT of the seat — that is the whole meaning of cold.
     expect(by.get("notes/frozen.md")!.seat).toBeNull();
@@ -221,7 +221,7 @@ describe("assembleHeat tiles", () => {
 
   it("declares the cold start when scores exist but nothing was ever read", async () => {
     seed(files);
-    __setHeatScores(async () => [scoreRow("profile.md"), scoreRow("projects/harbor.md")]);
+    __setHeatScores(async () => [scoreRow("profile.md"), scoreRow("projects/hotel.md")]);
     const heat = await assembleHeat();
     expect(heat.coldStart).toBe(true);
   });

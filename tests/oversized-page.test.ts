@@ -6,11 +6,11 @@ const big = (n: number) => "x".repeat(n);
 
 describe("oversizedPageItems — the trigger the splitter never had", () => {
   it("raises a page over the threshold and names the command that fixes it", () => {
-    const files = new Map([["projects/harbor.md", big(MAX_PAGE_BYTES + 1)]]);
+    const files = new Map([["projects/hotel.md", big(MAX_PAGE_BYTES + 1)]]);
     const [item] = oversizedPageItems(files);
     expect(item.kind).toBe("oversized-page");
-    expect(item.loc).toBe("projects/harbor.md");
-    expect(item.action).toContain("scripts/split-project-page.ts projects/harbor.md");
+    expect(item.loc).toBe("projects/hotel.md");
+    expect(item.action).toContain("scripts/split-project-page.ts projects/hotel.md");
   });
 
   it("is silent at the threshold — the bound is a ceiling, not a target", () => {
@@ -43,14 +43,14 @@ describe("oversizedPageItems — the trigger the splitter never had", () => {
 
 describe("oversizedPageItems — history parts are the splitter's output", () => {
   it("never raises a history part, which the splitter cannot cut smaller", () => {
-    // Measured on the live corpus the day this check was written: one part sat 25 bytes over the
-    // bound because a section is never cut in half. Irreducible, so not an item.
-    const files = new Map([["history/harbor-2026-08-3.md", "x".repeat(MAX_PAGE_BYTES + 25)]]);
+    // A part can sit a few bytes over the bound because a section is never cut in half.
+    // Irreducible, so not an item.
+    const files = new Map([["history/hotel-2026-08-3.md", "x".repeat(MAX_PAGE_BYTES + 25)]]);
     expect(oversizedPageItems(files)).toEqual([]);
   });
 
   it("still raises the status page that history parts were cut from", () => {
-    const files = new Map([["projects/harbor.md", "x".repeat(MAX_PAGE_BYTES + 25)]]);
+    const files = new Map([["projects/hotel.md", "x".repeat(MAX_PAGE_BYTES + 25)]]);
     expect(oversizedPageItems(files)).toHaveLength(1);
   });
 });

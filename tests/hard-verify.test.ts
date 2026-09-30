@@ -72,12 +72,12 @@ const BOM = "﻿";
 // Real brain excerpts. Copied byte-for-byte; the em dashes and backticks are load-bearing.
 // --------------------------------------------------------------------------------------
 
-/** notes/beacon-beacon.md:20-22 — the brain's own supersession banner, and the line it disowns. */
-const BEACON_BEACON = [
-  "- **Daily Beacon Check game (built 2026-07-14; spec+plan in docs/superpowers/)**: 9-task subagent-driven build on `dev`, all reviewed.",
-  "> **SUPERSEDED 2026-07-25 — production is dark. See `projects/beacon.md`.** The URL below returned 404 when re-checked on 2026-07-25; it was genuinely live on 2026-07-14, so the entry is kept as history. Do not answer \"is Beacon shipped?\" from this line.",
+/** notes/sample-status.md:20-22 — the brain's own supersession banner, and the line it disowns. */
+const SAMPLE_STATUS = [
+  "- **Daily Sample Check game (built 2025-02-03; spec+plan in docs/superpowers/)**: 9-task subagent-driven build on `dev`, all reviewed.",
+  "> **SUPERSEDED 2025-02-17 — production is dark. See `projects/sample.md`.** The URL below returned 404 when re-checked on 2025-02-17; it was genuinely live on 2025-02-03, so the entry is kept as history. Do not answer \"is Sample shipped?\" from this line.",
   "",
-  "- **SHIPPED 2026-07-14**: Daily Beacon Check live in production at https://beacon-demo.example.com/play. Env pushed to Vercel (prod+preview, service-role key server-only, verified not baked into any bundle).",
+  "- **SHIPPED 2025-02-03**: Daily Sample Check live in production at https://sample-demo.example.com/play. Env pushed to Vercel (prod+preview, service-role key server-only, verified not baked into any bundle).",
 ].join("\n");
 
 /** projects/admin-board.md:3-9 — a CORRECTION blockquote over the stale claim it corrects. */
@@ -107,17 +107,17 @@ const CORTEX_NAMES = [
   "cap the surface around 7-8 tools — **6 registered as of 2026-07-27**, so there is room for one or two more.",
 ].join("\n");
 
-/** projects/beacon.md:20-22 — a superseded fact kept verbatim inside a `(was: "...")` note. */
-const BEACON_WAS =
-  "Branches `main`/`dev` plus **three** open PRs: #1 \"Bootstrap beacon-next\" (opened 2026-07-19), #2 (07-20), #3 (07-21). (was: \"two open PRs (#2, #3)\" — updated 2026-07-25: #1 was never merged and is still open.)";
+/** projects/sample.md:20-22 — a superseded fact kept verbatim inside a `(was: "...")` note. */
+const SAMPLE_WAS =
+  "Branches `main`/`dev` plus **three** open PRs: #1 \"Bootstrap sample-next\" (opened 2026-07-19), #2 (07-20), #3 (07-21). (was: \"two open PRs (#2, #3)\" — updated 2025-02-17: #1 was never merged and is still open.)";
 
 /** projects/cortex.md:27-32 — the seam between the Next bullets and the next H2. */
 const CORTEX_SEAM = [
   "## Next",
-  "- Rotate the sample-app API token found hardcoded in `apps/beacon`'s `config.yml` — still unrotated and still in the file as of 2026-07-25 (see projects/beacon.md).",
+  "- Rotate the sample-app API token found hardcoded in `apps/sample`'s `config.yml` — still unrotated and still in the file as of 2025-02-17 (see projects/sample.md).",
   "",
   "",
-  "## Standing defects (logged 2026-07-25 — two closed 2026-07-27, the rest still open)",
+  "## Standing defects (logged 2025-02-17 — two closed 2026-07-27, the rest still open)",
 ].join("\n");
 
 /** notes/pr-targets.md:22-25 — the deviating-branch table. */
@@ -126,7 +126,7 @@ const BRANCH_TABLE = [
   "|---|---|---|",
   "| Aurora | **`Dev-Staging`** | `Dev-Staging → main` lands in a separate later promote. |",
   "| Meridian v2 | **ask every time** | Never settled. Check with the operator instead of assuming a target. |",
-  "| Harbor | see project page | 07-25 review turned up **no `staging` branch** — recent PRs land on `main` straight from feature branches. |",
+  "| Hotel | see project page | 02-17 review turned up **no `staging` branch** — recent PRs land on `main` straight from feature branches. |",
 ].join("\n");
 
 /**
@@ -147,27 +147,27 @@ const SHA = "d94641c0aaaa1111";
 // ======================================================================================
 describe("supersession is visible to verifyQuote", () => {
   it("OK: a line the brain explicitly disowns verifies, and comes back flagged superseded", () => {
-    // notes/beacon-beacon.md:20 says, in as many words, `Do not answer "is Beacon shipped?"
+    // notes/sample-status.md:20 says, in as many words, `Do not answer "is Sample shipped?"
     // from this line.` The line it is pointing at is one blank line below it.
     //
-    // was: ask cortex "is Beacon shipped?" and a reader that obeys the corpus and cites the
-    // SHIPPED bullet got a plain green VERIFIED on a URL that projects/beacon.md records as
+    // was: ask cortex "is Sample shipped?" and a reader that obeys the corpus and cites the
+    // SHIPPED bullet got a plain green VERIFIED on a URL that projects/sample.md records as
     // 404ing — nothing in the verdict said which of the two lines was current.
     // now: it still verifies, because the text really is on the page, but the banner sits in
     // the block immediately above it and the verdict says `superseded`. ask.ts renders that
     // as a `SUPERSEDED — ...` stamp instead of a clean proof.
     const quote =
-      "SHIPPED 2026-07-14**: Daily Beacon Check live in production at https://beacon-demo.example.com/play";
-    const v = verifyQuote(BEACON_BEACON, quote);
+      "SHIPPED 2025-02-03**: Daily Sample Check live in production at https://sample-demo.example.com/play";
+    const v = verifyQuote(SAMPLE_STATUS, quote);
     expect(v.verified).toBe(true);
     expect(v.superseded).toBe(true);
     expect(v.line).toBe(4);
     // The evidence shown is the FILE's own bullet, not the model's rendering of it.
-    expect(v.matched).toContain("**SHIPPED 2026-07-14**");
+    expect(v.matched).toContain("**SHIPPED 2025-02-03**");
 
     // ...and the disclaimer that would have saved it is right there in the same file, equally
     // verifiable — and equally flagged, since it is itself the retraction.
-    const d = verifyQuote(BEACON_BEACON, "Do not answer \"is Beacon shipped?\" from this line");
+    const d = verifyQuote(SAMPLE_STATUS, "Do not answer \"is Sample shipped?\" from this line");
     expect(d.verified).toBe(true);
     expect(d.superseded).toBe(true);
     expect(d.line).toBe(2);
@@ -224,7 +224,7 @@ describe("supersession is visible to verifyQuote", () => {
     // was: that made every correction a landmine — the superseded string is a genuine
     // substring, so `two open PRs (#2, #3)` verified with nothing to mark it as history.
     // now: `was: "` is one of the retraction markers, so the whole block is flagged.
-    const dead = verifyQuote(BEACON_WAS, "two open PRs (#2, #3)");
+    const dead = verifyQuote(SAMPLE_WAS, "two open PRs (#2, #3)");
     expect(dead.verified).toBe(true);
     expect(dead.superseded).toBe(true);
 
@@ -232,7 +232,7 @@ describe("supersession is visible to verifyQuote", () => {
     // radius is one block and the correction lives INSIDE the block it corrects, so there is
     // no sub-block signal to separate `three` from `was: "two"`. A spurious "check this"
     // costs a glance; a missed retraction costs a wrong answer with a green stamp.
-    const liveFact = verifyQuote(BEACON_WAS, "three** open PRs");
+    const liveFact = verifyQuote(SAMPLE_WAS, "three** open PRs");
     expect(liveFact.verified).toBe(true);
     expect(liveFact.superseded).toBe(true);
   });
@@ -382,7 +382,7 @@ describe("markdown stripping is positional, not a blanket [*_`>#] strip", () => 
 describe("matching is scoped to one block", () => {
   it("OK: a quote welded from two different sections is refused, with the boundary named", () => {
     // The fixture's last "Next" bullet says the sample token is STILL UNROTATED. The next H2
-    // is "Standing defects (logged 2026-07-25 — two closed 2026-07-27...)". Two blank lines and
+    // is "Standing defects (logged 2025-02-17 — two closed 2026-07-27...)". Two blank lines and
     // an `##` separate them.
     //
     // was: normalise() deleted all three, and the result was a single fluent passage in which
@@ -391,7 +391,7 @@ describe("matching is scoped to one block", () => {
     // now: refused, and the reason says why, so the reader is not left thinking the text is
     // absent when it is the JOIN that is fabricated.
     const spliced =
-      "still unrotated and still in the file as of 2026-07-25 (see projects/beacon.md). Standing defects (logged 2026-07-25 — two closed 2026-07-27, the rest still open)";
+      "still unrotated and still in the file as of 2025-02-17 (see projects/sample.md). Standing defects (logged 2025-02-17 — two closed 2026-07-27, the rest still open)";
     expect(CORTEX_SEAM.includes(spliced)).toBe(false);
     for (const line of CORTEX_SEAM.split("\n")) expect(normalise(line)).not.toContain(normalise(spliced));
     expect(verifyQuote(CORTEX_SEAM, spliced)).toMatchObject({
@@ -399,7 +399,7 @@ describe("matching is scoped to one block", () => {
       reason: "spans a paragraph, list or section boundary — not a contiguous quote",
     });
     // The bullet on its own is still perfectly quotable.
-    expect(verifyQuote(CORTEX_SEAM, "still unrotated and still in the file as of 2026-07-25").verified).toBe(true);
+    expect(verifyQuote(CORTEX_SEAM, "still unrotated and still in the file as of 2025-02-17").verified).toBe(true);
   });
 
   it("OK: a heading no longer merges into the paragraph below it", () => {
@@ -426,7 +426,7 @@ describe("matching is scoped to one block", () => {
     // project with a different answer — and the verifier called the whole thing verbatim, in
     // a note whose entire purpose is not getting that wrong.
     const spliced =
-      "Meridian v2 | ask every time | Never settled. Check with the operator instead of assuming a target. | | Harbor | see project page | 07-25 review turned up no staging branch";
+      "Meridian v2 | ask every time | Never settled. Check with the operator instead of assuming a target. | | Hotel | see project page | 02-17 review turned up no staging branch";
     expect(verifyQuote(BRANCH_TABLE, spliced)).toMatchObject({
       verified: false,
       reason: "spans a paragraph, list or section boundary — not a contiguous quote",
@@ -453,7 +453,7 @@ describe("matching is scoped to one block", () => {
   });
 
   it("OK: a quote cannot start inside a supersession banner and end inside the claim it guards", () => {
-    // notes/beacon-beacon.md again, this time as one string.
+    // notes/sample-status.md again, this time as one string.
     //
     // was: the banner and the disowned bullet were adjacent in the normal form, so a quote
     // could start inside the warning and end inside the claim, carrying the warning's
@@ -461,13 +461,13 @@ describe("matching is scoped to one block", () => {
     // now: `>` and `-` each start a block, so the two cannot be joined at all. Note the two
     // reasons: keep the bullet's `- ` and the string is nowhere in the file even flattened;
     // drop it and the flattened file still contains it, so the boundary reason fires.
-    const withMarker = "kept as history. Do not answer \"is Beacon shipped?\" from this line. - SHIPPED 2026-07-14";
-    const withoutMarker = "kept as history. Do not answer \"is Beacon shipped?\" from this line. SHIPPED 2026-07-14";
-    expect(verifyQuote(BEACON_BEACON, withMarker)).toMatchObject({
+    const withMarker = "kept as history. Do not answer \"is Sample shipped?\" from this line. - SHIPPED 2025-02-03";
+    const withoutMarker = "kept as history. Do not answer \"is Sample shipped?\" from this line. SHIPPED 2025-02-03";
+    expect(verifyQuote(SAMPLE_STATUS, withMarker)).toMatchObject({
       verified: false,
       reason: "NOT FOUND in the cited file",
     });
-    expect(verifyQuote(BEACON_BEACON, withoutMarker)).toMatchObject({
+    expect(verifyQuote(SAMPLE_STATUS, withoutMarker)).toMatchObject({
       verified: false,
       reason: "spans a paragraph, list or section boundary — not a contiguous quote",
     });
@@ -496,7 +496,7 @@ describe("matching is scoped to one block", () => {
     //
     // Fails CLOSED, and the cost of the alternative is higher: measured on the 2026-07-27
     // corpus there are exactly 2 line-leading `>` whose previous line is ordinary prose, and
-    // the OTHER one is notes/beacon-beacon.md:20 — the `> **SUPERSEDED ...**` banner that has
+    // the OTHER one is notes/sample-status.md:20 — the `> **SUPERSEDED ...**` banner that has
     // to start its own block or the retraction check cannot see it. One false negative on a
     // wrapped chain against one missed retraction on a dead production URL is not a close
     // call. Recorded so the trade is deliberate rather than forgotten.
@@ -577,17 +577,17 @@ describe("NFKC and invisible characters", () => {
 // ======================================================================================
 describe("MIN_QUOTE = 12 normalised characters", () => {
   it("BUG: 12 characters of English is boilerplate, not evidence", () => {
-    // `on 2026-07-2` is 12 normalised chars and occurs in 33 of the 77 live brain files
-    // (measured; see the live-corpus block, where it is re-counted). As proof it narrows the
+    // `on 2025-02-1` is 12 normalised chars, and a date fragment of that length recurs across
+    // a real brain's files (see the live-corpus block, where one is counted). As proof it narrows the
     // corpus by nothing, yet it clears the guard and renders as VERIFIED next to any answer
     // at all. Untouched by the block/positional work — block scoping stops a quote being
     // fabricated, it does not make a true fragment informative.
-    const q = "on 2026-07-2";
+    const q = "on 2025-02-1";
     expect(normalise(q).length).toBe(MIN_QUOTE);
-    expect(verifyQuote(BEACON_BEACON, q).verified).toBe(true);
-    expect(verifyQuote("a note last touched on 2026-07-25, about something else entirely", q).verified).toBe(true);
+    expect(verifyQuote(SAMPLE_STATUS, q).verified).toBe(true);
+    expect(verifyQuote("a note last touched on 2025-02-17, about something else entirely", q).verified).toBe(true);
     // The two matches are indistinguishable as proof; only the provenance differs.
-    expect(verifyQuote(BEACON_BEACON, q).line).toBe(2);
+    expect(verifyQuote(SAMPLE_STATUS, q).line).toBe(2);
   });
 
   it("BUG: the guard counts characters and never checks the quote supports the answer", () => {
@@ -607,8 +607,8 @@ describe("MIN_QUOTE = 12 normalised characters", () => {
 
   it("BUG: trailing/leading space is trimmed AFTER the count, so 12 raw chars can still be rejected", () => {
     // Not dangerous, but it means the documented threshold is not the effective one.
-    expect(normalise(" 2026-07-25.").length).toBe(11);
-    expect(verifyQuote("shipped on 2026-07-25. and more", " 2026-07-25.")).toMatchObject({
+    expect(normalise(" 2025-02-17.").length).toBe(11);
+    expect(verifyQuote("shipped on 2025-02-17. and more", " 2025-02-17.")).toMatchObject({
       verified: false,
       reason: "quote too short to prove (<12 chars of actual text)",
     });
@@ -638,7 +638,7 @@ describe("MIN_QUOTE = 12 normalised characters", () => {
 // 6. checkCitation path handling and provenance
 // ======================================================================================
 describe("checkCitation path handling", () => {
-  const files = new Map([["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25)."]]);
+  const files = new Map([["projects/sample.md", "**Production is still dark** (re-checked 2025-02-17)."]]);
   const Q = "Production is still dark";
 
   it("OK: files.get() is exact, so every path variant fails CLOSED", () => {
@@ -646,21 +646,21 @@ describe("checkCitation path handling", () => {
     // no percent-decoding. An honest reader that types the path from memory instead of
     // copying the FILE: header gets UNVERIFIED on text that is genuinely there.
     for (const p of [
-      "./projects/beacon.md",
-      "/projects/beacon.md",
-      "projects//beacon.md",
-      "projects/./beacon.md",
-      "Projects/Beacon.md",
-      "projects%2Fbeacon.md",
-      "projects\\beacon.md",
-      "brain/projects/beacon.md",
+      "./projects/sample.md",
+      "/projects/sample.md",
+      "projects//sample.md",
+      "projects/./sample.md",
+      "Projects/Sample.md",
+      "projects%2Fsample.md",
+      "projects\\sample.md",
+      "brain/projects/sample.md",
       "../../../etc/passwd",
     ]) {
       const c = checkCitation(files, SHA, p, Q);
       expect(c.verified).toBe(false);
       expect(c.reason).toBe("cited file is not in the corpus");
     }
-    expect(checkCitation(files, SHA, "projects/beacon.md", Q).verified).toBe(true);
+    expect(checkCitation(files, SHA, "projects/sample.md", Q).verified).toBe(true);
   });
 
   it("BUG: a bad path plus a short quote is reported as a short quote, hiding the bad path", () => {
@@ -675,7 +675,7 @@ describe("checkCitation path handling", () => {
   });
 
   it("OK: the commit is pinned and truncated to 12", () => {
-    expect(checkCitation(files, SHA, "projects/beacon.md", Q).commit).toBe("d94641c0aaaa");
+    expect(checkCitation(files, SHA, "projects/sample.md", Q).commit).toBe("d94641c0aaaa");
   });
 
   it("OK: evidence is the FILE's own text, so displayed and verified cannot diverge", () => {
@@ -684,10 +684,10 @@ describe("checkCitation path handling", () => {
     // was found in, straight out of the file — so any residual unicode game in the quote is
     // invisible in what the operator reads, because the quote is not what they read.
     const mangled = `Produc${ZWSP}tion is still dark`;
-    const c = checkCitation(files, SHA, "projects/beacon.md", mangled);
+    const c = checkCitation(files, SHA, "projects/sample.md", mangled);
     expect(c.verified).toBe(true);
     expect(c.quote).toBe(mangled);
-    expect(c.evidence).toBe("**Production is still dark** (re-checked 2026-07-25).");
+    expect(c.evidence).toBe("**Production is still dark** (re-checked 2025-02-17).");
     expect(c.evidence).not.toContain(ZWSP);
     expect(c.line).toBe(1);
   });
@@ -773,14 +773,14 @@ describe("parity with brain/tools/eval/verify_citation.py", () => {
     // all: it resolves (root / path) and verifies against anything under the brain root that
     // reads as UTF-8, including archived (superseded) notes and its own source file.
     //
-    // Unchanged by the normalisation work, and re-measured on 2026-07-27: `./projects/beacon.md`
-    // and `Projects/Beacon.md` (APFS is case-insensitive) both VERIFY in Python and fail here,
+    // Unchanged by the normalisation work, and re-measured on 2026-07-27: `./projects/sample.md`
+    // and `Projects/Sample.md` (APFS is case-insensitive) both VERIFY in Python and fail here,
     // and so does `tools/eval/verify_citation.py` quoting its own docstring. The eval can
     // therefore score a citation to a file cortex would never have served.
-    const files = new Map([["projects/beacon.md", "Production is still dark"]]);
-    expect(checkCitation(files, SHA, "archive/fixtures-2026-01/dir5--beacon-drift-check-poc.md", "Production is still dark").verified)
+    const files = new Map([["projects/sample.md", "Production is still dark"]]);
+    expect(checkCitation(files, SHA, "archive/fixtures-2026-01/dir5--sample-drift-check-poc.md", "Production is still dark").verified)
       .toBe(false);
-    expect(checkCitation(files, SHA, "./projects/beacon.md", "Production is still dark").verified).toBe(false);
+    expect(checkCitation(files, SHA, "./projects/sample.md", "Production is still dark").verified).toBe(false);
     expect(checkCitation(files, SHA, "tools/eval/verify_citation.py", "deterministic proof that a cited quote").verified)
       .toBe(false);
   });
@@ -792,7 +792,7 @@ describe("parity with brain/tools/eval/verify_citation.py", () => {
     // which is what the differential harness compares, so this is invisible to it; but the
     // eval cannot tell an exact match from a normalised one on any retracted passage, and it
     // has no field corresponding to `superseded` on a non-retracted one.
-    const v = verifyQuote(BEACON_BEACON, "Daily Beacon Check live in production at https://beacon-demo");
+    const v = verifyQuote(SAMPLE_STATUS, "Daily Sample Check live in production at https://sample-demo");
     expect(v.verified).toBe(true);
     expect(v.reason).toBe("exact");
     expect(v.superseded).toBe(true);
@@ -800,8 +800,8 @@ describe("parity with brain/tools/eval/verify_citation.py", () => {
   });
 
   it("OK: the shared folds agree — dashes, curly quotes, NBSP, markdown wrappers, case", () => {
-    expect(verifyQuote("still open — confirmed 2026-07-25", "still open -- confirmed 2026-07-25").verified).toBe(true);
-    expect(verifyQuote("Obelyth/beacon’s config.yml is dirty", "Obelyth/beacon's config.yml is dirty").verified).toBe(true);
+    expect(verifyQuote("still open — confirmed 2025-02-17", "still open -- confirmed 2025-02-17").verified).toBe(true);
+    expect(verifyQuote("Obelyth/sample’s config.yml is dirty", "Obelyth/sample's config.yml is dirty").verified).toBe(true);
     expect(verifyQuote("it said “still to be created” now", 'it said "still to be created" now').verified).toBe(true);
     expect(verifyQuote("**Production is still dark**", "Production is still dark").verified).toBe(true);
     expect(verifyQuote("the tab is named By Lane today", "named By lane today").verified).toBe(false);
@@ -899,8 +899,8 @@ if (haveBrain) describe("live brain corpus", () => {
       const lines = text.split("\n");
       // A `# comment` inside a fenced code block is shell, not a markdown heading — and the
       // fence interior is deliberately ONE verifier block, so such a span verifying is the
-      // verifier working, not a merge. Live: the mac-lockout note's rescue script turned this
-      // gate red on three bash comments.
+      // verifier working, not a merge. A note carrying a shell script once turned this gate red
+      // on its bash comments.
       let inFence = false;
       for (let i = 0; i < lines.length - 1; i++) {
         if (/^(```|~~~)/.test(lines[i])) inFence = !inFence;

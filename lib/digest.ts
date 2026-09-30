@@ -48,8 +48,8 @@ const MAX_TAG_CHARS = 40;
  *
  * These are NOT day logs. A history page is one month of one project's record, written once and
  * afterwards reached by name, so it keeps its own authored description and its own router row.
- * The prefix is what lets the router tell "one month of harbor, findable" apart from "one day,
- * derived": both are dated, only one is worth a row of the always-loaded budget.
+ * The prefix is what lets the router tell "one month of project-alpha, findable" apart from "one
+ * day, derived": both are dated, only one is worth a row of the always-loaded budget.
  *
  * THE OPTIONAL `-<n>` IS A PART, NOT A DAY. A month is a filing rule, not a size: one month of a
  * project running flat out is a quarter of a megabyte, and a history note that big brings back
@@ -62,8 +62,8 @@ const MAX_TAG_CHARS = 40;
  *
  * ONE DEFINITION, imported by both users. scripts/split-project-page.ts cuts history notes to
  * this bound, and lib/inbox.ts raises a page that has crossed it — a threshold written twice is
- * a threshold that drifts, which is the failure this repo has now found in its export gate, its
- * brain-gate suite list and its router budget in the same week.
+ * a threshold that drifts, which is the failure this repo has found in its export gate, its
+ * brain-backed suite list and its router budget.
  *
  * A month is a filing rule, not a size. A large history note can crowd everything else out of a
  * pack, so the generic threshold remains independent of any one corpus snapshot.
@@ -81,8 +81,8 @@ export function isHistoryPath(path: string): boolean {
 }
 
 /**
- * The source page a history part belongs to — `history/harbor-2026-08-2.md` → `harbor`. Null
- * for a non-history path. Distinct from `monthKey`: two months of the same page share a page
+ * The source page a history part belongs to — `history/project-alpha-2026-08-2.md` →
+ * `project-alpha`. Null for a non-history path. Distinct from `monthKey`: two months of the same page share a page
  * name but not a month key. narrow()'s per-pack part cap groups by page, not by month, because
  * an oversized project's history floods a pack across MONTHS, not just within one — capping
  * per month would still let every month of the same page compete for its own slots.
@@ -101,13 +101,13 @@ export function dateFromLogPath(path: string): string {
  * `log/2026-08-04.md` → `log/2026-08`. Many days collapse onto one key, which is the point: the
  * router spends one row on the month instead of one per day, forever.
  *
- * `history/harbor-2026-08.md` → `history/harbor-2026-08` — itself, minus the extension. A history
- * page is already exactly one month and collapses with nothing. It answers anyway so that callers
+ * `history/project-alpha-2026-08.md` → `history/project-alpha-2026-08` — itself, minus the
+ * extension. A history page is already exactly one month and collapses with nothing. It answers anyway so that callers
  * asking "is this path routed, or is its month?" have ONE rule to apply rather than a rule and an
  * exception; the router's coverage guarantee is stated in those terms.
  *
- * `history/harbor-2026-08-2.md` → `history/harbor-2026-08` as well. The parts of an oversized
- * month are siblings, not three different months, so the key is composed from the match rather
+ * `history/project-alpha-2026-08-2.md` → `history/project-alpha-2026-08` as well. The parts of an
+ * oversized month are siblings, not three different months, so the key is composed from the match rather
  * than sliced off the filename — the difference matters only here, and only for parts.
  */
 export function monthKey(path: string): string | null {

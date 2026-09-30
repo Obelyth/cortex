@@ -39,8 +39,8 @@ describe("working-state project options route", () => {
       sha: "private-sha",
       files: new Map([
         ["projects/Kiln.MD", "private body"],
-        ["projects/harbor.md", "password=body-must-never-leave"],
-        ["projects/Harbor.md", "duplicate body"],
+        ["projects/hotel.md", "password=body-must-never-leave"],
+        ["projects/Hotel.md", "duplicate body"],
         ["projects/password=synthetic-hidden.md", "benign body"],
         ["projects/.md", "empty project"],
         [`projects/${"x".repeat(81)}.md`, "long project"],
@@ -54,7 +54,7 @@ describe("working-state project options route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(JSON.parse(text)).toEqual({ projects: ["harbor", "kiln"], truncated: false });
+    expect(JSON.parse(text)).toEqual({ projects: ["hotel", "kiln"], truncated: false });
     expect(text).not.toMatch(/private|password|synthetic-hidden|archive|private-sha/);
   });
 
@@ -76,10 +76,10 @@ describe("working-state project options route", () => {
     const credentialNames = [`AIza${"A".repeat(35)}`, `AKIA${"A".repeat(16)}`];
     corpus.loadCorpus.mockResolvedValue({ files: new Map([
       ...credentialNames.map(name => [`projects/${name}.md`, "synthetic fixture"] as const),
-      ["projects/harbor.md", "safe project"],
+      ["projects/hotel.md", "safe project"],
     ]) });
     const response = await GET(request(), ctx);
-    expect(await response.json()).toEqual({ projects: ["harbor"], truncated: false });
+    expect(await response.json()).toEqual({ projects: ["hotel"], truncated: false });
   });
 
   it("returns a fixed no-store failure without provider details", async () => {

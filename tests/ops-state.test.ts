@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { deriveState, nextDue, isPageable, type Unit, type Run } from "../lib/ops-state";
 
-const T0 = new Date("2026-09-02T09:17:00Z");
+const T0 = new Date("2026-09-02T06:40:00Z");
 const min = (n: number) => new Date(T0.getTime() + n * 60_000);
 const iso = (d: Date) => d.toISOString();
 const unit = (o: Partial<Unit> = {}): Unit => ({ id: "gk", kind: "routine", name: "gk", owner: "manager", period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: null, notes: null, ...o });
@@ -38,7 +38,7 @@ describe("deriveState", () => {
   });
   it("paused wins over everything while paused_until is ahead", () => expect(deriveState(unit({ paused_until: iso(min(60)) }), yesterday, null, min(40))).toBe("paused"));
   it("machines are seen or quiet, never late", () => {
-    const m = unit({ id: "rog", kind: "machine", period_s: 900, grace_s: 1800, pages: false });
+    const m = unit({ id: "box-a", kind: "machine", period_s: 900, grace_s: 1800, pages: false });
     const hb = run({ trigger: "heartbeat", started_at: iso(min(-4)), ended_at: iso(min(-4)), state: "seen" });
     expect(deriveState(m, hb, null, T0)).toBe("seen");
     expect(deriveState(m, hb, null, min(40))).toBe("quiet");

@@ -68,9 +68,9 @@ function snapshot(raw:unknown):{outcome:string;current:GuestSnapshot}{
  * A scope entry is either an exact note path or a directory prefix ENDING IN `/`.
  *
  * The trailing slash is load-bearing, because applyScope matches with startsWith: an entry of
- * `projects/harbor` — which the old pattern allowed, and which reads as "the harbor project" —
- * also covers projects/harbor-comp.md and projects/harbor-private.md. A prefix that can stop
- * mid-segment is a scope that silently includes siblings, and with citations off there is
+ * `projects/project-alpha` — which the old pattern allowed, and which reads as "the project-alpha
+ * project" — also covers projects/project-alpha-comp.md and projects/project-alpha-private.md. A
+ * prefix that can stop mid-segment is a scope that silently includes siblings, and with citations off there is
  * nothing in the reply to reveal it.
  *
  * `archive/` is gone: corpus.ts excludes the whole prefix from the reader corpus, so an archive
@@ -93,7 +93,7 @@ function parse(raw: unknown): GuestPolicy {
   }
   if (o === null || typeof o !== "object") return { ...GUEST_DEFAULTS };
   const r = o as Record<string, unknown>;
-  // Legacy entries stored before scope entries required a trailing slash (`projects/harbor`)
+  // Legacy entries stored before scope entries required a trailing slash (`projects/project-alpha`)
   // are NORMALISED, not dropped. Dropping them would empty the array and fall through to
   // GUEST_DEFAULTS below — turning a deliberately narrow policy into the wide default, which is
   // the exact fail-open direction this file forbids. Appending the slash keeps the operator's

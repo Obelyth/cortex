@@ -10,7 +10,7 @@ const helpers = await import(helperPath);
 const repo = { full_name: "example/brain", private: true, archived: false, default_branch: "notes" };
 const deployment = {
   id: "dpl_fresh", projectId: "prj_fresh", target: "production", readyState: "READY",
-  url: "fresh-unique.vercel.app", alias: ["actual-production.vercel.app"],
+  url: "your-deploy-fresh.vercel.app", alias: ["your-deploy-prod.vercel.app"],
 };
 
 describe("onboarding trust boundaries", () => {
@@ -58,32 +58,32 @@ describe("onboarding trust boundaries", () => {
   it("uses only an API-returned alias and verifies that alias resolves to this deployment", async () => {
     expect(helpers.resolveProductionOrigin).toBeTypeOf("function");
     const read = vi.fn().mockResolvedValue(deployment);
-    await expect(helpers.resolveProductionOrigin("https://fresh-unique.vercel.app", "prj_fresh", read))
-      .resolves.toBe("https://actual-production.vercel.app");
-    expect(read.mock.calls).toEqual([["fresh-unique.vercel.app"], ["actual-production.vercel.app"]]);
+    await expect(helpers.resolveProductionOrigin("https://your-deploy-fresh.vercel.app", "prj_fresh", read))
+      .resolves.toBe("https://your-deploy-prod.vercel.app");
+    expect(read.mock.calls).toEqual([["your-deploy-fresh.vercel.app"], ["your-deploy-prod.vercel.app"]]);
   });
 
   it.each([
     { ...deployment, projectId: "prj_other" }, { ...deployment, target: "preview" },
-    { ...deployment, readyState: "ERROR" }, { ...deployment, url: "different.vercel.app" },
+    { ...deployment, readyState: "ERROR" }, { ...deployment, url: "your-deploy-other.vercel.app" },
     { ...deployment, alias: [] }, { ...deployment, alias: ["https://evil.test/path"] },
   ])("rejects deployment metadata that cannot establish a production host: %j", async (value) => {
     expect(helpers.resolveProductionOrigin).toBeTypeOf("function");
-    await expect(helpers.resolveProductionOrigin("https://fresh-unique.vercel.app", "prj_fresh", vi.fn().mockResolvedValue(value)))
+    await expect(helpers.resolveProductionOrigin("https://your-deploy-fresh.vercel.app", "prj_fresh", vi.fn().mockResolvedValue(value)))
       .rejects.toThrow();
   });
 
   it("refuses an alias reassigned after the deployment was inspected", async () => {
     expect(helpers.resolveProductionOrigin).toBeTypeOf("function");
     const read = vi.fn().mockResolvedValueOnce(deployment).mockResolvedValueOnce({ ...deployment, id: "dpl_other" });
-    await expect(helpers.resolveProductionOrigin("https://fresh-unique.vercel.app", "prj_fresh", read)).rejects.toThrow();
+    await expect(helpers.resolveProductionOrigin("https://your-deploy-fresh.vercel.app", "prj_fresh", read)).rejects.toThrow();
   });
 
   it("does not send a connector secret if provider verification fails", async () => {
     expect(helpers.checkDeployment).toBeTypeOf("function");
     const fetcher = vi.fn();
     await expect(helpers.checkDeployment({
-      deploymentUrl: "https://fresh-unique.vercel.app", projectId: "prj_fresh", secret: "test-secret",
+      deploymentUrl: "https://your-deploy-fresh.vercel.app", projectId: "prj_fresh", secret: "test-secret",
       readDeployment: vi.fn().mockResolvedValue({ ...deployment, projectId: "prj_other" }), fetcher,
     })).rejects.toThrow();
     expect(fetcher).not.toHaveBeenCalled();
@@ -95,12 +95,12 @@ describe("onboarding trust boundaries", () => {
       jsonrpc: "2.0", id: 1, result: { tools: [{ name: "brain_read" }, { name: "brain_context" }] },
     })));
     await expect(helpers.checkDeployment({
-      deploymentUrl: "https://fresh-unique.vercel.app", projectId: "prj_fresh", secret: "test-secret",
+      deploymentUrl: "https://your-deploy-fresh.vercel.app", projectId: "prj_fresh", secret: "test-secret",
       readDeployment: vi.fn().mockResolvedValue(deployment), fetcher,
-    })).resolves.toEqual({ origin: "https://actual-production.vercel.app", tools: ["brain_context", "brain_read"] });
+    })).resolves.toEqual({ origin: "https://your-deploy-prod.vercel.app", tools: ["brain_context", "brain_read"] });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const [url, options] = fetcher.mock.calls[0];
-    expect(url).toBe("https://actual-production.vercel.app/api/s/test-secret/mcp");
+    expect(url).toBe("https://your-deploy-prod.vercel.app/api/s/test-secret/mcp");
     expect(options.redirect).toBe("error");
     expect(JSON.parse(options.body).method).toBe("tools/list");
   });
@@ -111,20 +111,20 @@ describe("onboarding trust boundaries", () => {
       { headers: { "content-type": "text/event-stream" } },
     ));
     await expect(helpers.checkDeployment({
-      deploymentUrl: "https://fresh-unique.vercel.app", projectId: "prj_fresh", token: "test-bearer",
+      deploymentUrl: "https://your-deploy-fresh.vercel.app", projectId: "prj_fresh", token: "test-bearer",
       readDeployment: vi.fn().mockResolvedValue(deployment), fetcher,
-    })).resolves.toEqual({ origin: "https://actual-production.vercel.app", tools: ["brain_read"] });
-    expect(fetcher.mock.calls[0][0]).toBe("https://actual-production.vercel.app/api/mcp");
+    })).resolves.toEqual({ origin: "https://your-deploy-prod.vercel.app", tools: ["brain_read"] });
+    expect(fetcher.mock.calls[0][0]).toBe("https://your-deploy-prod.vercel.app/api/mcp");
     expect(fetcher.mock.calls[0][1].headers.Authorization).toBe("Bearer test-bearer");
     expect(fetcher.mock.calls[0][1].redirect).toBe("error");
   });
 
   it("scopes provider lookup to team accounts without treating a personal user ID as a team", () => {
     expect(helpers.deploymentLookupPath).toBeTypeOf("function");
-    expect(helpers.deploymentLookupPath("fresh-unique.vercel.app", "team_fresh"))
-      .toBe("/v13/deployments/fresh-unique.vercel.app?teamId=team_fresh");
-    expect(helpers.deploymentLookupPath("fresh-unique.vercel.app", "user_fresh"))
-      .toBe("/v13/deployments/fresh-unique.vercel.app");
+    expect(helpers.deploymentLookupPath("your-deploy-fresh.vercel.app", "team_fresh"))
+      .toBe("/v13/deployments/your-deploy-fresh.vercel.app?teamId=team_fresh");
+    expect(helpers.deploymentLookupPath("your-deploy-fresh.vercel.app", "user_fresh"))
+      .toBe("/v13/deployments/your-deploy-fresh.vercel.app");
   });
 
   it("does not start an interactive setup in a pipe or CI process", () => {

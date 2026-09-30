@@ -9,9 +9,9 @@ const corpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
-    ["notes/beacon-rollout.md", "> SUPERSEDED 2026-07-25 — see projects/beacon.md.\n- SHIPPED 2026-07-14: live in production."],
-    ["projects/harbor.md", "The plates backlog went into a deleted database."],
+    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["notes/sample-rollout.md", "> SUPERSEDED 2025-02-17 — see projects/sample.md.\n- LAUNCHED 2025-02-03: the demo is public."],
+    ["projects/hotel.md", "The import queue was written to a dropped table."],
     // House style for a correction made in place: the CURRENT claim, with the wording it
     // replaced kept beside it. Both sentences are verbatim in the same block.
     ["projects/atlas.md", 'The reader is pluggable (was: "the reader is always Claude" — updated 2026-08-03). Three providers are wired.'],
@@ -79,10 +79,10 @@ describe("parseReply", () => {
 
 describe("buildPrompt", () => {
   it("carries the contract and only the chosen files", () => {
-    const { prompt } = buildPrompt(corpus, "is beacon live", ["projects/beacon.md"]);
+    const { prompt } = buildPrompt(corpus, "is sample live", ["projects/sample.md"]);
     expect(prompt).toContain(ANSWER_CONTRACT);
-    expect(prompt).toContain("FILE: projects/beacon.md");
-    expect(prompt).not.toContain("FILE: projects/harbor.md");
+    expect(prompt).toContain("FILE: projects/sample.md");
+    expect(prompt).not.toContain("FILE: projects/hotel.md");
   });
 
   it("keeps the pack byte-identical per commit, and re-derives every tag when the head moves", () => {
@@ -90,30 +90,30 @@ describe("buildPrompt", () => {
     // must produce the same bytes or the cache never hits. The forgery defence moves to the
     // commit boundary — a note cannot contain the tag of the commit that includes it (the SHA
     // depends on the note's own bytes), and writing a leaked tag down moves the head.
-    const a = buildPrompt(corpus, "first question", ["projects/beacon.md"]);
-    const b = buildPrompt(corpus, "a different question", ["projects/beacon.md"]);
+    const a = buildPrompt(corpus, "first question", ["projects/sample.md"]);
+    const b = buildPrompt(corpus, "a different question", ["projects/sample.md"]);
     expect(a.stable).toBe(b.stable);
     expect([...a.tags.keys()]).toEqual([...b.tags.keys()]);
-    expect([...a.tags.values()]).toEqual(["projects/beacon.md"]);
+    expect([...a.tags.values()]).toEqual(["projects/sample.md"]);
 
-    const moved = buildPrompt({ ...corpus, sha: "ffff0000ffff0000" }, "first question", ["projects/beacon.md"]);
+    const moved = buildPrompt({ ...corpus, sha: "ffff0000ffff0000" }, "first question", ["projects/sample.md"]);
     expect([...moved.tags.keys()][0]).not.toBe([...a.tags.keys()][0]);
   });
 
   it("puts the question AFTER the pack, outside the cacheable prefix", () => {
     // Question-first would put the one varying string ahead of the stable bytes — exactly
     // backwards for a prefix-matched cache.
-    const p = buildPrompt(corpus, "is beacon live", ["projects/beacon.md"]);
+    const p = buildPrompt(corpus, "is sample live", ["projects/sample.md"]);
     expect(p.prompt).toBe(`${p.stable}${p.question}`);
     expect(p.stable).not.toContain("QUESTION:");
-    expect(p.question).toContain("QUESTION: is beacon live");
-    expect(p.prompt.indexOf("FILE: projects/beacon.md")).toBeLessThan(p.prompt.indexOf("QUESTION:"));
+    expect(p.question).toContain("QUESTION: is sample live");
+    expect(p.prompt.indexOf("FILE: projects/sample.md")).toBeLessThan(p.prompt.indexOf("QUESTION:"));
   });
 });
 
 describe("ask", () => {
   it("verifies a true citation and reports the commit", async () => {
-    const r = await ask("is beacon live", citing("projects/beacon.md", "Production is still dark", "No — production is dark."));
+    const r = await ask("is sample live", citing("projects/sample.md", "The demo is offline", "No — the demo is offline."));
     expect(r.citation?.verified).toBe(true);
     expect(r.commit).toBe("eaf0a03e4849");
     expect(r.notInBrain).toBe(false);
@@ -122,7 +122,7 @@ describe("ask", () => {
   });
 
   it("stamps a corrected-in-place passage as CORRECTED, not as history to discard", async () => {
-    // The measured failure this split fixes: two CORRECT, CURRENT answers off the live brain
+    // The failure this split fixes: CORRECT, CURRENT answers
     // came back stamped "It is history, not the current state. Do not answer from it." Because
     // house style writes corrections as `<current> (was: "<old>")`, the block holding the truth
     // matched the retraction pattern and got the strongest possible discard instruction.
@@ -150,7 +150,7 @@ describe("ask", () => {
   });
 
   it("flags a fabricated quote instead of passing it through", async () => {
-    const r = await ask("is beacon live", citing("projects/beacon.md", "Beacon is fully live in production", "It shipped."));
+    const r = await ask("is sample live", citing("projects/sample.md", "The sample demo is public and working", "It launched."));
     expect(r.citation?.verified).toBe(false);
     expect(render(r)).toMatch(/UNVERIFIED/);
     expect(render(r)).toMatch(/unproven/);
@@ -167,10 +167,10 @@ describe("ask", () => {
   it("keeps a provable citation even when the answer says the words NOT IN BRAIN", async () => {
     // Absence is structural. Matching the phrase anywhere in the answer threw away a correct,
     // verified citation whenever the reader happened to mention the contract or brain-index.
-    const r = await ask("is beacon live", citing(
-      "projects/beacon.md",
-      "Production is still dark",
-      "That detail is not in brain-index.md, but projects/beacon.md covers it."
+    const r = await ask("is sample live", citing(
+      "projects/sample.md",
+      "The demo is offline",
+      "That detail is not in brain-index.md, but projects/sample.md covers it."
     ));
     expect(r.notInBrain).toBe(false);
     expect(r.citation?.verified).toBe(true);
@@ -189,14 +189,14 @@ describe("ask", () => {
   it("narrows by default and can be asked for the full corpus", async () => {
     let seen = 0;
     const reader = async (p: ReaderPrompt) => { seen = (p.stable.match(/={20} FILE: /g) ?? []).length; return "{}"; };
-    await ask("plates backlog deleted database", reader, { k: 1 });
+    await ask("import queue dropped table", reader, { k: 1 });
     expect(seen).toBe(1);
-    await ask("plates backlog deleted database", reader, { full: true });
+    await ask("import queue dropped table", reader, { full: true });
     expect(seen).toBe(corpus.files.size);
   });
 
   it("reports the pack size so cost is visible per call", async () => {
-    const r = await ask("beacon", async () => "{}", { k: 1 });
+    const r = await ask("sample", async () => "{}", { k: 1 });
     expect(r.packTokens).toBeGreaterThan(0);
     expect(r.candidates).toHaveLength(1);
   });
@@ -204,10 +204,10 @@ describe("ask", () => {
   it("surfaces both sides of a contradiction in the pack", async () => {
     // The stale note outranks the live one lexically; the pack must contain BOTH so the
     // reader can see the SUPERSEDED stamp and resolve it. This is the architecture's
-    // answer to the beacon contradiction — the filter does not get to decide.
-    const r = await ask("is beacon shipped or is production dark", async () => "{}", { k: 2 });
-    expect(r.candidates).toContain("notes/beacon-rollout.md");
-    expect(r.candidates).toContain("projects/beacon.md");
+    // answer to the sample contradiction — the filter does not get to decide.
+    const r = await ask("is sample launched or is the demo offline", async () => "{}", { k: 2 });
+    expect(r.candidates).toContain("notes/sample-rollout.md");
+    expect(r.candidates).toContain("projects/sample.md");
   });
 
   it("propagates a reader failure instead of answering from nothing", async () => {

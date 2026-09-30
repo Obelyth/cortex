@@ -25,23 +25,23 @@ const edge = (src: string, dst: string, kind: EdgeRow["kind"], weight = 1): Edge
 });
 
 /**
- * A corpus where BM25 has strong opinions: the question "harbor tuning" ranks the harbor notes,
- * and the graph knows things BM25 cannot see (a note that never says "harbor" but is linked).
+ * A corpus where BM25 has strong opinions: the question "hotel tuning" ranks the hotel notes,
+ * and the graph knows things BM25 cannot see (a note that never says "hotel" but is linked).
  */
 const FILES = corpus({
-  "projects/harbor.md": "harbor tuning results and the harbor pipeline",
-  "notes/harbor-tuning.md": "harbor tuning parameters, harbor tuning sweep",
-  "notes/harbor-deploy.md": "harbor deploy checklist",
+  "projects/hotel.md": "hotel tuning results and the hotel pipeline",
+  "notes/hotel-tuning.md": "hotel tuning parameters, hotel tuning sweep",
+  "notes/hotel-deploy.md": "hotel deploy checklist",
   "notes/soundings.md": "depth measurements, nothing else",
   "notes/kiln.md": "kiln firing schedule",
   "notes/unrelated.md": "completely different topic entirely",
 });
 
 const EDGES: EdgeRow[] = [
-  edge("projects/harbor.md", "notes/soundings.md", "link", 3),
-  edge("projects/harbor.md", "notes/kiln.md", "tag", 1),
-  edge("notes/harbor-tuning.md", "notes/unrelated.md", "coaccess", 5),
-  edge("projects/harbor.md", "notes/harbor-deploy.md", "lexical", 4.2),
+  edge("projects/hotel.md", "notes/soundings.md", "link", 3),
+  edge("projects/hotel.md", "notes/kiln.md", "tag", 1),
+  edge("notes/hotel-tuning.md", "notes/unrelated.md", "coaccess", 5),
+  edge("projects/hotel.md", "notes/hotel-deploy.md", "lexical", 4.2),
 ];
 
 const FILL_ONLY = HOP_SHAPES["fill-only"];
@@ -53,13 +53,13 @@ describe("buildAdjacency", () => {
     const b = buildAdjacency([...EDGES].reverse());
     expect(a).toEqual(b);
     // Both endpoints see the edge — retrieval asks "what travels with this note", not who said it.
-    expect(a.get("projects/harbor.md")!.map((n) => n.other)).toContain("notes/soundings.md");
-    expect(a.get("notes/soundings.md")!.map((n) => n.other)).toContain("projects/harbor.md");
+    expect(a.get("projects/hotel.md")!.map((n) => n.other)).toContain("notes/soundings.md");
+    expect(a.get("notes/soundings.md")!.map((n) => n.other)).toContain("projects/hotel.md");
   });
 
   it("sorts each neighbour list by weight desc, then path — same rows, same order, every time", () => {
     const adj = buildAdjacency(EDGES);
-    const weights = adj.get("projects/harbor.md")!.map((n) => n.weight);
+    const weights = adj.get("projects/hotel.md")!.map((n) => n.weight);
     expect(weights).toEqual([...weights].sort((x, y) => y - x));
   });
 });
@@ -67,9 +67,9 @@ describe("buildAdjacency", () => {
 describe("hopNarrow — determinism", () => {
   it("returns byte-identical candidates across repeated calls and across adjacency row order", () => {
     for (const config of Object.values(HOP_SHAPES)) {
-      const a = hopNarrow(FILES, "harbor tuning", 5, buildAdjacency(EDGES), config);
-      const b = hopNarrow(FILES, "harbor tuning", 5, buildAdjacency([...EDGES].reverse()), config);
-      const c = hopNarrow(FILES, "harbor tuning", 5, buildAdjacency(EDGES), config);
+      const a = hopNarrow(FILES, "hotel tuning", 5, buildAdjacency(EDGES), config);
+      const b = hopNarrow(FILES, "hotel tuning", 5, buildAdjacency([...EDGES].reverse()), config);
+      const c = hopNarrow(FILES, "hotel tuning", 5, buildAdjacency(EDGES), config);
       expect(b).toEqual(a);
       expect(c).toEqual(a);
     }
@@ -79,7 +79,7 @@ describe("hopNarrow — determinism", () => {
     const adj = buildAdjacency(EDGES);
     for (const config of Object.values(HOP_SHAPES)) {
       for (const k of [1, 3, 5, 10]) {
-        const got = hopNarrow(FILES, "harbor tuning", k, adj, config);
+        const got = hopNarrow(FILES, "hotel tuning", k, adj, config);
         expect(got.length).toBeLessThanOrEqual(k);
         expect(new Set(got).size).toBe(got.length);
       }
@@ -92,8 +92,8 @@ describe("hopNarrow — budget invariants (the FTS lesson, as executable law)", 
     const adj = buildAdjacency(EDGES);
     const config = HOP_SHAPES[BEST_MEASURED];
     for (const k of [1, 2, 3, 5, 10]) {
-      const bm = narrow(FILES, "harbor tuning", k);
-      const got = hopNarrow(FILES, "harbor tuning", k, adj, config);
+      const bm = narrow(FILES, "hotel tuning", k);
+      const got = hopNarrow(FILES, "hotel tuning", k, adj, config);
       // The whole of BM25's own answer survives, in BM25's own order, at the front.
       expect(got.slice(0, bm.length)).toEqual(bm);
     }
@@ -101,10 +101,10 @@ describe("hopNarrow — budget invariants (the FTS lesson, as executable law)", 
 
   it("at k=5 no SHIPPED shape with a k-aware guard displaces BM25's top-5", () => {
     const adj = buildAdjacency(EDGES);
-    const bm = narrow(FILES, "harbor tuning", 5);
+    const bm = narrow(FILES, "hotel tuning", 5);
     for (const [name, config] of Object.entries(HOP_SHAPES)) {
       if (config.tailSlots > 0 && config.displaceAboveK < 5) continue; // displacing shapes, measured and rejected
-      const got = hopNarrow(FILES, "harbor tuning", 5, adj, config);
+      const got = hopNarrow(FILES, "hotel tuning", 5, adj, config);
       expect(got.slice(0, bm.length), name).toEqual(bm);
     }
   });
@@ -112,8 +112,8 @@ describe("hopNarrow — budget invariants (the FTS lesson, as executable law)", 
   it("a displacing shape touches ONLY the declared tail slots — the protected prefix is inviolate", () => {
     const adj = buildAdjacency(EDGES);
     const k = 4;
-    const bmRanked = rank(FILES, "harbor tuning").map((s) => s.path);
-    const got = hopNarrow(FILES, "harbor tuning", k, adj, TAIL2);
+    const bmRanked = rank(FILES, "hotel tuning").map((s) => s.path);
+    const got = hopNarrow(FILES, "hotel tuning", k, adj, TAIL2);
     // Top (k - tailSlots) BM25 ranks, exact and in order.
     expect(got.slice(0, k - TAIL2.tailSlots)).toEqual(bmRanked.slice(0, k - TAIL2.tailSlots));
   });
@@ -121,13 +121,13 @@ describe("hopNarrow — budget invariants (the FTS lesson, as executable law)", 
   it("k-aware guard: below the threshold the displacing config behaves exactly like fill-only", () => {
     const adj = buildAdjacency(EDGES);
     const kaware = HOP_SHAPES["k-aware tail-2"];
-    expect(hopNarrow(FILES, "harbor tuning", 5, adj, kaware)).toEqual(
-      hopNarrow(FILES, "harbor tuning", 5, adj, { ...kaware, tailSlots: 0 })
+    expect(hopNarrow(FILES, "hotel tuning", 5, adj, kaware)).toEqual(
+      hopNarrow(FILES, "hotel tuning", 5, adj, { ...kaware, tailSlots: 0 })
     );
     // Above the threshold the tail opens up, but the protected prefix still holds.
-    const bmRanked = rank(FILES, "harbor tuning").map((s) => s.path);
+    const bmRanked = rank(FILES, "hotel tuning").map((s) => s.path);
     const guarded = Math.min(6 - kaware.tailSlots, bmRanked.length);
-    const at6 = hopNarrow(FILES, "harbor tuning", 6, adj, kaware);
+    const at6 = hopNarrow(FILES, "hotel tuning", 6, adj, kaware);
     expect(at6.slice(0, guarded)).toEqual(bmRanked.slice(0, guarded));
   });
 });
@@ -156,7 +156,7 @@ describe("hopNarrow — fill and fallback", () => {
   it("an empty adjacency makes every shape collapse to plain BM25", () => {
     const none = buildAdjacency([]);
     for (const config of Object.values(HOP_SHAPES)) {
-      expect(hopNarrow(FILES, "harbor tuning", 5, none, config)).toEqual(narrow(FILES, "harbor tuning", 5));
+      expect(hopNarrow(FILES, "hotel tuning", 5, none, config)).toEqual(narrow(FILES, "hotel tuning", 5));
     }
   });
 });

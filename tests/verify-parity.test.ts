@@ -11,7 +11,7 @@
  *      it is skipped in CI — but skipped VISIBLY, never silently dropped from the count.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -25,8 +25,8 @@ const PY = path.join(BRAIN, "tools", "eval", "verify_citation.py");
 export const CASES = [
   "brain_ask",
   "brainask",
-  "top-1 > 58.4%",
-  "top-1 58.4%",
+  "top-1 > 41.2%",
+  "top-1 41.2%",
   "notes/*.md",
   "notes/.md",
   "#7 open",
@@ -41,8 +41,8 @@ export const CASES = [
   // that actually diverged between the two implementations while this golden stayed green.
   // The list only covered `**bold** text`, where the marker follows a letter, so it could not
   // see the disagreement. A golden that omits the interesting cases is not a golden.
-  "**58.4%**, MRR 0.727",
-  "58.4%, MRR 0.727",
+  "**41.2%**, MRR 0.613",
+  "41.2%, MRR 0.613",
   "**Label:** value",
   "Label: value",
   "**Sentence ends here.** next",
@@ -61,8 +61,8 @@ export const CASES = [
   "- bullet line of text",
   "1. numbered line of text",
   "a​b sufficiently long",
-  "Production is﻿still dark",
-  "Production is still dark",
+  "The demo is﻿still offline",
+  "The demo is still offline",
   "﻿leading bom text here",
   "soft­hyphen padded text",
   "softhyphen padded text",
@@ -79,7 +79,7 @@ describe("normalise — pinned golden", () => {
     // measurement became an inequality and an identifier got silently renamed.
     const pairs: Array<[string, string]> = [
       ["brain_ask", "brainask"],
-      ["top-1 > 58.4%", "top-1 58.4%"],
+      ["top-1 > 41.2%", "top-1 41.2%"],
       ["notes/*.md", "notes/.md"],
       ["#7 open", "7 open"],
       ["template > GitHub > hook > CLAUDE.md", "template GitHub hook CLAUDE.md"],
@@ -90,10 +90,9 @@ describe("normalise — pinned golden", () => {
 
   it("folds bold that swallows its own trailing punctuation", () => {
     // The regression this golden failed to catch. The CLOSE rule once named its ALLOWED
-    // predecessors, which excluded `.` `:` `%` and accented letters — 259 of 727 markdown
-    // blocks in the live brain stopped verifying when a reader dropped the markdown, and the
-    // two implementations silently disagreed for a while because none of these were pinned.
-    expect(normalise("**58.4%**, MRR 0.727")).toBe(normalise("58.4%, MRR 0.727"));
+    // predecessors, which excluded `.` `:` `%` and accented letters — markdown blocks stopped
+    // verifying when a reader dropped the markdown, and the two implementations silently disagreed for a while because none of these were pinned.
+    expect(normalise("**41.2%**, MRR 0.613")).toBe(normalise("41.2%, MRR 0.613"));
     expect(normalise("**Label:** value")).toBe(normalise("Label: value"));
     expect(normalise("**Sentence ends here.** next")).toBe(normalise("Sentence ends here. next"));
     expect(normalise("**café** text")).toBe(normalise("café text"));
@@ -121,7 +120,7 @@ describe("normalise — pinned golden", () => {
     // Folding widened matches; U+FEFF in particular was \s in JS and not in Python, so the
     // server was the more permissive of the two.
     expect(normalise("a​b sufficiently long")).toBe("ab sufficiently long");
-    expect(normalise("Production is﻿still dark")).toBe("Production isstill dark");
+    expect(normalise("The demo is﻿still offline")).toBe("The demo isstill offline");
     expect(normalise("soft­hyphen padded text")).toBe("softhyphen padded text");
     expect(normalise("﻿leading bom text here")).toBe("leading bom text here");
   });
@@ -145,8 +144,8 @@ describe("block scoping", () => {
     "",
     "eta theta iota kappa",
     "",
-    "| Ledger | confirm each time | not fixed |",
-    "| Harbor   | see project page  | no dev branch |",
+    "| Widget | review weekly | still open |",
+    "| Gadget   | see its own page  | no dev branch |",
   ].join("\n");
 
   it("joins soft-wrapped lines inside one paragraph", () => {
@@ -154,16 +153,16 @@ describe("block scoping", () => {
   });
 
   it("refuses a quote welded across a blank line — the splice with no artefact at all", () => {
-    // ~80,000 such spans existed in the live brain. A paragraph break and an intra-paragraph
-    // sentence space are the same character once whitespace is collapsed, so this splice left
-    // nothing to notice. It is caught by structure, not by inspection.
+    // A paragraph break and an intra-paragraph sentence space are the same character once
+    // whitespace is collapsed, so this splice left nothing to notice. It is caught by structure,
+    // not by inspection.
     const v = verifyQuote(doc, "epsilon zeta mu nu xi");
     expect(v.verified).toBe(false);
     expect(v.reason).toMatch(/spans a paragraph, list or section boundary/);
   });
 
   it("refuses a quote welded across a heading, which no longer even matches the file", () => {
-    // 192 of those spans crossed a heading, where stripping `#` everywhere deleted the only
+    // Some of those spans crossed a heading, where stripping `#` everywhere deleted the only
     // marker a section had been left. Line-leading-only stripping keeps the heading TEXT, so
     // the weld now fails the whole-file test too.
     const v = verifyQuote(doc, "mu nu xi omicron eta theta");
@@ -172,9 +171,9 @@ describe("block scoping", () => {
   });
 
   it("refuses a quote welded across two table rows", () => {
-    // The real case: notes/branch-policy.md, where welding rows moves one project's branch
+    // The case that matters: a policy table, where welding rows moves one project's branch
     // policy onto another — in a note whose entire purpose is not getting that wrong.
-    const v = verifyQuote(doc, "not fixed | Harbor | see project page");
+    const v = verifyQuote(doc, "still open | Gadget | see its own page");
     expect(v.verified).toBe(false);
   });
 
@@ -212,9 +211,18 @@ if (havePy) describe("TS/PY differential over the live verifier", () => {
   });
 
   it("agrees on real (file, quote) pairs from the live brain, splices included", () => {
-    const rel = "notes/beacon-rollout.md";
-    const file = path.join(BRAIN, rel);
-    if (!existsSync(file)) return;
+    // The first live note carrying a SUPERSEDED banner, so retracted passages are in the sample.
+    // Chosen at run time: no note name is pinned here, and a missing one fails instead of passing.
+    const rel = readdirSync(path.join(BRAIN, "notes"))
+      .filter((f) => f.endsWith(".md"))
+      .sort()
+      .map((f) => `notes/${f}`)
+      .find((r) => {
+        const t = readFileSync(path.join(BRAIN, r), "utf8");
+        return t.includes("SUPERSEDED") && t.split("\n").filter((l) => l.trim().length > 30).length >= 6;
+      });
+    expect(rel, "no live note with a SUPERSEDED banner").toBeDefined();
+    const file = path.join(BRAIN, rel as string);
     const lines = readFileSync(file, "utf8").split("\n").filter((l) => l.trim().length > 30);
     const quotes = [...lines.slice(0, 6).map((l) => l.trim()), `${lines[0].trim()} ${lines[4].trim()}`];
     const script = [

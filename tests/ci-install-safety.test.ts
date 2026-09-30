@@ -11,13 +11,13 @@ it("CI installs dependencies without executing package lifecycle code", () => {
   for (const [, command] of installs) {
     const scratch = mkdtempSync(join(tmpdir(), "cortex-ci-install-"));
     try {
-      const pkg = { name: "synthetic-install-canary", version: "1.0.0", scripts: { postinstall: "node canary.cjs" } };
+      const pkg = { name: "synthetic-install-sentinel", version: "1.0.0", scripts: { postinstall: "node sentinel.cjs" } };
       writeFileSync(join(scratch, "package.json"), JSON.stringify(pkg));
       writeFileSync(join(scratch, "package-lock.json"), JSON.stringify({
         name: pkg.name, version: pkg.version, lockfileVersion: 3, requires: true,
         packages: { "": { name: pkg.name, version: pkg.version, hasInstallScript: true } },
       }));
-      writeFileSync(join(scratch, "canary.cjs"), 'require("node:fs").writeFileSync("lifecycle-ran", "unexpected");');
+      writeFileSync(join(scratch, "sentinel.cjs"), 'require("node:fs").writeFileSync("lifecycle-ran", "unexpected");');
       const installed = spawnSync("npm", [...command.split(" "), "--offline", "--no-audit", "--no-fund"], {
         cwd: scratch, encoding: "utf8",
         env: { PATH: process.env.PATH, HOME: scratch, NODE_ENV: "test", npm_config_cache: join(scratch, "cache") },

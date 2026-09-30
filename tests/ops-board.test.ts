@@ -3,10 +3,10 @@ import { buildBoard, degradeLine, eventGlyph, humanDuration, opsBoard, primaryCo
 import { __setOpsStore } from "../lib/ops";
 import type { Run, Unit } from "../lib/ops-state";
 
-const T0 = new Date("2026-09-02T04:41:07Z");
+const T0 = new Date("2026-09-02T09:41:07Z");
 const gk: Unit = { id: "groundskeeper", kind: "routine", name: "Brain groundskeeper", owner: "manager", period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: { kind: "dispatch", target: "run-groundskeeper" }, notes: null };
-const secret: Unit = { ...gk, id: "console-secret", name: "Console secret", kind: "item", period_s: null, run_now: null };
-const done: Run = { id: 9, unit_id: "groundskeeper", run_key: "2026-09-01", trigger: "cron", scheduled_at: null, started_at: "2026-09-01T09:19:00Z", ended_at: "2026-09-01T09:25:12Z", lease_until: null, state: "succeeded", exit_reason: null, attempt: 1, summary: "2 pages corrected", error: null, evidence: ["https://github.com/example-owner/brain/commit/abcdef12"], cost: null, facts: null };
+const secret: Unit = { ...gk, id: "cert-renewal", name: "Certificate renewal", kind: "item", period_s: null, run_now: null };
+const done: Run = { id: 9, unit_id: "groundskeeper", run_key: "2026-09-01", trigger: "cron", scheduled_at: null, started_at: "2026-09-01T14:19:00Z", ended_at: "2026-09-01T14:25:12Z", lease_until: null, state: "succeeded", exit_reason: null, attempt: 1, summary: "2 pages corrected", error: null, evidence: ["https://github.com/example-owner/brain/commit/abcdef12"], cost: null, facts: null };
 
 describe("humanDuration", () => {
   it.each([[41, "41s"], [372, "6m 12s"], [16560, "4h 36m"], [266400, "3d 02h"]])("%d → %s", (s, out) => expect(humanDuration(s)).toBe(out));
@@ -17,10 +17,10 @@ describe("buildBoard", () => {
     const result = buildBoard([gk], new Map(), new Map(), new Map(), [{ unit_id: gk.id, run_id: null, actor: "operator", kind: "ack" }], T0);
     expect(result.timeline[0].line).toBe("Operator acknowledged Groundskeeper");
   });
-  const board = buildBoard([gk, secret], new Map([["groundskeeper", done]]), new Map(), new Map(), [{ id: 1, unit_id: "groundskeeper", run_id: 9, at: "2026-09-01T09:25:12Z", actor: "unit", kind: "finish", to_state: "succeeded", body: { evidence: ["https://github.com/example-owner/brain/commit/abcdef12"] } }], T0);
+  const board = buildBoard([gk, secret], new Map([["groundskeeper", done]]), new Map(), new Map(), [{ id: 1, unit_id: "groundskeeper", run_id: 9, at: "2026-09-01T14:25:12Z", actor: "unit", kind: "finish", to_state: "succeeded", body: { evidence: ["https://github.com/example-owner/brain/commit/abcdef12"] } }], T0);
   it("counts attention first and finds the next run", () => {
     expect(board.counts).toEqual({ needsYou: 1, running: 0, lateOrMissed: 0 });
-    // 09:25:12 + 24h = 2026-09-02T09:25:12Z; T0 = 2026-09-02T04:41:07Z; diff = 4h44m05s = 17045s.
+    // 14:25:12 + 24h = 2026-09-02T14:25:12Z; T0 = 2026-09-02T09:41:07Z; diff = 4h44m05s = 17045s.
     expect(board.nextRun).toEqual({ unit: "groundskeeper", inSeconds: 17045 });
   });
   it("groups by owner with reserved stations for the unbuilt operators", () => {
@@ -29,9 +29,9 @@ describe("buildBoard", () => {
   });
   it("sorts attention rows first and states the window on every figure", () => {
     const rows = board.groups[0].rows;
-    expect(rows[0].id).toBe("console-secret"); expect(rows[0].state).toBe("needs_you");
+    expect(rows[0].id).toBe("cert-renewal"); expect(rows[0].state).toBe("needs_you");
     expect(rows[1].schedule).toBe("nightly · next 4h 44m");
-    expect(rows[1].lastRun).toBe("09:19 → 09:25 · 6m 12s");
+    expect(rows[1].lastRun).toBe("14:19 → 14:25 · 6m 12s");
     expect(rows[1].evidence).toEqual(["abcdef12"]);
   });
   it("offers only the controls that make sense", () => {
@@ -83,7 +83,7 @@ describe("the strip", () => {
   });
   it("says why, and never claims a last known state it does not hold", () => {
     expect(degradeLine({ ...live, mode: "unconfigured" })).toBe("ops ledger not configured · env");
-    expect(degradeLine({ ...live, mode: "unreachable" })).toBe("unreachable this render · nothing shown · stamped 04:41:07 utc");
+    expect(degradeLine({ ...live, mode: "unreachable" })).toBe("unreachable this render · nothing shown · stamped 09:41:07 utc");
     expect(degradeLine({ ...live, mode: "unreachable" })).not.toContain("last known");
   });
 });
@@ -112,9 +112,9 @@ describe("rows carry what the fold discloses", () => {
 
 describe("the timeline speaks in state words, not column values", () => {
   it("renders a transition with the register's labels", () => {
-    const ev = { id: 2, unit_id: "console-secret", run_id: null, at: "2026-09-02T10:31:00Z", actor: "sweep" as const, kind: "transition" as const, from_state: "scheduled", to_state: "needs_you", body: {} };
+    const ev = { id: 2, unit_id: "cert-renewal", run_id: null, at: "2026-09-02T15:31:00Z", actor: "sweep" as const, kind: "transition" as const, from_state: "scheduled", to_state: "needs_you", body: {} };
     const board = buildBoard([secret], new Map(), new Map(), new Map(), [ev], T0);
-    expect(board.timeline[0].line).toBe("Console secret: Scheduled → Needs you");
+    expect(board.timeline[0].line).toBe("Certificate renewal: Scheduled → Needs you");
   });
 });
 
@@ -142,7 +142,7 @@ describe("eventGlyph — the same meaning, the same glyph", () => {
 describe("next run is a routine's, never a machine's heartbeat", () => {
   it("skips the heartbeat that would otherwise always be next", () => {
     const machine: Unit = { ...gk, id: "workstation-test", name: "Test workstation", kind: "machine", period_s: 900, run_now: null, pages: false };
-    const beat: Run = { ...done, id: 10, unit_id: "workstation-test", started_at: "2026-09-02T04:30:00Z", ended_at: "2026-09-02T04:30:02Z", evidence: [] };
+    const beat: Run = { ...done, id: 10, unit_id: "workstation-test", started_at: "2026-09-02T09:30:00Z", ended_at: "2026-09-02T09:30:02Z", evidence: [] };
     const board = buildBoard([gk, machine], new Map([["groundskeeper", done], ["workstation-test", beat]]), new Map(), new Map(), [], T0);
     expect(board.nextRun?.unit).toBe("groundskeeper");
   });

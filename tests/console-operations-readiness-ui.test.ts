@@ -102,28 +102,28 @@ describe("Settings operations permissions walkthrough",()=>{
   it("labels complete configuration as present but unverified and never claims working permission",()=>{
     const ref="abcdefghijklmnopqrst";
     const markup=operationsMarkup(renderSettings(getOperationsReadiness({
-      CORTEX_APP_REPO:"fixture/app",CORTEX_APP_BRANCH:"main",CORTEX_ACTIONS_TOKEN:"canary-actions",
-      CORTEX_VERCEL_TOKEN:"canary-vercel",CORTEX_VERCEL_PROJECT_ID:"prj_fixture",CORTEX_VERCEL_TEAM_ID:"team_fixture",
-      CORTEX_MIGRATION_TARGET:`supabase:${ref}:postgres`,SUPABASE_URL:`https://${ref}.supabase.co`,SUPABASE_SERVICE_ROLE_KEY:"canary-database",
+      CORTEX_APP_REPO:"fixture/app",CORTEX_APP_BRANCH:"main",CORTEX_ACTIONS_TOKEN:"sentinel-actions",
+      CORTEX_VERCEL_TOKEN:"sentinel-vercel",CORTEX_VERCEL_PROJECT_ID:"prj_fixture",CORTEX_VERCEL_TEAM_ID:"team_fixture",
+      CORTEX_MIGRATION_TARGET:`supabase:${ref}:postgres`,SUPABASE_URL:`https://${ref}.supabase.co`,SUPABASE_SERVICE_ROLE_KEY:"sentinel-database",
     })));
     expect(markup.match(/Present · unverified/g)).toHaveLength(4);
     expect(markup).toContain("fixture/app");
     expect(markup).toContain("prj_fixture");
     expect(markup).toContain("Presence is not proof");
     expect(markup).not.toContain("permission is working");
-    expect(markup).not.toContain("canary-actions");
-    expect(markup).not.toContain("canary-vercel");
-    expect(markup).not.toContain("canary-database");
+    expect(markup).not.toContain("sentinel-actions");
+    expect(markup).not.toContain("sentinel-vercel");
+    expect(markup).not.toContain("sentinel-database");
   });
 
   it("withholds malformed identities and gives every external next action noreferrer isolation",()=>{
     const markup=operationsMarkup(renderSettings(getOperationsReadiness({
-      CORTEX_APP_REPO:"unsafe repository canary",CORTEX_APP_BRANCH:"feature//unsafe",
+      CORTEX_APP_REPO:"unsafe repository sentinel",CORTEX_APP_BRANCH:"feature//unsafe",
       CORTEX_ACTIONS_TOKEN:"present",CORTEX_VERCEL_TOKEN:"present",
-      CORTEX_VERCEL_PROJECT_ID:"unsafe-project-canary",CORTEX_VERCEL_TEAM_ID:"unsafe-team-canary",
-      CORTEX_MIGRATION_TARGET:"unsafe-target-canary",SUPABASE_URL:"https://unsafe.example",SUPABASE_SERVICE_ROLE_KEY:"present",
+      CORTEX_VERCEL_PROJECT_ID:"unsafe-project-sentinel",CORTEX_VERCEL_TEAM_ID:"unsafe-team-sentinel",
+      CORTEX_MIGRATION_TARGET:"unsafe-target-sentinel",SUPABASE_URL:"https://unsafe.example",SUPABASE_SERVICE_ROLE_KEY:"present",
     })));
-    for(const unsafe of ["unsafe repository canary","feature//unsafe","unsafe-project-canary","unsafe-team-canary","unsafe-target-canary","https://unsafe.example"]){
+    for(const unsafe of ["unsafe repository sentinel","feature//unsafe","unsafe-project-sentinel","unsafe-team-sentinel","unsafe-target-sentinel","https://unsafe.example"]){
       expect(markup).not.toContain(unsafe);
     }
     expect(markup.match(/target="_blank" rel="noreferrer"/g)).toHaveLength(4);
@@ -132,8 +132,8 @@ describe("Settings operations permissions walkthrough",()=>{
   it("shows the affected fields and safe corrections before opening technical help",()=>{
     const markup=operationsMarkup(renderSettings(getOperationsReadiness({
       CORTEX_APP_BRANCH:"main",CORTEX_ACTIONS_TOKEN:"present",CORTEX_VERCEL_TOKEN:"present",
-      CORTEX_VERCEL_PROJECT_ID:"private-project-canary",CORTEX_VERCEL_TEAM_ID:"private-team-canary",
-      CORTEX_MIGRATION_TARGET:"private-migration-canary",SUPABASE_URL:"https://abcdefghijklmnopqrst.supabase.co",SUPABASE_SERVICE_ROLE_KEY:"present",
+      CORTEX_VERCEL_PROJECT_ID:"private-project-sentinel",CORTEX_VERCEL_TEAM_ID:"private-team-sentinel",
+      CORTEX_MIGRATION_TARGET:"private-migration-sentinel",SUPABASE_URL:"https://abcdefghijklmnopqrst.supabase.co",SUPABASE_SERVICE_ROLE_KEY:"present",
     })));
     const visible=markup.replace(/<details\b[\s\S]*?<\/details>/g,"");
     expect(visible).toContain("CORTEX_APP_REPO");
@@ -165,8 +165,8 @@ describe("Settings operations permissions walkthrough",()=>{
   it("shows safe corrections beside missing siblings before opening technical help",()=>{
     const markup=operationsMarkup(renderSettings(getOperationsReadiness({
       CORTEX_APP_BRANCH:"github_pat_syntheticOpaqueCredential123",
-      CORTEX_VERCEL_PROJECT_ID:"bad-project-canary",CORTEX_VERCEL_TEAM_ID:"bad-team-canary",
-      CORTEX_MIGRATION_TARGET:"bad-target-canary",SUPABASE_URL:"https://unsupported-canary.invalid",
+      CORTEX_VERCEL_PROJECT_ID:"bad-project-sentinel",CORTEX_VERCEL_TEAM_ID:"bad-team-sentinel",
+      CORTEX_MIGRATION_TARGET:"bad-target-sentinel",SUPABASE_URL:"https://unsupported-sentinel.invalid",
     })));
     const visible=markup.replace(/<details\b[\s\S]*?<\/details>/g,"");
     expect(visible.match(/Setup needed/g)).toHaveLength(4);
@@ -179,7 +179,7 @@ describe("Settings operations permissions walkthrough",()=>{
     expect(visible).toContain("CORTEX_MIGRATION_TARGET");
     expect(visible).toContain("same project-ref as SUPABASE_URL");
     expect(visible).toContain("Use the supported hosted Supabase project URL");
-    for(const unsafe of ["syntheticOpaqueCredential123","bad-project-canary","bad-team-canary","bad-target-canary","unsupported-canary"]){
+    for(const unsafe of ["syntheticOpaqueCredential123","bad-project-sentinel","bad-team-sentinel","bad-target-sentinel","unsupported-sentinel"]){
       expect(markup).not.toContain(unsafe);
     }
   });

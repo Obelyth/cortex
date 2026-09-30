@@ -51,37 +51,37 @@ describe.runIf(enabled)("bubble_open_scoped native PostgreSQL contract", () => {
   it("normalizes and filters before count/order/limit, with general controlled explicitly", async () => {
     const normalization = await client.query<{ normalized: string[] }>(`
       select array[
-        bubble_normalize_project(E'\tprojects/Harbor.md\t'),
-        bubble_normalize_project(chr(160) || 'projects/Harbor.md' || chr(160)),
+        bubble_normalize_project(E'\tprojects/Hotel.md\t'),
+        bubble_normalize_project(chr(160) || 'projects/Hotel.md' || chr(160)),
         bubble_normalize_project('İ'),
         bubble_normalize_project('Σ'),
         bubble_normalize_project('ΟΣ'),
         bubble_normalize_project('K')
       ] normalized
     `);
-    expect(normalization.rows[0].normalized).toEqual(["harbor", "harbor", "i̇", "σ", "ος", "k"]);
+    expect(normalization.rows[0].normalized).toEqual(["hotel", "hotel", "i̇", "σ", "ος", "k"]);
 
     await client.query(`
       insert into bubble_items(kind, project, body, touched_at)
       select 'focus', 'other', 'other-' || g, now() - (g || ' seconds')::interval
       from generate_series(1, 250) g;
       insert into bubble_items(kind, project, body, touched_at) values
-        ('focus', ' Projects/Harbor.MD ', 'scoped-old', now() - interval '1 hour'),
-        ('focus', E'\tprojects/Harbor.md\t', 'tab-padded', now() - interval '2 hours'),
-        ('focus', chr(160) || 'projects/Harbor.md' || chr(160), 'nbsp-padded', now() - interval '3 hours'),
+        ('focus', ' Projects/Hotel.MD ', 'scoped-old', now() - interval '1 hour'),
+        ('focus', E'\tprojects/Hotel.md\t', 'tab-padded', now() - interval '2 hours'),
+        ('focus', chr(160) || 'projects/Hotel.md' || chr(160), 'nbsp-padded', now() - interval '3 hours'),
         ('focus', 'Σ', 'unicode-case', now() - interval '4 hours'),
         ('focus', '', 'general-new', now()),
-        ('focus', 'harbor', 'expired', now() - interval '15 days');
+        ('focus', 'hotel', 'expired', now() - interval '15 days');
     `);
     const one = await client.query<{ value: { total: number; swept: number; items: Array<{ body: string }> } }>(
-      `select bubble_open_scoped(14, 1, ' projects/HARBOR.md ', true) as value`
+      `select bubble_open_scoped(14, 1, ' projects/HOTEL.md ', true) as value`
     );
     expect(one.rows[0].value.total).toBe(4);
     expect(one.rows[0].value.swept).toBe(1);
     expect(one.rows[0].value.items.map((x) => x.body)).toEqual(["general-new"]);
 
     const projectOnly = await client.query<{ value: { total: number; items: Array<{ body: string }> } }>(
-      `select bubble_open_scoped(14, 200, 'harbor', false) as value`
+      `select bubble_open_scoped(14, 200, 'hotel', false) as value`
     );
     expect(projectOnly.rows[0].value.total).toBe(3);
     expect(projectOnly.rows[0].value.items.map((x) => x.body)).toEqual(["scoped-old", "tab-padded", "nbsp-padded"]);

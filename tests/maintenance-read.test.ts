@@ -121,34 +121,34 @@ const filters = excludedModes(effectiveSql);
 
 describe("brain_read's maintenance flag", () => {
   it("logs mode 'read' when the flag is absent — the honest default for every existing caller", async () => {
-    const { row } = await readAndCaptureRow({ path: "projects/harbor.md" });
-    expect(row).toMatchObject({ path: "projects/harbor.md", tool: "brain_read", mode: "read" });
+    const { row } = await readAndCaptureRow({ path: "projects/hotel.md" });
+    expect(row).toMatchObject({ path: "projects/hotel.md", tool: "brain_read", mode: "read" });
   });
 
   it("logs mode 'read' when the flag is explicitly false", async () => {
-    const { row } = await readAndCaptureRow({ path: "projects/harbor.md", maintenance: false });
+    const { row } = await readAndCaptureRow({ path: "projects/hotel.md", maintenance: false });
     expect(row.mode).toBe("read");
   });
 
   it("logs mode 'maintenance' when the flag is true", async () => {
-    const { row } = await readAndCaptureRow({ path: "projects/harbor.md", maintenance: true });
-    expect(row).toMatchObject({ path: "projects/harbor.md", tool: "brain_read", mode: "maintenance" });
+    const { row } = await readAndCaptureRow({ path: "projects/hotel.md", maintenance: true });
+    expect(row).toMatchObject({ path: "projects/hotel.md", tool: "brain_read", mode: "maintenance" });
   });
 
   it("changes NOTHING a caller can observe except the logged mode", async () => {
     // The whole design rests on the sweep reading the same bytes through the same gate. If a
     // maintenance read ever returned less, callers would stop setting the flag to get the text.
-    const plain = await readAndCaptureRow({ path: "projects/harbor.md" });
-    const sweep = await readAndCaptureRow({ path: "projects/harbor.md", maintenance: true });
+    const plain = await readAndCaptureRow({ path: "projects/hotel.md" });
+    const sweep = await readAndCaptureRow({ path: "projects/hotel.md", maintenance: true });
     expect(sweep.text).toBe(plain.text);
     expect(sweep.isError).toBe(plain.isError);
     expect({ ...sweep.row, mode: null }).toEqual({ ...plain.row, mode: null });
   });
 
   it("accepts the old one-argument call shape, and rejects a non-boolean flag", () => {
-    expect(readSchema.safeParse({ path: "projects/harbor.md" }).success).toBe(true);
-    expect(readSchema.safeParse({ path: "projects/harbor.md", maintenance: true }).success).toBe(true);
-    expect(readSchema.safeParse({ path: "projects/harbor.md", maintenance: "yes" }).success).toBe(false);
+    expect(readSchema.safeParse({ path: "projects/hotel.md" }).success).toBe(true);
+    expect(readSchema.safeParse({ path: "projects/hotel.md", maintenance: true }).success).toBe(true);
+    expect(readSchema.safeParse({ path: "projects/hotel.md", maintenance: "yes" }).success).toBe(false);
   });
 
   it("tells a caller in the description what the flag MEANS, not just that it exists", () => {
@@ -198,8 +198,8 @@ describe("the effective edges_rebuild definition", () => {
   it("drops the mode a maintenance read logs, and keeps the mode a real read logs", async () => {
     // The cross-language join: the string the TypeScript writes, checked against the strings the
     // SQL drops. Rename either side and this fails.
-    const sweep = await readAndCaptureRow({ path: "projects/harbor.md", maintenance: true });
-    const real = await readAndCaptureRow({ path: "projects/harbor.md" });
+    const sweep = await readAndCaptureRow({ path: "projects/hotel.md", maintenance: true });
+    const real = await readAndCaptureRow({ path: "projects/hotel.md" });
     expect(filters[0]).toContain(sweep.row.mode);
     expect(filters[0]).not.toContain(real.row.mode);
   });

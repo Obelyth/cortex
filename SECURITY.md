@@ -37,4 +37,4 @@ Cortex guards one asset: your brain repository, which contains private notes ser
 - Use distinct random values for every access secret; `openssl rand -hex 32` is one suitable generator.
 - Keep the brain repository private; scope its token to that one repo.
 - Set `GUEST_PATH_SECRET` only while you actually have a guest; unset + redeploy revokes.
-- Run `ops/groundskeeper/healthcheck.sh` on a schedule. It asserts both MCP paths against `lib/tool-roster.json` and fails loudly on drift.
+- Run `ops/groundskeeper/healthcheck.sh` on a schedule. It asserts that the connector path (`/api/s/<CONNECTOR_PATH_SECRET>/mcp`) serves exactly the trusted roster in `lib/tool-roster.json` and fails loudly on drift. It does not probe the bearer or guest paths.

@@ -7,13 +7,13 @@ const databaseRef="abcdefghijklmnopqrst";
 const completeEnv={
   CORTEX_APP_REPO:"fixture/app",
   CORTEX_APP_BRANCH:"main",
-  CORTEX_ACTIONS_TOKEN:"canary-actions-authority",
-  CORTEX_VERCEL_TOKEN:"canary-vercel-authority",
+  CORTEX_ACTIONS_TOKEN:"sentinel-actions-authority",
+  CORTEX_VERCEL_TOKEN:"sentinel-vercel-authority",
   CORTEX_VERCEL_PROJECT_ID:"prj_fixture",
   CORTEX_VERCEL_TEAM_ID:"team_fixture",
   CORTEX_MIGRATION_TARGET:`supabase:${databaseRef}:postgres`,
   SUPABASE_URL:`https://${databaseRef}.supabase.co`,
-  SUPABASE_SERVICE_ROLE_KEY:"canary-database-authority",
+  SUPABASE_SERVICE_ROLE_KEY:"sentinel-database-authority",
 };
 
 const requirement=(env:Record<string,string|undefined>,id:"source"|"github"|"vercel"|"database")=>
@@ -23,7 +23,7 @@ describe("operations readiness",()=>{
   it("points a deployment blocked by missing Vercel authority to that requirement",()=>{
     const providers=providerReadiness({
       CORTEX_APP_REPO:"fixture/app",CORTEX_APP_BRANCH:"main",
-      CORTEX_ACTIONS_TOKEN:"canary-actions",
+      CORTEX_ACTIONS_TOKEN:"sentinel-actions",
     });
     expect(providers.find(provider=>provider.operation==="deploy.production"))
       .toMatchObject({configured:false,setupRequirement:"vercel"});
@@ -32,7 +32,7 @@ describe("operations readiness",()=>{
   it("reports source absence in fixed variable order without accepting content configuration",()=>{
     const readiness=getOperationsReadiness({
       BRAIN_REPO:"fixture/brain",
-      GITHUB_TOKEN:"canary-content-token",
+      GITHUB_TOKEN:"sentinel-content-token",
     });
     expect(readiness.requirements).toContainEqual({
       id:"source",state:"missing",
@@ -46,7 +46,7 @@ describe("operations readiness",()=>{
       detail:"Missing configuration: CORTEX_APP_REPO, CORTEX_APP_BRANCH, CORTEX_ACTIONS_TOKEN",
       setupRequirement:"source",
     });
-    expect(JSON.stringify(readiness)).not.toContain("canary-content-token");
+    expect(JSON.stringify(readiness)).not.toContain("sentinel-content-token");
   });
 
   it.each([
@@ -94,7 +94,7 @@ describe("operations readiness",()=>{
     }
   });
 
-  it.each(["malformed-team-canary"," team_fixture "])("rejects a supplied malformed Vercel team without exposing project or team input: %j",team=>{
+  it.each(["malformed-team-sentinel"," team_fixture "])("rejects a supplied malformed Vercel team without exposing project or team input: %j",team=>{
     const env={...completeEnv,CORTEX_VERCEL_TEAM_ID:team};
     expect(requirement(env,"vercel")).toEqual({id:"vercel",state:"invalid",missing:[],identities:[],issues:[{
       field:"CORTEX_VERCEL_TEAM_ID",reason:"Use a team_ ID followed by letters and numbers. Leave unset for a personal project.",
@@ -131,12 +131,12 @@ describe("operations readiness",()=>{
   });
 
   it("identifies an unsupported database URL without changing its unavailable result or exposing the URL",()=>{
-    const env={...completeEnv,SUPABASE_URL:"https://secret-canary.invalid/?token=private"};
+    const env={...completeEnv,SUPABASE_URL:"https://secret-sentinel.invalid/?token=private"};
     expect(requirement(env,"database")).toEqual({id:"database",state:"invalid",missing:[],identities:[],issues:[{
       field:"SUPABASE_URL",reason:"Use the supported hosted Supabase project URL: https://<project-ref>.supabase.co.",
     }]});
     expect(resolveProviderConfiguration("migrations.check",env)).toMatchObject({ok:false,code:"unavailable",setupRequirement:"database"});
-    expect(JSON.stringify(getOperationsReadiness(env))).not.toContain("secret-canary");
+    expect(JSON.stringify(getOperationsReadiness(env))).not.toContain("secret-sentinel");
   });
 
   it.each([
@@ -205,21 +205,21 @@ describe("operations readiness",()=>{
 
   it("never serializes credentials, malformed identities, URLs, or mismatched targets",()=>{
     const unsafe=[
-      "malformed-repository-canary","unsafe//branch-canary","canary-actions-authority",
-      "canary-vercel-authority","malformed-project-canary","malformed-team-canary",
-      "https://database-canary.invalid/path?secret=canary","canary-database-authority",
-      "mismatched-target-canary",
+      "malformed-repository-sentinel","unsafe//branch-sentinel","sentinel-actions-authority",
+      "sentinel-vercel-authority","malformed-project-sentinel","malformed-team-sentinel",
+      "https://database-sentinel.invalid/path?secret=sentinel","sentinel-database-authority",
+      "mismatched-target-sentinel",
     ];
     const serialized=JSON.stringify(getOperationsReadiness({
-      CORTEX_APP_REPO:"malformed-repository-canary",
-      CORTEX_APP_BRANCH:"unsafe//branch-canary",
-      CORTEX_ACTIONS_TOKEN:"canary-actions-authority",
-      CORTEX_VERCEL_TOKEN:"canary-vercel-authority",
-      CORTEX_VERCEL_PROJECT_ID:"malformed-project-canary",
-      CORTEX_VERCEL_TEAM_ID:"malformed-team-canary",
-      CORTEX_MIGRATION_TARGET:"mismatched-target-canary",
-      SUPABASE_URL:"https://database-canary.invalid/path?secret=canary",
-      SUPABASE_SERVICE_ROLE_KEY:"canary-database-authority",
+      CORTEX_APP_REPO:"malformed-repository-sentinel",
+      CORTEX_APP_BRANCH:"unsafe//branch-sentinel",
+      CORTEX_ACTIONS_TOKEN:"sentinel-actions-authority",
+      CORTEX_VERCEL_TOKEN:"sentinel-vercel-authority",
+      CORTEX_VERCEL_PROJECT_ID:"malformed-project-sentinel",
+      CORTEX_VERCEL_TEAM_ID:"malformed-team-sentinel",
+      CORTEX_MIGRATION_TARGET:"mismatched-target-sentinel",
+      SUPABASE_URL:"https://database-sentinel.invalid/path?secret=sentinel",
+      SUPABASE_SERVICE_ROLE_KEY:"sentinel-database-authority",
     }));
     for(const value of unsafe)expect(serialized).not.toContain(value);
   });

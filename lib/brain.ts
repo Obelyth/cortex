@@ -74,7 +74,7 @@ export function validateReadPath(path: string): void {
 }
 
 export function todayStamp(): { date: string; time: string } {
-  const tz = process.env.BRAIN_TZ ?? "America/Los_Angeles";
+  const tz = process.env.BRAIN_TZ || "UTC";
   const now = new Date();
   const date = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
@@ -100,7 +100,7 @@ export function todayStamp(): { date: string; time: string } {
  * subtraction cannot be bitten by a 23- or 25-hour local day.
  */
 export function lastNDates(n: number): string[] {
-  const tz = process.env.BRAIN_TZ ?? "America/Los_Angeles";
+  const tz = process.env.BRAIN_TZ || "UTC";
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",
@@ -141,9 +141,8 @@ export const BOUNDARY_RE = /(={6,}\s*FILE\b|^---\s+\S+\.md\b.*---\s*$)/im;
  * Bytes of verbatim log the boot call will spend, newest first.
  *
  * A BUDGET, NOT A DAY COUNT, and the difference is not academic. The first cut of this expanded
- * "the two most recent days" — which on the live brain is up to 24 KB for a single day, because a
- * groundskeeper night is an essay. Two such days is ~9k tokens and the boot call had barely
- * improved on the raw dump it replaced. A day count bounds how MANY things you read; it does not
+ * "the two most recent days" — and one busy day of log can run to many kilobytes, so two such
+ * days left the boot call barely improved on the raw dump it replaced. A day count bounds how MANY things you read; it does not
  * bound how much you read, and the thing that costs is the second one.
  *
  * So days are expanded newest-first while the budget holds, and every day that does not fit gets
@@ -223,24 +222,22 @@ export function projectLogSections(
 /**
  * Bytes of router the boot call will spend.
  *
- * RE-MEASURED 2026-08-17 at 102 notes: the router renders **20,121 bytes, ~5.0k tokens**, with
- * all 102 rows rendered, none cold and none dropped — capped and uncapped output are byte-for-byte
- * identical, so the ceiling is not currently cutting anything. That works out at ~197 bytes per
- * note. 28,000 buys roughly forty more notes before the ceiling is the thing deciding what a
- * session can see (was: 20,000, set when the corpus was 86 notes and the router ~2.5k tokens —
- * raised 2026-08-17. The old comment called that figure "headroom rather than a cut"; it had
- * quietly stopped being either. The corpus grew ~19% and the router doubled, because the
- * description backfill landed in between, and 20,000 was reached with 121 bytes to spare).
+ * Sized from a measurement, not a guess: render the router for a corpus, divide by its note
+ * count, and leave room for a few dozen more notes before the ceiling is the thing deciding what a
+ * session can see. While capped and uncapped output are byte-for-byte identical the ceiling is not
+ * cutting anything. Re-measure when descriptions change shape as well as when the corpus grows:
+ * a description backfill can double the router without adding a single note, which is how the
+ * previous, smaller value quietly stopped being headroom.
  *
  * The point of the ceiling is unchanged: it exists so growth and a scores() outage both degrade
  * into "some rows did not fit, here is how to reach them" rather than into an unannounced 25k-token
  * boot call.
  *
- * The wrapper is counted now (fixed the day after the number moved, as its own change so the two
- * stay distinguishable in a bisect): `routerCut` fits the whole DOCUMENT to this budget by
- * rendering candidates through `renderRouterDoc` — the same function `buildRouter` returns — so
- * the constant means exactly what it says (was: the budget enforced row bytes only, and the
- * ~121-byte header/coverage/`## <dir>` wrapper rode over it unaccounted — updated 2026-08-17).
+ * The wrapper is counted (as its own change, so the two stay distinguishable in a bisect):
+ * `routerCut` fits the whole DOCUMENT to this budget by rendering candidates through
+ * `renderRouterDoc` — the same function `buildRouter` returns — so the constant means exactly
+ * what it says (was: the budget enforced row bytes only, and the header/coverage/`## <dir>`
+ * wrapper rode over it unaccounted).
  */
 export const ROUTER_BUDGET_BYTES = 28_000;
 
@@ -282,12 +279,11 @@ export interface ContextPreview {
 /**
  * The boot call.
  *
- * WHAT CHANGED AND WHY. This used to return `profile.md` + `INDEX.md` + seven raw day-logs. On the
- * live brain that measured ~11.8k tokens — and a floor, not a ceiling, since only four of the seven
- * days existed. It also grew every single day, because the logs are the fastest-growing thing in
+ * WHAT CHANGED AND WHY. This used to return `profile.md` + `INDEX.md` + seven raw day-logs. That
+ * cost was a floor, not a ceiling, and it grew every single day, because the logs are the fastest-growing thing in
  * the corpus, so the price of booting rose whether or not the new material was relevant.
  *
- * Worse, the two big pieces were the wrong shape. `INDEX.md` was 83 bare paths that describe
+ * Worse, the two big pieces were the wrong shape. `INDEX.md` was a list of bare paths that describe
  * nothing, so a reader could not tell what any note held without opening it. And seven days of
  * verbatim log answered "what has been written down lately" when the question a boot call actually
  * asks is "what were we doing".
