@@ -7,8 +7,14 @@
 # On every pull request: the label scheme exists, type/* comes from the title
 # and size/* from the diff, the quarter milestone is set, the issue named in
 # the branch is linked, empty sections of the description are written from the
-# diff, and the project board is kept in step. On a v* tag: a release with
-# generated notes, grouped by those labels.
+# diff, and the project board is kept in step.
+#
+# Local change, kept on purpose: the installer's caller also runs on v* tag
+# pushes, where the toolkit publishes an ungated release with generated notes.
+# Here .github/workflows/release.yml is the only publisher (CI at the tag, the
+# 'release' environment approval, the reviewed header and the attested
+# archive), so this caller has no tag trigger. tests/release-workflow.test.ts
+# fails if a reinstall brings it back.
 #
 # Full description: https://github.com/Obelyth/obelyth-pr-hygiene
 name: PR Hygiene
@@ -16,8 +22,6 @@ name: PR Hygiene
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review, closed]
-  push:
-    tags: ['v*']
 
 # One run per pull request at a time, queued rather than cancelled, so two
 # events in quick succession never edit the same body at once.
