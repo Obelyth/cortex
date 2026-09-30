@@ -17,7 +17,7 @@ export const LANDING_SEG = "ops";
 // segment is ABSENT from TABS (e.g. `t.seg === "attention"`) needs that comparison to stay
 // assignable even though no row carries the literal — a narrower literal-union type would turn
 // that check into a compile error instead of the runtime `false` it is testing for.
-// Notes is gone (v2, 2026-09-05): the corpus explorer lives on Ask, and corpus/route.ts sends
+// Notes is gone (v2): the corpus explorer lives on Ask, and corpus/route.ts sends
 // the old address there.
 export const TABS: ReadonlyArray<{ seg: string; label: string }> = [
   { seg: "ops", label: "Ops" },

@@ -56,7 +56,7 @@ describe("untar", () => {
     // Regression: any path over 100 chars is split across a `prefix` field at offset 345.
     // Reading only `name` dropped every long-path entry silently — live notes among them,
     // which the reader would then have answered "not in brain" for.
-    const deep = "memory-2026-07/dir1--project-sample-collection-evolution-with-a-long-name.md";
+    const deep = "backup-2025-01/part1-writeup-sample-collection-evolution-with-a-long-name.md";
     const header = Buffer.alloc(512);
     header.write(deep.split("/").pop()!, 0, 100, "utf8");            // name field
     header.write("0".padStart(11, "0") + "\0", 124, 12, "ascii");    // size 0
@@ -65,15 +65,15 @@ describe("untar", () => {
     const tar = Buffer.concat([seal(header), Buffer.alloc(1024)]);
     const got = untar(tar);
     expect(got).toHaveLength(1);
-    expect(got[0][0]).toBe(`archive/memory-2026-07/${deep.split("/").pop()}`);
+    expect(got[0][0]).toBe(`archive/backup-2025-01/${deep.split("/").pop()}`);
   });
 });
 
-describe("corpus/brain_ask parity", () => {
-  it("excludes exactly the prefixes brain_ask.py excludes", () => {
+describe("corpus/reference ranker parity", () => {
+  it("excludes exactly the prefixes the reference ranker excludes", () => {
     // Two definitions of "the live corpus" that disagree is the dual-implementation drift
-    // this rebuild exists to delete. brain_ask.py SKIP_PREFIX must match this list; when
-    // they diverged, cortex saw 70 files and brain_ask saw 77.
+    // this rebuild exists to delete. The reference ranker's SKIP_PREFIX must match this list;
+    // when they diverge, the two see different corpora.
     const py = [".git/", ".claude/", "tools/", "archive/", "brain-v2/", ".github/"];
     for (const prefix of py) expect(isLive(`${prefix}whatever.md`)).toBe(false);
     for (const name of ["brain-index.md", "INDEX.md", "README.md"]) {
@@ -91,15 +91,15 @@ describe("isLive", () => {
   });
 
   it("excludes archive, tooling and generated catalogues", () => {
-    // archive is 45% of bytes and holds superseded claims; a reader given both can answer
-    // from the dead one. The generated indexes are the thing this rebuild deletes.
-    for (const p of ["archive/memory-2026-07/x.md", "tools/recall.py", "notes/brain-index.md", "INDEX.md", "README.md"]) {
+    // archive can be a large share of the bytes and holds superseded claims; a reader given
+    // both can answer from the dead one. The generated indexes are the thing this rebuild deletes.
+    for (const p of ["archive/backup-2025-01/x.md", "tools/recall.py", "notes/brain-index.md", "INDEX.md", "README.md"]) {
       expect(isLive(p)).toBe(false);
     }
   });
 
   it("ignores non-markdown", () => {
-    expect(isLive("tools/eval/labels.json")).toBe(false);
+    expect(isLive("tools/data.json")).toBe(false);
   });
 });
 
@@ -112,7 +112,7 @@ describe("loadCorpus", () => {
     const tarball = makeTarball({
       "tools/atlas-snapshot.json": "{\"capturedAt\":\"retired\"}",
       "profile.md": "operator",
-      "projects/sample.md": "the demo is offline",
+      "projects/sample.md": "the oven is cold",
       "archive/old.md": "superseded",
       "notes/brain-index.md": "generated",
     });
@@ -160,18 +160,18 @@ describe("loadCorpus", () => {
 });
 
 describe("verify", () => {
-  const files = new Map([["projects/sample.md", "**The demo is offline** (checked 2025-02-17)."]]);
+  const files = new Map([["projects/sample.md", "**The oven is cold** (checked 2025-02-17)."]]);
 
   it("verifies an exact quote", () => {
     expect(checkCitation(files, "abc123def456", "projects/sample.md", "checked 2025-02-17").verified).toBe(true);
   });
 
   it("verifies through markdown wrappers", () => {
-    expect(verifyQuote("**The demo is offline**", "The demo is offline").verified).toBe(true);
+    expect(verifyQuote("**The oven is cold**", "The oven is cold").verified).toBe(true);
   });
 
   it("rejects a fabricated quote", () => {
-    const c = checkCitation(files, "abc", "projects/sample.md", "The sample demo launched and is fully working");
+    const c = checkCitation(files, "abc", "projects/sample.md", "The sample oven is lit and fully working");
     expect(c.verified).toBe(false);
     expect(c.reason).toMatch(/NOT FOUND/);
   });
@@ -200,7 +200,7 @@ describe("verify", () => {
 
 describe("narrow", () => {
   const files = new Map([
-    ["projects/sample.md", "the sample demo is offline and the preview deploy returns 404"],
+    ["projects/sample.md", "the sample oven is cold and the thermometer reads 18C"],
     ["projects/hotel.md", "hotel supabase import queue written to a dropped table"],
     ["notes/laptop.md", "the laptop swaps when the browser and the editor are both open"],
   ]);

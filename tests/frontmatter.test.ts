@@ -3,23 +3,23 @@ import { parseFrontmatter, routerLine, buildRouter, routerCut, safeText } from "
 import { monthKey } from "../lib/digest";
 
 describe("parseFrontmatter", () => {
-  it("reads description and tags from a real feedback-note shape", () => {
+  it("reads description and tags from a note with nested frontmatter", () => {
     const text = [
       "---",
-      "name: example-parallel-work-rule",
-      'description: "Don\'t stall mid-build; delegate to agent teams."',
+      "name: example-bread-recipe",
+      'description: "Rye loaf: don\'t skip the overnight proof."',
       "metadata:",
-      "  type: feedback",
+      "  type: recipe",
       "---",
       "",
-      "When there's an approved plan, keep building.",
+      "Mix at night, bake in the morning.",
     ].join("\n");
     const fm = parseFrontmatter(text);
-    expect(fm.description).toBe("Don't stall mid-build; delegate to agent teams.");
+    expect(fm.description).toBe("Rye loaf: don't skip the overnight proof.");
     // Byte-faithful: everything after the closing fence is kept verbatim, blank line included.
     // Trimming would be a silent rewrite of note text, and note text is what quotes are proven
     // against.
-    expect(fm.body).toBe("\nWhen there's an approved plan, keep building.");
+    expect(fm.body).toBe("\nMix at night, bake in the morning.");
   });
 
   it("reads tags as a YAML flow sequence and as a comma list", () => {

@@ -1,5 +1,5 @@
 /**
- * explorer — the live corpus as a file tree, for the console's Ask screen (v2, 2026-09-05).
+ * explorer — the live corpus as a file tree, for the console's Ask screen (v2).
  *
  * Pure: notes in, groups out. No store, no React, no node imports, so the same function builds
  * the tree on the server for the first paint and on the client for every keystroke of the find

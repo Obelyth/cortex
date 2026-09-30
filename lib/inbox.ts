@@ -8,7 +8,7 @@
  * they are re-derived on every render and leave ONLY because the corpus (or the derived edge
  * they cite) stopped saying the thing. There is no dismiss, no ignore-list, no state.
  *
- * THE ONE OPT-OUT, and why it is not a dismiss (2026-08-17). A note carrying `decays: false` is
+ * THE ONE OPT-OUT, and why it is not a dismiss. A note carrying `decays: false` is
  * out of every check here. That flag already meant "this note records something that happened
  * rather than something that is true now" and already excused it from the stale-stamp check;
  * it now excuses it from these three as well, because the same reasoning covers them. A retired
@@ -59,8 +59,8 @@ export { COACCESS_FLOOR };
 
 /**
  * A note is "superseded" when its own frontmatter description LEADS with the word — the house
- * norm since the description backfill (brain d39d7a2), which deliberately put SUPERSEDED first
- * so a reader is warned before opening a dead page; two live notes carry it today. Leading, not
+ * norm since the description backfill, which deliberately put SUPERSEDED first so a reader is
+ * warned before opening a dead page. Leading, not
  * merely containing: prose descriptions mention the word mid-sentence about OTHER things
  * ("…stamps quotes VERIFIED/SUPERSEDED…"), and a check that flagged links to those would fire
  * on healthy text.
@@ -80,10 +80,10 @@ export function supersededNotes(files: Map<string, string>): Set<string> {
  * The spans of `(was: …)` parentheticals inside one block, by character offset.
  *
  * verify.ts's WAS_RE keys on `was:` followed by a QUOTE, because that is what the retraction
- * classifier needs — but the corpus also writes the loose form: `(was: this page used to cover
- * <the retired product> here instead — …; see <its retired page>.)`, live today in the design
- * brand note. A reference inside either form is the note explaining what it USED to say; flagging it asks
- * the operator to falsify his own correction. This finds the span so the reference scan can
+ * classifier needs — but the corpus can also write the loose form, an unquoted aside such as
+ * `(was: an older version of this section; see <the page it came from>.)`. A reference inside
+ * either form is the note explaining what it USED to say; flagging it asks the operator to
+ * falsify their own correction. This finds the span so the reference scan can
  * skip it — a positional test, not a retraction opinion, so it does not touch verify.ts's
  * machinery. An unclosed parenthetical runs to the end of the block: the safe direction here is
  * exclusion, because a missed item costs a glance and a false one costs the queue its credibility.
@@ -120,17 +120,17 @@ const ev = scrubEvidence;
  * or the target stops being superseded.
  *
  * What does NOT fire, each exclusion carrying the live passage that demanded it:
- *   - banner-retired blocks, per verify.ts's retraction() — reused, not reimplemented — the
- *     main project page's backfill record names both superseded pages while recording the
- *     backfill that marked them; the passage is history about the marking, not a live pointer.
+ *   - banner-retired blocks, per verify.ts's retraction() — reused, not reimplemented — a
+ *     status page's own backfill record can name the superseded pages it marked; the passage is
+ *     history about the marking, not a live pointer.
  *     "banner" specifically, NOT "correction": a block carrying `<current claim> (was: "<old>")`
  *     is the freshest text in the note, and a live reference standing beside its own correction
  *     marker is exactly the kind of pointer this check exists to catch.
- *   - `(was: …)` parentheticals, quoted or loose — the design brand note explains which retired
- *     page it used to cover and points there: the note explaining its own past.
+ *   - `(was: …)` parentheticals, quoted or loose — a note can explain which retired page it used
+ *     to cover and point there: the note explaining its own past.
  *   - dated log entries and dated headings (health.ts's doctrine, same constants) — a log entry
- *     pointed at a retired project page the night it closed an item there; a diary was true
- *     when written.
+ *     can point at a retired page on the day it closed an item there; a diary was true when
+ *     written.
  *   - notes that are themselves superseded: history pointing at history misleads nobody who
  *     got past the description.
  *

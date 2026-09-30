@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET } from "../app/s/[secret]/console/corpus/route";
 
 /**
- * The Notes screen folded into Ask (v2, 2026-09-05). `corpus?note=` keeps working for every
+ * The Notes screen folded into Ask (v2). `corpus?note=` keeps working for every
  * bookmark, old notice and the screens that still link it: a 308 to `ask?note=`, relative, so
  * the secret rides along from the request and never enters anything the handler writes.
  */

@@ -14,18 +14,18 @@ import type { Corpus } from "../lib/corpus";
 const corpusOf = (entries: Array<[string, string]>): Corpus =>
   ({ files: new Map(entries), sha: "b".repeat(40), bytes: 0, fetchedAt: 0 });
 const abstain = async () => JSON.stringify({ answer: "NOT IN BRAIN", tag: "", quote: "" });
-const dark = "The sample demo is still offline.";
+const cold = "The sample oven is still cold.";
 
 describe("NOT IN BRAIN on a narrowed search", () => {
   it("is the verdict when every unread note scored nothing for the question", async () => {
     const corpus = corpusOf([
-      ["projects/sample.md", dark],
-      ["notes/sample-rollout.md", "Sample rollout notes: nothing on pricing."],
+      ["projects/sample.md", cold],
+      ["notes/sample-bakes.md", "Sample bake notes: nothing on pricing."],
       ["projects/hotel.md", "The import queue was written to a dropped table."],
     ]);
     let prompt = "";
     const r = await ask("what does sample cost", async (p: ReaderPrompt) => { prompt = p.stable; return abstain(); }, { corpus, k: 2 });
-    expect([...r.candidates].sort()).toEqual(["notes/sample-rollout.md", "projects/sample.md"]);
+    expect([...r.candidates].sort()).toEqual(["notes/sample-bakes.md", "projects/sample.md"]);
     expect(r).toMatchObject({
       protocol: "abstention", notInBrain: true,
       coverage: { selectedNotes: 2, totalNotes: 3, omittedNotes: 1, unreadMatched: 0, complete: true, reason: "retrieval" },
@@ -39,7 +39,7 @@ describe("NOT IN BRAIN on a narrowed search", () => {
   });
 
   it("stays a partial search while an unread note still contains a word of the question", async () => {
-    const corpus = corpusOf([["projects/sample.md", dark], ["notes/sample-rollout.md", "Sample rollout, part two."]]);
+    const corpus = corpusOf([["projects/sample.md", cold], ["notes/sample-bakes.md", "Sample bakes, part two."]]);
     let prompt = "";
     const r = await ask("sample", async (p: ReaderPrompt) => { prompt = p.stable; return abstain(); }, { corpus, k: 1 });
     expect(r).toMatchObject({ protocol: "abstention", notInBrain: false, coverage: { omittedNotes: 1, unreadMatched: 1, complete: false, reason: "retrieval" } });
@@ -50,7 +50,7 @@ describe("NOT IN BRAIN on a narrowed search", () => {
 
   it("names the budget, not retrieval, when a note carrying the question's words was refused for its size", async () => {
     const oversized = "sample ".repeat(Math.ceil(NARROW_BUDGET_BYTES / 7) + 10);
-    const corpus = corpusOf([["projects/sample.md", dark], ["history/sample-2026-08.md", oversized]]);
+    const corpus = corpusOf([["projects/sample.md", cold], ["history/sample-2026-08.md", oversized]]);
     const r = await ask("sample", abstain, { corpus });
     expect(r.candidates).toEqual(["projects/sample.md"]);
     expect(r.cut).toEqual([{ path: "history/sample-2026-08.md", score: expect.any(Number), by: "budget" }]);
@@ -60,7 +60,7 @@ describe("NOT IN BRAIN on a narrowed search", () => {
 
   it("a question whose words occur in no note is complete once its fallback pack abstains", async () => {
     // Fallback packs the largest notes; nothing scored, so nothing unread scored either.
-    const corpus = corpusOf([["projects/sample.md", dark], ["projects/hotel.md", "The import queue was written to a dropped table."]]);
+    const corpus = corpusOf([["projects/sample.md", cold], ["projects/hotel.md", "The import queue was written to a dropped table."]]);
     const r = await ask("zxqv wqrp", abstain, { corpus, k: 1 });
     expect(r.narrowing.mode).toBe("fallback");
     expect(r).toMatchObject({ notInBrain: true, coverage: { omittedNotes: 1, unreadMatched: 0, complete: true } });
@@ -68,7 +68,7 @@ describe("NOT IN BRAIN on a narrowed search", () => {
   });
 
   it("a question that tokenizes to nothing ranked nobody, so its omissions stay unknown", async () => {
-    const corpus = corpusOf([["projects/sample.md", dark], ["projects/hotel.md", "The import queue was written to a dropped table."]]);
+    const corpus = corpusOf([["projects/sample.md", cold], ["projects/hotel.md", "The import queue was written to a dropped table."]]);
     const r = await ask("???", abstain, { corpus, k: 1 });
     expect(r.narrowing.mode).toBe("fallback");
     expect(r).toMatchObject({ notInBrain: false, coverage: { omittedNotes: 1, unreadMatched: null, complete: false } });
@@ -76,7 +76,7 @@ describe("NOT IN BRAIN on a narrowed search", () => {
   });
 
   it("a full read cannot vouch for what its budget cut, so its omissions stay unknown too", async () => {
-    const corpus = corpusOf([["projects/sample.md", dark], ["notes/big.md", "…".repeat(140_000)]]);
+    const corpus = corpusOf([["projects/sample.md", cold], ["notes/big.md", "…".repeat(140_000)]]);
     const r = await ask("sample", abstain, { corpus, full: true });
     expect(r).toMatchObject({ notInBrain: false, coverage: { omittedNotes: 1, unreadMatched: null, complete: false, reason: "budget" } });
     expect(render(r)).toContain("1 omitted by budget; the unread notes were not ranked against the question.");
@@ -102,7 +102,7 @@ describe("an empty pack never reaches the reader", () => {
   });
 
   it("a scope that holds no notes is NOT IN BRAIN without a model call", async () => {
-    const corpus = corpusOf([["projects/sample.md", dark]]);
+    const corpus = corpusOf([["projects/sample.md", cold]]);
     let calls = 0;
     const r = await ask("sample", async () => { calls++; return abstain(); }, { corpus, scope: ["guest/"] });
     expect(calls).toBe(0);

@@ -33,7 +33,7 @@ const corpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["projects/sample.md", "**The oven is cold** (checked 2025-02-17). The thermometer reads 18C."],
     ["projects/hotel.md", "The import queue was written to a dropped table."],
   ]),
 };
@@ -113,9 +113,9 @@ function mockAnthropic(counter: { calls: number }) {
               {
                 type: "text",
                 text: JSON.stringify({
-                  answer: "No — the demo is offline.",
+                  answer: "No — the oven is cold.",
                   tag,
-                  quote: "The demo is offline",
+                  quote: "The oven is cold",
                 }),
               },
             ],

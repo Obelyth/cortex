@@ -48,3 +48,20 @@ npx vitest run tests/export-reference-policy.test.ts tests/export-reference-gate
 
 Those synthetic tests protect the gate's behavior. They do not replace the enforced
 check against the private reference corpus before publication.
+
+## Reference implementation parity
+
+Three suites compare cortex with a separate reference implementation that scores
+retrieval outside this server. Where that implementation lives is deployment detail,
+so the repository does not name it; environment variables point at it instead:
+
+| Variable | Used by | Points at |
+|---|---|---|
+| `BRAIN_PARITY_RANKER` | `tests/bm25-parity.test.ts`, the corpus parity block in `tests/no-brain-leakage.test.ts` | the reference ranker's source file, with its `K1`, `B`, `SKIP_PREFIX` and `SKIP_NAMES` |
+| `BRAIN_PARITY_VERIFIER` | `tests/verify-parity.test.ts` (with `BRAIN_DIR`) | the reference verifier's Python module, with `normalise` and `verify` |
+
+Unset, each suite reports a visible skip. Set to a path that does not exist, it fails.
+`REQUIRE_BM25_PARITY=1` makes an unset ranker a failure too.
+
+The evaluation scripts take their label set the same way: `--labels <file>` or
+`EVAL_LABELS`.

@@ -57,9 +57,10 @@
  * checkout, instead of today's working tree — `git archive <sha>` exported read-only into a temp
  * dir (the brain checkout itself is never written to). This is what makes eval numbers
  * reproducible: the working brain changes, so a recall result only means something when
- * it names the tree it was measured on. Labels always come from the live checkout's
- * tools/eval/labels.json — the label set isn't part of what's being frozen.
+ * it names the tree it was measured on. Labels always come from the file named by `--labels`
+ * (or EVAL_LABELS), never from the frozen tree — the label set isn't part of what's being frozen.
  *
+ *   EVAL_LABELS=/path/to/labels.json npx tsx scripts/eval-retrieval.ts   # or pass --labels <file>
  *   npx tsx scripts/eval-retrieval.ts                     # every strategy, working tree, production config
  *   npx tsx scripts/eval-retrieval.ts --k 5
  *   npx tsx scripts/eval-retrieval.ts --raw               # add the no-caps BM25 arm for comparison
@@ -294,9 +295,12 @@ async function main(): Promise<void> {
   const narrowOpts = { budgetBytes, maxPartsPerPage };
 
   const brain = process.env.BRAIN_DIR ?? path.join(process.cwd(), "..", "brain");
-  const labelsPath = path.join(brain, "tools/eval/labels.json");
-  if (!existsSync(labelsPath)) {
-    console.error(`no labels at ${labelsPath} — set BRAIN_DIR`);
+  // The label set is not part of the brain's shape, so its location is always given, never
+  // guessed from the checkout layout.
+  const labelsAt = argv.indexOf("--labels");
+  const labelsPath = (labelsAt >= 0 ? argv[labelsAt + 1] : undefined) ?? process.env.EVAL_LABELS;
+  if (!labelsPath || !existsSync(labelsPath)) {
+    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json> or set EVAL_LABELS`);
     process.exit(2);
   }
   const all = JSON.parse(readFileSync(labelsPath, "utf8")) as Label[];

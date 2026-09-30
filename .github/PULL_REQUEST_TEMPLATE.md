@@ -48,7 +48,7 @@ This repo's rule is that **a claim must be true or absent**. Please confirm:
 - [ ] It beats the incumbent, or it does not become the default.
 
 <!--
-Precedent, so this does not read as a formality: full-text search was built, measured at 91.2%
-recall@10 against BM25's 97.6%, and deliberately did not become the default. Shipping the
+Precedent, so this does not read as a formality: full-text search was built, measured below
+BM25's recall@10 on the labelled set, and deliberately did not become the default. Shipping the
 measurement instead of the feature is a good outcome here.
 -->

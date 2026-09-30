@@ -7,8 +7,9 @@
  *
  *   1. A pinned golden of normalise() outputs. Always runs, including in CI, and fails the
  *      moment the TypeScript side drifts.
- *   2. The live differential against brain/tools/eval/verify_citation.py. Needs the clone, so
- *      it is skipped in CI — but skipped VISIBLY, never silently dropped from the count.
+ *   2. The live differential against the brain-side reference verifier, a Python module whose
+ *      path BRAIN_PARITY_VERIFIER names. Needs that module and a brain clone, so it is skipped in
+ *      CI — but skipped VISIBLY, never silently dropped from the count.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -19,7 +20,20 @@ import { normalise, verifyQuote } from "../lib/verify";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BRAIN = process.env.BRAIN_DIR ?? path.resolve(HERE, "../../brain");
-const PY = path.join(BRAIN, "tools", "eval", "verify_citation.py");
+const PY = process.env.BRAIN_PARITY_VERIFIER ?? "";
+
+/**
+ * Loads the reference verifier from its path, whatever the module happens to be called. Bytecode
+ * writing is off so a test run never leaves a cache directory inside someone else's checkout.
+ */
+const LOAD_REFERENCE = [
+  "import importlib.util",
+  "sys.dont_write_bytecode = True",
+  `sys.path.insert(0, ${JSON.stringify(path.dirname(PY))})`,
+  `spec = importlib.util.spec_from_file_location("reference_verifier", ${JSON.stringify(PY)})`,
+  "ref = importlib.util.module_from_spec(spec)",
+  "spec.loader.exec_module(ref)",
+];
 
 /** Every shape the audit found, plus the ones that must NOT collapse into each other. */
 export const CASES = [
@@ -31,8 +45,8 @@ export const CASES = [
   "notes/.md",
   "#7 open",
   "7 open",
-  "template > GitHub > hook > CLAUDE.md",
-  "template GitHub hook CLAUDE.md",
+  "memory > disk > replica > origin",
+  "memory disk replica origin",
   "ADMIN_PASSWORD",
   "ADMINPASSWORD",
   "**bold** text here",
@@ -82,7 +96,7 @@ describe("normalise — pinned golden", () => {
       ["top-1 > 41.2%", "top-1 41.2%"],
       ["notes/*.md", "notes/.md"],
       ["#7 open", "7 open"],
-      ["template > GitHub > hook > CLAUDE.md", "template GitHub hook CLAUDE.md"],
+      ["memory > disk > replica > origin", "memory disk replica origin"],
       ["ADMIN_PASSWORD", "ADMINPASSWORD"],
     ];
     for (const [a, b] of pairs) expect(normalise(a)).not.toBe(normalise(b));
@@ -186,22 +200,21 @@ describe("block scoping", () => {
 
 // --------------------------------------------------------------- cross-language
 
-const havePy = existsSync(PY);
+const havePy = PY !== "" && existsSync(PY) && existsSync(path.join(BRAIN, "notes"));
 
 if (!havePy) {
   describe.skip("TS/PY differential over the live verifier", () => {
-    it(`SKIPPED: needs brain/tools/eval/verify_citation.py at ${PY} — set BRAIN_DIR`, () => {});
+    it("SKIPPED: needs BRAIN_PARITY_VERIFIER (the reference verifier's source file) and a brain clone at BRAIN_DIR", () => {});
   });
 }
 
 if (havePy) describe("TS/PY differential over the live verifier", () => {
-  it("agrees with verify_citation.py on every normalise case", () => {
+  it("agrees with the reference verifier on every normalise case", () => {
     const script = [
       "import json,sys",
-      `sys.path.insert(0, ${JSON.stringify(path.dirname(PY))})`,
-      "from verify_citation import normalise",
+      ...LOAD_REFERENCE,
       "cases=json.loads(sys.stdin.read())",
-      "print(json.dumps([normalise(c) for c in cases]))",
+      "print(json.dumps([ref.normalise(c) for c in cases]))",
     ].join("\n");
     const out = execFileSync("python3", ["-c", script], {
       input: JSON.stringify(CASES),
@@ -227,11 +240,10 @@ if (havePy) describe("TS/PY differential over the live verifier", () => {
     const quotes = [...lines.slice(0, 6).map((l) => l.trim()), `${lines[0].trim()} ${lines[4].trim()}`];
     const script = [
       "import json,sys",
-      `sys.path.insert(0, ${JSON.stringify(path.dirname(PY))})`,
+      ...LOAD_REFERENCE,
       "from pathlib import Path",
-      "from verify_citation import verify",
       "qs=json.loads(sys.stdin.read())",
-      `print(json.dumps([verify(Path(${JSON.stringify(BRAIN)}), ${JSON.stringify(rel)}, q)[0] for q in qs]))`,
+      `print(json.dumps([ref.verify(Path(${JSON.stringify(BRAIN)}), ${JSON.stringify(rel)}, q)[0] for q in qs]))`,
     ].join("\n");
     const py = JSON.parse(
       execFileSync("python3", ["-c", script], { input: JSON.stringify(quotes), encoding: "utf8" })

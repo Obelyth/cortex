@@ -2,8 +2,8 @@
  * live brain corpus — the router against the real thing.
  *
  * Fixtures prove the parser handles the shapes it was designed for. These prove it handles the
- * shapes an operator actually wrote, which is a different claim: 83 notes, nine with frontmatter and
- * 74 without, prose full of colons, em-dashes, `(was: "…")` markers and `---` horizontal rules.
+ * shapes an operator actually wrote, which is a different claim: notes with frontmatter and notes
+ * without, prose full of colons, em-dashes, `(was: "…")` markers and `---` horizontal rules.
  *
  * Skips cleanly when ../brain is absent, like every other hard-* suite, which is why CI stays
  * green without the brain checked out.
@@ -68,15 +68,15 @@ describe.skipIf(!present)("live brain corpus", () => {
       expect(parseFrontmatter(text).body, path).toBe(text);
       expect(parseFrontmatter(text).description, path).toBe("");
     }
-    // Before the backfill this was 74 of 83. Day-logs are the permanent bare set — they derive
-    // their line from their own entry headings and are never given frontmatter — so the floor is
-    // about them, not about a corpus that has not been described yet.
+    // Day-logs are the permanent bare set — they derive their line from their own entry headings
+    // and are never given frontmatter — so the floor is about them, not about a corpus that has
+    // not been described yet.
     expect(bare).toBeGreaterThanOrEqual(5);
   });
 
   it("reads a description out of every note that already has frontmatter", () => {
     const withFm = [...files].filter(([, t]) => /^---\r?\n/.test(t));
-    expect(withFm.length).toBeGreaterThanOrEqual(9);
+    expect(withFm.length).toBeGreaterThan(0);
     for (const [path, text] of withFm) {
       const fm = parseFrontmatter(text);
       expect(fm.description.length, `${path} description`).toBeGreaterThan(10);
@@ -96,10 +96,10 @@ describe.skipIf(!present)("live brain corpus", () => {
     // buildRouter(files, temps, ROUTER_BUDGET_BYTES) and routerCut fits the DOCUMENT to it. This
     // test used to call buildRouter(files) unbounded and assert `tokens < 6000` — a size no code
     // path emits, measured against a literal that had drifted from the constant beside it
-    // (28,000 B permits 7,000 tokens). On 2026-09-02 it went red at 6,202 tokens while the
-    // document was 24,807 B: 3,193 B INSIDE its own budget, 140 of 140 rows rendered, nothing
-    // dropped. The mechanism was working; the gate was failing on the corpus growing, and it
-    // blocked two PRs that never touched the router. hard-context.test.ts learned this one file
+    // (28,000 B permits 7,000 tokens). It went red while the document sat INSIDE its own byte
+    // budget with every row rendered and nothing dropped. The mechanism was working; the gate was
+    // failing on the corpus growing, and it blocked PRs that never touched the router.
+    // hard-context.test.ts learned this one file
     // over — "The constant, not a literal. Hardcoding 20,000 here meant the day the budget was
     // re-measured the test kept asserting the old one" — and this is that lesson applied where it
     // was missed. The bound now cannot disagree with the code, because it IS the code's number.

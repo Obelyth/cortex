@@ -14,7 +14,7 @@ const LABEL: Record<string, [string, string, string]> = {
   ack: ["Acknowledge", "Acknowledging", "Acknowledged"],
   snooze: ["Snooze 24h", "Snoozing", "Snoozed"],
   // The window is part of the label: a control that hides what it commits to invites a
-  // click nobody meant (critique 2026-09-05).
+  // click nobody meant (design critique).
   pause: ["Pause 3d", "Pausing", "Paused 3d"],
   resume: ["Resume", "Resuming", "Resumed"],
   "run-now": ["Run now", "Dispatching", "Dispatched"],

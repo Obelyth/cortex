@@ -145,7 +145,7 @@ function num(name: string, fallback: number): number {
   const v = arg(name);
   if (v === undefined) return fallback;
   const n = Number(v);
-  // A NaN or zero concurrency once produced a results file reading "labels: 204, errors: 0"
+  // A NaN or zero concurrency once produced a results file reading "labels: N, errors: 0"
   // with no API call made and exit 0 — a fabricated-looking measurement of nothing.
   if (!Number.isFinite(n) || n <= 0) {
     console.error(`--${name} must be a positive number, got "${v}"`);
@@ -368,7 +368,7 @@ async function main(): Promise<void> {
   }
 
   // The judge panel is resolved and checked BEFORE any paid reader call. A run that grades
-  // nothing must not be discovered after 204 billed asks.
+  // nothing must not be discovered after a full set of billed asks.
   const panel = JUDGE_CANDIDATES.filter((j) => providerConfigured(j.provider));
   if (panel.length === 0) {
     console.error(
@@ -380,18 +380,19 @@ async function main(): Promise<void> {
   }
   const judgeIndependent = !panel.some((j) => j.provider === provider);
 
-  const brain = arg("brain") ?? path.resolve("../brain");
-  const labelsPath = path.join(brain, "tools/eval/labels.json");
-  if (!existsSync(labelsPath)) {
-    console.error(`no labels at ${labelsPath} — pass --brain <path to the brain clone>`);
+  // The label set is not part of the brain's shape, so its location is always given, never
+  // guessed from the checkout layout.
+  const labelsPath = arg("labels") ?? process.env.EVAL_LABELS;
+  if (!labelsPath || !existsSync(labelsPath)) {
+    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json> or set EVAL_LABELS`);
     process.exit(2);
   }
   const labelsRaw = readFileSync(labelsPath, "utf8");
   const all: Label[] = JSON.parse(labelsRaw);
   const labelsHash = createHash("sha256").update(labelsRaw).digest("hex").slice(0, 12);
 
-  // A sample is drawn at RANDOM from a seed, never head-sliced: labels.json is clustered by
-  // note, so the first N is one corner of the corpus and contains no absence labels at all.
+  // A sample is drawn at RANDOM from a seed, never head-sliced: a label file is usually clustered
+  // by note, so the first N is one corner of the corpus and may contain no absence labels at all.
   const sampleSize = arg("sample") ? num("sample", all.length) : all.length;
   let labels = all;
   if (sampleSize < all.length) {

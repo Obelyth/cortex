@@ -948,8 +948,8 @@
   position: fixed; inset: 0; z-index: 60; border: 0; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: inherit; font: inherit; text-align: center; padding: 0;
-  /* Paper, not the dark world: the splash is the console's own first frame (depth pass
-     2026-09-01) — ink hairline grid on warm paper, the faintest signal-orange breath. */
+  /* Paper, not the dark world: the splash is the console's own first frame (depth pass)
+     — ink hairline grid on warm paper, the faintest signal-orange breath. */
   background:
     linear-gradient(rgba(17, 19, 21, 0.06) 1px, transparent 1px) 0 0 / 32px 32px,
     linear-gradient(90deg, rgba(17, 19, 21, 0.06) 1px, transparent 1px) 0 0 / 32px 32px,
@@ -1013,7 +1013,7 @@
 @media (prefers-reduced-motion: reduce) { .skelNum, .skelLine { animation: none; } }
 
 /* ── Heat: under the hood (corpus band 01, on the ink ground) ─────────────────── */
-/* Temperature-banded rows — the treatment the operator picked (2026-08-11); the folder-tile
+/* Temperature-banded rows — the chosen treatment; the folder-tile
    and grid variants are deleted, not parked. The palette is the console's own, not a
    thermometer's: orange is the product's one heat accent (the HOT band label), cyan marks live
    — and the seat is literally what is live in every session, so seat marking takes the live
@@ -1202,7 +1202,7 @@
    render, the one place the masthead states a fact about data rather than identity. */
 .conChipDot { width: 8px; height: 8px; flex: none; background: var(--field-live); }
 
-/* ── The depth pass (2026-09-01) ───────────────────────────────────────────────
+/* ── The depth pass ──────────────────────────────────────────────────────────────
    Meters and bars are wells sunk into the sheet; the ink band is a slab that casts
    onto the paper on both edges; the masthead rests just above the page it rules. */
 .conRoot .bandInk {

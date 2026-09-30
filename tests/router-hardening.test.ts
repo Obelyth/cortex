@@ -73,12 +73,12 @@ describe("the router cannot be structurally forged from a note", () => {
 
 describe("hardening does not damage honest notes", () => {
   it("leaves a normal description exactly as written", () => {
-    const d = "Dashboard access: base URL, data source 12, and the three places the key rotates";
+    const d = "Allotment plot map: water taps, compost bays, and the two gates that lock at dusk";
     expect(routerLine(entryFor("notes/a.md", note(`"${d}"`)))).toContain(d);
   });
 
   it("keeps an em-dash, apostrophe and parentheses untouched", () => {
-    const d = "The operator's rig — dormant since PR #16 (2026-06-03)";
+    const d = "The club's tender — laid up since the storm (2025-01-12)";
     expect(routerLine(entryFor("notes/a.md", note(`"${d}"`)))).toContain(d);
   });
 

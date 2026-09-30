@@ -2,7 +2,7 @@
  * backfill-descriptions — give every brain note the one-line description the router runs on.
  *
  * Dry-run by default. Nothing is written without `--apply`, because this edits the operator's memory and
- * a bad run is a bad run against the only copy of things he asked to be remembered.
+ * a bad run is a bad run against the only copy of things they asked to be remembered.
  *
  * Every write goes through `applyDescription` (lib/frontmatter.ts), which refuses input it cannot
  * read back and never overwrites a description that already exists. On top of that, this script
@@ -13,7 +13,7 @@
  *   3. the file gained exactly one frontmatter block, not two.
  *
  * A failure on any of them aborts the whole run rather than continuing, because a half-applied
- * backfill across 65 notes is far worse to unpick than a clean stop.
+ * backfill across a whole corpus is far worse to unpick than a clean stop.
  *
  * Usage:
  *   npx tsx scripts/backfill-descriptions.ts <descriptions.json> [--apply] [--brain <dir>]

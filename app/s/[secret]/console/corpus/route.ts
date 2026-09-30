@@ -1,7 +1,7 @@
 import { safeEqualStrings } from "@/lib/auth";
 
 /**
- * The Notes screen folded into Ask (v2, 2026-09-05): the explorer on `ask` is the corpus as
+ * The Notes screen folded into Ask (v2): the explorer on `ask` is the corpus as
  * files, and `ask?note=<path>` opens the lens on a note the way `corpus?note=` used to filter
  * the ledger. This route keeps every old link honest — bookmarks, old notices, the three
  * screens that still link `corpus?note=` until their own ports move them — with a 308 to the

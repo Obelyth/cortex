@@ -36,13 +36,13 @@ export interface CallRow {
   ms: number;
   /**
    * Which reader model answered — brain_ask only; absent on every other tool, and absent on
-   * every row written before this field shipped (2026-08-03). Optional on purpose: the store
+   * every row written before this field shipped. Optional on purpose: the store
    * holds up to two days of older rows, and a reader that demanded this field would drop them
    * all and call the server idle. The console counts unattributed rows out loud instead.
    */
   model?: string;
   /** Tokens narrowing kept out of a context on this ask: scoped corpus minus the pack actually
-   *  sent. brain_ask only; absent on rows written before the field shipped (2026-08-05) — the
+   *  sent. brain_ask only; absent on rows written before the field shipped — the
    *  trends screen counts those out loud rather than folding them into zero. */
   saved?: number;
   /** True when the reply came from the answer cache — zero model calls on this row. `model`

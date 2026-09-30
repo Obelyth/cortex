@@ -22,7 +22,7 @@
  * once more from disk after.
  *
  * WHAT IS "NOW" IS A PARAMETER, NOT A GUESS. Which sections stay is given on the command line
- * (`--keep`), because only the operator knows whether his page's opening block is called
+ * (`--keep`), because only the operator knows whether their page's opening block is called
  * "Status" or "What this is". Everything not named is dated and filed. A section with no date of
  * its own inherits the month of the section above it, which is the correct reading of an append
  * -only log: an undated block was written in the same sitting as the dated one it follows.
@@ -202,8 +202,8 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 /**
  * The comparable form of a heading: everything before the first ` — ` or ` (`, folded.
  *
- * Headings in this corpus are titles with their circumstances attached — "Open issues (logged
- * 2026-07-02 — two closed 2026-07-04)". `--keep "Open issues"` has to match that, and so does
+ * Headings on a status page are titles with their circumstances attached — "Open issues (logged
+ * 2025-02-17 — two closed 2025-02-24)". `--keep "Open issues"` has to match that, and so does
  * pasting the whole heading back in, so BOTH sides go through this. Nothing else is normalised:
  * two sections sharing a leading phrase are MEANT to collide, since that is how a page's
  * recurring "Next" blocks are named — `keptSectionIndexes` then decides which of them stays.
@@ -220,9 +220,9 @@ export function headingKey(heading: string): string {
 /**
  * Which sections stay on the status page: for each kept heading, its LAST occurrence only.
  *
- * A page written by appending restates its plan. The largest page in this corpus carries four
- * `## Next` blocks, three of them superseded lists from three different weeks. Keeping every
- * match would lift all four onto the status page and re-assert every abandoned plan as current —
+ * A page written by appending restates its plan. A long-lived page can carry several `## Next`
+ * blocks, all but one of them superseded lists from different weeks. Keeping every match would
+ * lift all of them onto the status page and re-assert every abandoned plan as current —
  * the exact failure the split exists to end. The last one is the live one; the earlier ones are
  * history, dated by the sections they sit under like any other moved block.
  *

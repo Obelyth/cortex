@@ -14,12 +14,12 @@ const CHANGELOG = `# cortex
 
 ## DEFECT — brain_recall answers from a superseded page
 
-SUPERSEDED 2026-07-30 — brain_recall was deleted in Stage 5.
+SUPERSEDED 2025-02-28 — brain_recall was removed in the retrieval rewrite.
 
 The brain_recall defect: brain_recall ranked brain-index.md, and brain_recall
 opened the wrong note. recall.py and build_index had the same flaw.
 
-## Stage 5 rough edges
+## Rewrite rough edges
 
 The shims still point at recall.py and build_index.
 `;
@@ -75,7 +75,7 @@ describe("retiredRefs ranking", () => {
   it("excludes dated log entries, which were true on their date", async () => {
     mLoad.mockResolvedValue(
       corpus([
-        ["log/2026-07-26.md", "# Log\n\nbrain_recall is live in production. brain_search works.\n"],
+        ["log/2025-01-20.md", "# Log\n\nbrain_recall is live in production. brain_search works.\n"],
         ["notes/evergreen.md", "# Note\n\nrecall.py is how retrieval works.\n"],
       ]),
     );
@@ -86,7 +86,7 @@ describe("retiredRefs ranking", () => {
 
   it("does not exclude a dated-looking name that is not a whole filename", async () => {
     mLoad.mockResolvedValue(
-      corpus([["projects/plan-2026-07-26-rollout.md", "# Plan\n\nUse recall.py.\n"]]),
+      corpus([["projects/plan-2025-01-20-rollout.md", "# Plan\n\nUse recall.py.\n"]]),
     );
     expect((await health()).retiredRefs).toHaveLength(1);
   });
@@ -110,7 +110,7 @@ describe("retiredRefs ranking", () => {
 
   it("says nothing when every mention is already marked", async () => {
     mLoad.mockResolvedValue(
-      corpus([["notes/done.md", "# Done — SUPERSEDED 2026-07-30\n\nrecall.py ranked the index.\n"]]),
+      corpus([["notes/done.md", "# Done — SUPERSEDED 2025-02-28\n\nrecall.py ranked the index.\n"]]),
     );
     expect((await health()).retiredRefs).toHaveLength(0);
   });
@@ -119,10 +119,11 @@ describe("retiredRefs ranking", () => {
 describe("triage tuning", () => {
   it("does not alert on the shapes that were never secrets", async () => {
     const { plausibleSecret } = await import("../lib/health");
-    // Four shapes that look like secrets but are not:
-    expect(plausibleSecret("sudo is ENABLED via sudoers (`alice ALL=(ALL) NOPASSWD: ALL`)")).toBe(false);
-    expect(plausibleSecret("Fix: `~/.zshrc` now has `export GITHUB_PERSONAL_ACCESS_TOKEN=<your-pat-here>`")).toBe(false);
-    expect(plausibleSecret("override inline: `GITHUB_TOKEN=ghp_exampl npx tsx ...`")).toBe(false);
+    // Four shapes that look like secrets but are not: a secret-ish key with a short value, a
+    // documented placeholder, a short inline override, and a variable reference.
+    expect(plausibleSecret("lockout policy — MAX_PASSWORD_ATTEMPTS: 5, then a 15-minute wait")).toBe(false);
+    expect(plausibleSecret("Set `export SERVICE_API_TOKEN=<your-token-goes-here>` before the first run")).toBe(false);
+    expect(plausibleSecret("override inline: `API_TOKEN=abc123 npm run check`")).toBe(false);
     expect(plausibleSecret("MY_TOKEN=${SOME_OTHER_VAR}")).toBe(false);
     // And the shape that IS worth a critical alert: secret-ish name, long opaque value.
     expect(plausibleSecret("API_SECRET=k9f2mQ81xPzL04vWyTr7NnB3")).toBe(true);
@@ -130,8 +131,8 @@ describe("triage tuning", () => {
 
   it("treats command and variable substitution as indirection, not a secret", async () => {
     const { plausibleSecret } = await import("../lib/health");
-    expect(plausibleSecret('export GITHUB_PERSONAL_ACCESS_TOKEN="$(security find-generic-password -s github-pat -w)"')).toBe(false);
-    expect(plausibleSecret('GITHUB_TOKEN="${VAULT_GITHUB_TOKEN}" gh api …')).toBe(false);
+    expect(plausibleSecret('export SERVICE_API_TOKEN="$(pass show example/service-token)"')).toBe(false);
+    expect(plausibleSecret('API_TOKEN="${VAULT_API_TOKEN}" npm run check')).toBe(false);
   });
 
   it("alerts on a colon / JSON-form secret exactly as on its = twin — redact classifies both", async () => {

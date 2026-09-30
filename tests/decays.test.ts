@@ -4,10 +4,10 @@ import { parseFrontmatter, applyDecays } from "../lib/frontmatter";
 /**
  * `decays: false` takes a note off the verification-stamp clock.
  *
- * The check treated every stamped note alike, and the notes are not alike: "MEGAsync was removed
- * on 2026-07-26" cannot stop being true, while a runbook describing how a machine is configured
- * decays the moment the machine changes. Six of seven inbox findings were the first kind, which is
- * how the one that mattered — a recovery runbook with an unmitigated risk — got buried.
+ * The check treated every stamped note alike, and the notes are not alike: "the legacy build
+ * server was decommissioned on 2025-01-12" cannot stop being true, while a runbook describing how
+ * a machine is configured decays the moment the machine changes. When most inbox findings are the
+ * first kind, the one that matters — a recovery runbook with an unmitigated risk — gets buried.
  *
  * The direction of failure is the whole design. Being watched when you need not be is noise;
  * NOT being watched when you should be is a stale fact answered as current. So every ambiguous
