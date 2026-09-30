@@ -4,7 +4,7 @@ import { defineConfig } from "vitest/config";
 
 // Mirrors tsconfig's "@/*" -> "./*" mapping. Regex (not a plain "@" string
 // key) so it only matches the "@/..." local-root prefix and doesn't also
-// swallow scoped package specifiers like "@modelcontextprotocol/sdk".
+// swallow scoped package specifiers like "@modelcontextprotocol/server".
 const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
