@@ -15,11 +15,40 @@ permissions:
   contents: read
 
 jobs:
+  # Checks on the tag itself, before the suite runs and before anyone is asked to
+  # approve publication. A bad tag fails here, not at the approval gate.
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      # Third-party actions are pinned to full commit SHAs; a movable tag is a supply-chain
+      # door this workflow does not need to leave open. The comment carries the version.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history, so the default branch is there to test ancestry against.
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a tag from the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: git merge-base --is-ancestor HEAD "refs/remotes/origin/$DEFAULT_BRANCH"
+      # The published text is the reviewed header and guide for exactly this version. A tag on
+      # a commit whose package version, header or guide is for another release stops here.
+      - name: Require the tag to match the reviewed release text
+        run: |
+          test "v$(jq -r .version package.json)" = "$GITHUB_REF_NAME"
+          grep -qxF "## What changed in ${GITHUB_REF_NAME}" .github/RELEASE_HEADER.md
+          test -f "docs/releases/${GITHUB_REF_NAME}.md"
   verify:
+    needs: preflight
     # Re-run portable unit/build and zero-skip native gates at this exact tag.
     uses: ./.github/workflows/ci.yml
   release:
-    needs: verify
+    # Both, not just verify: publication must not depend on verify happening to propagate a
+    # preflight failure. release-workflow.test.ts also forbids if: and continue-on-error here.
+    needs: [preflight, verify]
     # Configure approved v* tags and a required maintainer review in this
     # environment. Passing CI alone does not approve publication.
     environment:
@@ -31,17 +60,12 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      # gh release create --discussion-category opens the Announcements thread.
+      discussions: write
     steps:
-      # Third-party actions are pinned to full commit SHAs; a movable tag is a supply-chain
-      # door this workflow does not need to leave open. The comment carries the version.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Require a tag from the default branch
-        env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-        run: git merge-base --is-ancestor HEAD "refs/remotes/origin/$DEFAULT_BRANCH"
       # The one asset a source-served project has: the exact tree at the tag, packaged here
       # rather than trusted from an archive produced elsewhere, so the attestation below has
       # a stable subject. HEAD is the tag's commit on a tag-push run.

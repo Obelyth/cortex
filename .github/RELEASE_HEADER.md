@@ -1,22 +1,20 @@
 This release packages the source at its tag. Read any **Action required** section below before upgrading an existing installation.
 
-## What changed in v2.0.0
+## What changed in v2.0.1
 
-- A protected five-tab dashboard with dim Paper and dark Ink themes, consistent rounded surfaces, subtle dotted panels, calmer button motion and an optional orange-and-teal cursor outline.
-- One place on Overview for working notes and project-context previews, starting at None; Ask links to the same workflow.
-- Readiness and receipts for separately authorized checks, database migration commands and deployments, with explicit confirmation before execution.
-- A blank private-brain starter and distinct new-database bootstrap and existing-database upgrade paths.
-- Linux and macOS setup entry points in the same source archive. Both lead to the hosted web dashboard, not a desktop binary.
+- Privacy: documentation examples and MCP tool descriptions now use neutral placeholder names, hosts, values and wording, and test fixtures and code comments were rewritten as self-contained examples.
+- Security updates: the lockfile moves brace-expansion, fast-uri and ip-address to their patched releases, which resolves six Dependabot advisories. None of the three runs in the deployed server.
+- Documentation fixes: the security policy describes what the health check actually probes, the environment example documents the timezone default and a missing setting, the maintenance template lists every trusted tool, and broken links in the setup and repository guides now point at their public sources.
+- Release publishing: only the release workflow publishes a release, after the checks at the tag pass and a maintainer approves it in the `release` environment (the approval step is new since v2.0.0). The pull-request housekeeping workflow added since v2.0.0 does not run on version tags.
+- Overview shows its introduction and the working-notes workspace as separate sections in both themes. Controls and their meanings are unchanged.
+- For contributors: a GitHub Codespaces setup (Node 22, non-root, locked install) that does not start the server, run migrations or deploy; a documentation hub, a repository settings guide and an updated design reference; an optional Claude pull-request review workflow and housekeeping checks; documented export privacy checks; and evaluation scripts that take their label file from `--labels`.
 
 ## Action required
 
-- Local tools and builds require Node 22.18.0 or newer within 22.x, not Node 20 or a newer major version. Configure the hosting project's Node version accordingly.
-- Configure `CONSOLE_PASSCODE` separately from the connector secret before deploying. The browser console fails closed without it; MCP access is separate.
-- Back up notes and database state separately. Existing v1.2.0 databases predate the supported Ops migration baseline and require an administrator-reviewed integration plan before deployment. This release does not provide an automatic upgrade for them. Never run pristine bootstrap or fabricate migration records on an existing database.
-- If historical migration records have no checksums, dashboard apply remains blocked pending evidence-backed administrator reconciliation. A read-only check or hashes of today's files cannot certify what ran in the past.
-- Optional dashboard checks, deployments and configuration saves require their own provider grants and database receipts. They do not become authorized simply by installing new source.
+- **From v2.0.0:** if `BRAIN_TZ` is unset or empty, daily log boundaries now use UTC. Before redeploying, set `BRAIN_TZ` to the IANA timezone your daily logs should follow. Nothing else is required.
+- **From v1.2.0 or earlier:** every v2.0.0 requirement still applies. Local tools and builds require Node 22.18.0 or newer within 22.x. Configure `CONSOLE_PASSCODE` separately from the connector secret before deploying. Back up notes and database state separately; existing v1.2.0 databases need an administrator-reviewed integration plan, and pristine bootstrap or fabricated migration records must never be used on an existing database. Read the [v2.0.0 upgrade requirements for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.0.md#action-required-for-existing-installations). The `BRAIN_TZ` change above applies too.
 
-Read the [v2.0.0 release and upgrade guide for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.0.md) before continuing.
+Read the [v2.0.1 release guide for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.1.md) before continuing.
 
 ## Install and verify
 
@@ -41,6 +39,4 @@ The wizard asks before creating a private brain, importing notes, saving provide
 
 **Updates:** `npm run update` is an optional interactive source and deployment helper. Back up notes and database state separately, review local changes and release instructions, and check the resulting deployment. It does not apply database migrations.
 
-The attached `cortex-<tag>.tar.gz` is the tree packaged by the release workflow. Verify its provenance attestation with `gh attestation verify cortex-<tag>.tar.gz --owner Obelyth`. Subscribe to GitHub **Watch → Custom → Releases** for future releases.
-
----
+The attached `cortex-<tag>.tar.gz` is the tree packaged by the release workflow. Verify its provenance attestation with `gh attestation verify cortex-<tag>.tar.gz --repo Obelyth/cortex`. Subscribe to GitHub **Watch → Custom → Releases** for future releases.
