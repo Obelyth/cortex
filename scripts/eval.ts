@@ -406,10 +406,12 @@ async function main(): Promise<void> {
   const k = arg("k") ? num("k", 10) : undefined;
   const out = arg("out") ?? `results/eval-${model}.json`;
 
+  // The label count, sample size and label-file hash go to the results file (labelsTotal, sampled,
+  // labelsHash), not the console: nothing read from the operator-named file is echoed to a log.
   console.error(
-    `eval: ${labels.length} labels x ${runs} run(s) · ${model} (${provider}) · concurrency ${concurrency}\n` +
+    `eval: ${runs} run(s) · ${model} (${provider}) · concurrency ${concurrency}\n` +
       `      judges: ${panel.map((j) => j.model).join(", ")}${judgeIndependent ? "" : "  [NOT INDEPENDENT — same family as the candidate]"}\n` +
-      `      labels sha ${labelsHash}\n`
+      `      label set: see labelsTotal, sampled and labelsHash in ${out}\n`
   );
 
   const {rows, corpusCommit, stale} = await evaluateRows({all, labels, runs, concurrency, model, k, reader: modelReader, panel});
