@@ -323,10 +323,10 @@ describe("dateUndatedNotes — the clock's second job", () => {
 });
 
 /**
- * Regression: 2026-08-12. A note carrying a literal NUL byte (U+0000) landed in the brain, and
- * every sync_apply from then on 400'd whole — Postgres cannot hold the byte in text, and jsonb
- * refuses its escape outright — so the mirror froze at the last clean commit and the connections
- * graph (whose rebuild trigger rides the mirror path only) froze with it, both silently. The
+ * Regression: once a note carrying a literal NUL byte (U+0000) lands in the brain, every
+ * sync_apply from then on 400s whole — Postgres cannot hold the byte in text, and jsonb refuses
+ * its escape outright — so the mirror freezes at the last clean commit and the connections graph
+ * (whose rebuild trigger rides the mirror path only) freezes with it, both silently. The
  * sync seam must strip exactly that byte: history already carrying it has to stay syncable, and
  * every byte the store CAN hold must survive untouched.
  */

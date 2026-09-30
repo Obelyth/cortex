@@ -3,7 +3,7 @@
  *
  * v2 (from the Claude Design canvas "Cortex Console v2"): the console lives
  * on the OBELYTH dark ink world by default, and paper is a setting. Both dictionaries below are
- * derived from the canvas, with the approved softer paper refinement (2026-09-12). The names are the semantic
+ * derived from the canvas, with the approved softer paper refinement. The names are the semantic
  * layer the dark world always had (app/globals.css) plus v2's additions — surface2, accent-on,
  * band, the inv-* set for inverted regions, grain, elev1, cast, well, glass, wordmark, modebg,
  * bezel, trough, mast. Screens read these names; the ground swaps underneath them.

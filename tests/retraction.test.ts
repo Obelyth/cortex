@@ -13,10 +13,10 @@ import { verifyQuote, retraction, retracted, splitBlocks } from "../lib/verify";
  */
 
 const CORRECTION =
-  'Cortex runs on Vercel (was: "cortex runs on Fly.io" — updated 2026-07-20). The deploy is stateless.';
+  'Cortex runs on Vercel (was: "cortex runs on Fly.io" — updated 2025-02-20). The deploy is stateless.';
 
 const BANNER =
-  "> **SUPERSEDED 2025-02-17 — the demo is offline.**\n\nLAUNCHED 2025-02-03: the demo is public.";
+  "> **SUPERSEDED 2025-02-17 — the oven is cold.**\n\nLIT 2025-02-03: the oven is hot.";
 
 describe("a correction is not a retraction", () => {
   it("stamps the CURRENT claim beside a (was: …) marker as corrected, not dead", () => {
@@ -38,7 +38,7 @@ describe("a correction is not a retraction", () => {
   });
 
   it("leaves an explicit banner exactly as strong as it was", () => {
-    const v = verifyQuote(BANNER, "LAUNCHED 2025-02-03: the demo is public.");
+    const v = verifyQuote(BANNER, "LIT 2025-02-03: the oven is hot.");
     expect(v.verified).toBe(true);
     expect(v.retraction).toBe("banner");
     expect(v.superseded).toBe(true);

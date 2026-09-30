@@ -1,6 +1,6 @@
 /**
  * The ground — ink or paper — is a per-device choice kept in a cookie scoped to the console
- * path. Ink is the default (v2, 2026-09-05); paper is the setting. A plain module, no React,
+ * path. Ink is the default (v2); paper is the setting. A plain module, no React,
  * so the layout (server), the route (server) and the switch (client) read one definition.
  */
 export type Ground = "ink" | "paper";

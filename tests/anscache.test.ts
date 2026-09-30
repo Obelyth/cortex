@@ -24,12 +24,12 @@ const corpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["projects/sample.md", "**The oven is cold** (checked 2025-02-17). The thermometer reads 18C."],
     ["projects/hotel.md", "The import queue was written to a dropped table."],
   ]),
 };
 
-const SHAPE = { question: "is sample live", sha: corpus.sha, model: "claude-sonnet-5", k: 10 as const };
+const SHAPE = { question: "is sample warm", sha: corpus.sha, model: "claude-sonnet-5", k: 10 as const };
 const TRUSTED = { door: "trusted" as const, scope: [], citations: true };
 const GUEST = { door: "guest" as const, scope: ["projects/"], citations: false };
 
@@ -62,12 +62,12 @@ describe("cache key fingerprinting", () => {
     expect(cacheKey({ ...SHAPE, question: "cafe\u0301" }, TRUSTED)).toBe(
       cacheKey({ ...SHAPE, question: "caf\u00e9" }, TRUSTED));
     const oldHash = createHash("sha256").update(JSON.stringify({
-      q: "is sample live", sha: corpus.sha, model: "claude-sonnet-5", k: 10,
+      q: "is sample warm", sha: corpus.sha, model: "claude-sonnet-5", k: 10,
       door: "trusted", scope: [], citations: true,
     })).digest("hex");
     expect(cacheKey(SHAPE, TRUSTED).split(":").at(-1)).not.toBe(oldHash);
     const beforeUnicode = createHash("sha256").update(JSON.stringify({
-      pipeline: 3, q: "is sample live", sha: corpus.sha, model: "claude-sonnet-5", k: 10,
+      pipeline: 3, q: "is sample warm", sha: corpus.sha, model: "claude-sonnet-5", k: 10,
       door: "trusted", scope: [], citations: true,
     })).digest("hex");
     expect(cacheKey(SHAPE, TRUSTED).split(":").at(-1)).not.toBe(beforeUnicode);
@@ -79,7 +79,7 @@ describe("cache key fingerprinting", () => {
   it("is stable for the same ask and harmless whitespace", async () => {
     const { cacheKey } = await keys();
     expect(cacheKey(SHAPE, TRUSTED)).toBe(cacheKey(SHAPE, TRUSTED));
-    expect(cacheKey({ ...SHAPE, question: "  is   sample live " }, TRUSTED)).toBe(
+    expect(cacheKey({ ...SHAPE, question: "  is   sample warm " }, TRUSTED)).toBe(
       cacheKey(SHAPE, TRUSTED)
     );
   });
@@ -170,7 +170,7 @@ function fakeStore(seed: Record<string, string> = {}) {
 }
 
 const ENTRY = {
-  reply: "VERIFIED — proven.\n\nNo, the demo is offline.",
+  reply: "VERIFIED — proven.\n\nNo, the oven is cold.",
   stamp: "VERIFIED",
   model: "claude-sonnet-5",
   commit: "eaf0a03e4849",
@@ -279,9 +279,9 @@ function mockAnthropic(counter: { calls: number }, reply?: (tag: string) => stri
               {
                 type: "text",
                 text: reply?.(tag) ?? JSON.stringify({
-                  answer: "No — the demo is offline.",
+                  answer: "No — the oven is cold.",
                   tag,
-                  quote: "The demo is offline",
+                  quote: "The oven is cold",
                 }),
               },
             ],
@@ -326,33 +326,33 @@ describe("trusted door: hit, miss, marker", () => {
   it.each(["sk-synthetic-abcdefghijklmnopqrstuv","Bearer syntheticOpaqueCredential123","github_pat_syntheticOpaqueCredential123"])("redacts fresh and poisoned cache replies through the registered tool: %s", async (secret) => {
     const store = fakeStore();
     const counter = { calls: 0 };
-    mockAnthropic(counter, tag => JSON.stringify({ answer: `The key is ${secret}`, tag, quote: "The demo is offline" }));
+    mockAnthropic(counter, tag => JSON.stringify({ answer: `The key is ${secret}`, tag, quote: "The oven is cold" }));
     await pinCorpus();
     const handler = await captureAsk(false);
-    const fresh = await handler({ question: "is sample live" });
+    const fresh = await handler({ question: "is sample warm" });
     expect(fresh.content[0].text).toMatch(/^VERIFIED/);
     expect(fresh.content[0].text).not.toContain(secret);
     const key = [...store.data.keys()].find(k => k.includes("anscache"))!;
     expect(key).toBeTruthy();
     expect(store.data.get(key)).not.toContain(secret);
     store.data.set(key, JSON.stringify({ ...ENTRY, reply: `VERIFIED — ${secret}` }));
-    const hit = await handler({ question: "is sample live" });
+    const hit = await handler({ question: "is sample warm" });
     expect(hit.content[0].text).toContain("no model call");
     expect(hit.content[0].text).not.toContain(secret);
     expect(counter.calls).toBe(1);
   });
 
   it.each([
-    ["blank answer", (tag: string) => JSON.stringify({ answer: "   ", tag, quote: "The demo is offline" })],
-    ["missing quote", (tag: string) => JSON.stringify({ answer: "The demo is offline", tag, quote: "" })],
-    ["positive prose", () => "The demo is offline"],
+    ["blank answer", (tag: string) => JSON.stringify({ answer: "   ", tag, quote: "The oven is cold" })],
+    ["missing quote", (tag: string) => JSON.stringify({ answer: "The oven is cold", tag, quote: "" })],
+    ["positive prose", () => "The oven is cold"],
     ["malformed abstention", () => JSON.stringify({ answer: "NOT IN BRAIN", tag: null, quote: "" })],
   ])("does not cache protocol failure: %s", async (_name, reply) => {
     const store = fakeStore();
     mockAnthropic({ calls: 0 }, reply);
     await pinCorpus();
     const handler = await captureAsk(false);
-    const result = await handler({ question: "is sample live" });
+    const result = await handler({ question: "is sample warm" });
     expect(result.content[0].text).toMatch(/^UNVERIFIED/);
     expect([...store.data.keys()].filter(k => k.includes("anscache"))).toEqual([]);
   });
@@ -364,11 +364,11 @@ describe("trusted door: hit, miss, marker", () => {
     const { __setCache } = await import("../lib/corpus");
     __setCache({ ...corpus, files: new Map([
       ["notes/first.md", "…".repeat(80_000)], ["notes/omitted.md", "…".repeat(88_000)],
-      ["projects/sample.md", "The demo is offline"],
+      ["projects/sample.md", "The oven is cold"],
     ]) });
     const handler = await captureAsk(false);
     for (let i = 0; i < 2; i++) {
-      const result = await handler({ question: "is sample live", full: true });
+      const result = await handler({ question: "is sample warm", full: true });
       expect(result.content[0].text).toMatch(/^UNVERIFIED.*partial search/);
       expect(result.content[0].text).toContain("2 of 3");
     }
@@ -382,10 +382,10 @@ describe("trusted door: hit, miss, marker", () => {
     mockAnthropic(counter, () => JSON.stringify({ answer, tag: "", quote: "" }));
     await pinCorpus();
     const handler = await captureAsk(false);
-    const result = await handler({ question: "is sample live", full: true });
+    const result = await handler({ question: "is sample warm", full: true });
     expect(result.content[0].text).toMatch(/^NOT IN BRAIN/);
     expect(result.content[0].text).toContain("2 of 2");
-    await handler({ question: "is sample live", full: true });
+    await handler({ question: "is sample warm", full: true });
     expect(counter.calls).toBe(1);
     expect([...store.data.keys()].filter(k => k.includes("anscache"))).toHaveLength(1);
   });
@@ -398,10 +398,10 @@ describe("trusted door: hit, miss, marker", () => {
     mockAnthropic(counter, () => JSON.stringify({ answer: "NOT IN BRAIN", tag: "", quote: "" }));
     await pinCorpus();
     const handler = await captureAsk(false);
-    const result = await handler({ question: "demo pricing" });
+    const result = await handler({ question: "oven pricing" });
     expect(result.content[0].text).toMatch(/^NOT IN BRAIN/);
     expect(result.content[0].text).toContain("1 of 2 scoped notes searched; 1 omitted by retrieval; no unread note contains any word of the question");
-    const again = await handler({ question: "demo pricing" });
+    const again = await handler({ question: "oven pricing" });
     expect(again.content[0].text).toContain("no model call");
     expect(counter.calls).toBe(1);
     expect([...store.data.keys()].filter(k => k.includes("anscache"))).toHaveLength(1);
@@ -414,14 +414,14 @@ describe("trusted door: hit, miss, marker", () => {
     await pinCorpus();
     const ask = await captureAsk(false);
 
-    const fresh = await ask({ question: "is sample live" });
+    const fresh = await ask({ question: "is sample warm" });
     expect(fresh.isError).toBeUndefined();
     const freshText = fresh.content[0].text;
     expect(freshText).toMatch(/^VERIFIED/);
     expect(freshText).toContain("MODEL CALL:");
     expect(counter.calls).toBe(1);
 
-    const hit = await ask({ question: "  is sample   live " }); // normalised to the same key
+    const hit = await ask({ question: "  is sample   warm " }); // normalised to the same key
     const hitText = hit.content[0].text;
     expect(counter.calls).toBe(1); // ZERO model calls on the hit
     expect(hitText).toMatch(/^VERIFIED/);
@@ -431,7 +431,7 @@ describe("trusted door: hit, miss, marker", () => {
     expect(hitText).not.toContain("MODEL CALL:");
 
     // A different question is a different key — fresh again, and cached under its own entry.
-    await ask({ question: "is the sample demo still offline" });
+    await ask({ question: "is the sample oven still cold" });
     expect(counter.calls).toBe(2);
     expect([...store.data.keys()].filter((k) => k.includes("anscache"))).toHaveLength(2);
   });
@@ -450,7 +450,7 @@ describe("trusted door: hit, miss, marker", () => {
                 {
                   type: "text",
                   // A fabricated quote: verifies false, renders UNVERIFIED.
-                  text: JSON.stringify({ answer: "It launched.", tag: "deadbeef0", quote: "The sample demo is public and working" }),
+                  text: JSON.stringify({ answer: "It is baking.", tag: "deadbeef0", quote: "The sample oven is hot and baking" }),
                 },
               ],
             };
@@ -461,9 +461,9 @@ describe("trusted door: hit, miss, marker", () => {
     await pinCorpus();
     const ask = await captureAsk(false);
 
-    const first = await ask({ question: "is sample live" });
+    const first = await ask({ question: "is sample warm" });
     expect(first.content[0].text).toMatch(/^UNVERIFIED/);
-    const second = await ask({ question: "is sample live" });
+    const second = await ask({ question: "is sample warm" });
     expect(second.content[0].text).toMatch(/^UNVERIFIED/);
     expect(calls).toBe(2); // both went to the model — nothing was pinned
   });
@@ -481,13 +481,13 @@ describe("guest door: a hit does not charge the budget", () => {
     const ask = await captureAsk(true);
 
     // Miss: metered (INCR once) and answered by the model.
-    const fresh = await ask({ question: "is sample live" });
+    const fresh = await ask({ question: "is sample warm" });
     expect(fresh.isError).toBeUndefined();
     expect(counter.calls).toBe(1);
     expect(store.incrs).toBe(1);
 
     // Hit: no model call AND no INCR — checked before the meter.
-    const hit = await ask({ question: "is sample live" });
+    const hit = await ask({ question: "is sample warm" });
     expect(hit.isError).toBeUndefined();
     expect(hit.content[0].text).toMatch(/cached · answered at [0-9a-f]{8}/);
     expect(counter.calls).toBe(1);
@@ -498,7 +498,7 @@ describe("guest door: a hit does not charge the budget", () => {
     expect(refused.isError).toBe(true);
     expect(refused.content[0].text).toMatch(/daily limit/);
     // …while the cached answer keeps serving, because it costs the operator nothing.
-    const stillServed = await ask({ question: "is sample live" });
+    const stillServed = await ask({ question: "is sample warm" });
     expect(stillServed.isError).toBeUndefined();
     expect(stillServed.content[0].text).toMatch(/cached · answered at/);
     expect(counter.calls).toBe(1);
@@ -511,13 +511,13 @@ describe("guest door: a hit does not charge the budget", () => {
     await pinCorpus();
 
     const guestAsk = await captureAsk(true);
-    const g = await guestAsk({ question: "is sample live" });
+    const g = await guestAsk({ question: "is sample warm" });
     expect(counter.calls).toBe(1);
     // The guest reply carries no source path — the shape the guest policy demands.
     expect(g.content[0].text).not.toContain("projects/sample.md");
 
     const trustedAsk = await captureAsk(false);
-    const t = await trustedAsk({ question: "is sample live" });
+    const t = await trustedAsk({ question: "is sample warm" });
     // The trusted ask must NOT be served the guest's citation-stripped entry.
     expect(counter.calls).toBe(2);
     expect(t.content[0].text).toContain("projects/sample.md");

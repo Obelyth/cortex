@@ -3,7 +3,7 @@
  *
  * Deliberately reuses splitBlocks() and retracted() from verify.ts rather than reimplementing
  * them. A console that computed its own idea of "retracted" would be a third opinion on the
- * corpus, and two opinions disagreeing is the exact drift Stage 5 spent a day deleting. If the
+ * corpus, and two opinions disagreeing is the exact drift the corpus rebuild deleted. If the
  * page and the answer ever disagree about a passage, that is a bug in one file, not two.
  */
 import { loadCorpus } from "./corpus";
@@ -50,7 +50,7 @@ export function lastVerified(text: string): string | null {
  *
  * ONE regex for the read and the write, which is the fix as much as "last, not first" is. The
  * console's write path used to carry its own narrower pattern requiring the stamp to END right
- * after the date (`_Facts last verified 2026-07-16._`) — and almost no real stamp does. The house
+ * after the date (`_Facts last verified 2025-01-16._`) — and almost no real stamp does. The house
  * shape is `_Facts last verified <date> — what was checked, what was skipped._`, so the button
  * answered "has no _Facts last verified_ stamp to refresh" on the very pages the queue was
  * flagging. It replaces the DATE and nothing else, so whatever prose the stamp carries survives
@@ -62,12 +62,12 @@ export function stampVerified(text: string, date: string): string | null {
   const m = all[all.length - 1];
   return text.slice(0, m.index) + `${m[1]}${date}` + text.slice(m.index + m[0].length);
 }
-/** Tools retired in Stage 5. A live note describing them answers about a system that is gone. */
+/** Tools retired in an earlier release. A live note describing them answers about a system that is gone. */
 const RETIRED = ["brain_recall", "brain_search", "brain-index.md", "build_index", "recall.py"];
 /**
  * A note whose filename is a date is a record OF that date, not a standing claim.
- * `log/2026-07-26.md` saying brain_recall is live was true the night it was written; flagging it
- * would ask the operator to falsify his own diary.
+ * `log/2025-01-20.md` saying brain_recall is live was true the night it was written; flagging it
+ * would ask the operator to falsify their own diary.
  *
  * Exported (with DATED_HEADING) because lib/inbox.ts applies the identical doctrine to its
  * superseded-link check — a diary entry naming a now-superseded page was true the night it was
@@ -104,7 +104,7 @@ export interface NoteRow {
   /**
    * Whether the note's stamp can go stale — `decays: false` in its frontmatter says no. The
    * stale queue already honours it above; exposed here so the explorer can dim a settled note's
-   * stamp instead of painting it amber (v2, 2026-09-05). True when the note does not say.
+   * stamp instead of painting it amber (v2). True when the note does not say.
    */
   decays: boolean;
 }
@@ -197,8 +197,8 @@ export function plausibleSecret(line: string): boolean {
     if (!SECRETISH_KEY.test(m[1])) continue;
     const value = m[2].replace(/^[`"']|[`"',.;]+$/g, "");
     if (value.length < 16) continue;
-    // $(…) and ${…} are indirection, not secrets — a note documenting `TOKEN="$(security
-    // find-generic-password …)"` is describing Keychain hygiene, the exact practice the
+    // $(…) and ${…} are indirection, not secrets — a note documenting `TOKEN="$(pass show
+    // example/token)"` is describing secret-manager hygiene, the exact practice the
     // alert exists to encourage. Quoted substitutions carry spaces, so this is a prefix
     // test rather than part of the single-token placeholder regex.
     if (/^\$[({]/.test(value)) continue;
@@ -238,8 +238,8 @@ export async function health(now = new Date()): Promise<Health> {
         if (found.length) {
           // `hit` is verify.ts's verdict, reused rather than re-derived. A mention already under a
           // SUPERSEDED / CORRECTION / (was: "…") marker is caught on the read path, so it is
-          // counted as handled. Two opinions about what "retracted" means is the drift Stage 5
-          // spent a day deleting.
+          // counted as handled. Two opinions about what "retracted" means is the drift the corpus
+          // rebuild deleted.
           if (hit) retiredMarked++;
           else {
             for (const t of found) retiredTerms.add(t);
@@ -274,8 +274,8 @@ export async function health(now = new Date()): Promise<Health> {
       const kind = out.includes("<redacted-token>") ? "vendor token"
         : out.includes("<redacted-jwt>") ? "jwt"
         : out.includes("<redacted-url>") ? "url secret" : "key=value";
-      // Egress redaction is recall; this alert is precision. The generic key=value shape
-      // matched sudoers lines (NOPASSWD: ALL=...), documented placeholders, and 10-char
+      // Egress redaction is recall; this alert is precision. The generic key=value shape also
+      // matches config lines where `=` or `:` is only syntax, documented placeholders, and short
       // shell examples — none a credential. It only alerts when the key NAME is secret-ish
       // and the value is long enough to be one and not a placeholder. Vendor tokens, JWTs
       // and URL secrets keep alerting unconditionally — those shapes don't false-positive.
@@ -307,7 +307,7 @@ export async function health(now = new Date()): Promise<Health> {
         // claim (the DATED_ENTRY doctrine above, already applied to the retired-tool check).
         // Its stamp cannot go stale, so it never rides the re-verify queue — otherwise a day
         // log that happens to quote a "_Facts last verified_" line asks the operator to
-        // re-verify his own diary, burning a groundskeeper slot on a page that can never resolve.
+        // re-verify their own diary, burning a groundskeeper slot on a page that can never resolve.
         if (age > 14 && !dated && fm.decays !== false) {
           stale.push({
             path,

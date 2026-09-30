@@ -116,7 +116,7 @@ export interface AskResult {
    *  contract, or a note talked it into naming a file by path. Both must be visible. */
   unresolvedTag: boolean;
   /**
-   * The narrowing's working, for the console's "what it read" (2026-09-05, "no black box"):
+   * The narrowing's working, for the console's "what it read" ("no black box"):
    * the pack in rank order with each note's score, matched terms and bytes; every scored
    * candidate a cap refused, with the cap; how many files carried no signal at all. `candidates`
    * stays the pack's paths, byte-for-byte what `shortlist` lists, so the call log and the MCP
@@ -593,7 +593,7 @@ export async function ask(question: string, read: Reader, opts: AskOptions = {})
     commit: corpus.sha.slice(0, 12),
     candidates: paths,
     // Measured on the prompt actually sent: the contract, the question and the per-file
-    // banners are billed too. Counting only file bodies under-reported by 5-8%.
+    // banners are billed too. Counting only file bodies under-reported the bill.
     packTokens: Math.round(prompt.length / 4),
     corpusTokens: Math.round(
       [...corpus.files.values()].reduce((a, t) => a + t.length, 0) / 4
@@ -735,7 +735,7 @@ function renderFull(r: AskResult): string {
     // The highest-value check in the whole file. This brain keeps retracted claims on the
     // page on purpose — `> **SUPERSEDED …**`, `> **CORRECTION …**`, `(was: "…")` — so the
     // text being verbatim is exactly what a stale answer looks like. A status page can still
-    // say "LAUNCHED … the demo is public" two lines under a banner saying the demo is offline.
+    // say "the oven is lit" two lines under a banner saying the oven has gone cold.
     stamp = `SUPERSEDED — the quote is verbatim in ${at}, but that passage is marked as retracted or corrected. It is history, not the current state. Do not answer from it.`;
   } else if (r.quoteFileCount > 1) {
     stamp = `PARTIALLY VERIFIED — the quote is verbatim, but it appears in ${r.quoteFileCount} notes, so it does not establish that ${c.path} is the source.`;

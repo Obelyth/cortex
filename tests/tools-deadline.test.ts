@@ -21,7 +21,7 @@ const URL_KEY = "KV_REST_API_URL";
 const TOK_KEY = "KV_REST_API_TOKEN";
 const SHA = "eaf0a03e4849aaaa";
 const NOTES = {
-  "projects/sample.md": "**The demo is offline** (checked 2025-02-17). The preview link returns 404.",
+  "projects/sample.md": "**The oven is cold** (checked 2025-02-17). The thermometer reads 18C.",
   "projects/hotel.md": "The import queue was written to a dropped table.",
 };
 
@@ -97,7 +97,7 @@ function mockAnthropic(events: string[], stall: boolean) {
           const tag = stable.match(/FILE: projects\/sample\.md \[tag: ([0-9a-z]+)\]/)?.[1] ?? "";
           return Promise.resolve({
             stop_reason: "end_turn",
-            content: [{ type: "text", text: JSON.stringify({ answer: "No — the demo is offline.", tag, quote: "The demo is offline" }) }],
+            content: [{ type: "text", text: JSON.stringify({ answer: "No — the oven is cold.", tag, quote: "The oven is cold" }) }],
           });
         },
       };

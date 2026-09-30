@@ -145,7 +145,7 @@ function num(name: string, fallback: number): number {
   const v = arg(name);
   if (v === undefined) return fallback;
   const n = Number(v);
-  // A NaN or zero concurrency once produced a results file reading "labels: 204, errors: 0"
+  // A NaN or zero concurrency once produced a results file reading "labels: N, errors: 0"
   // with no API call made and exit 0 — a fabricated-looking measurement of nothing.
   if (!Number.isFinite(n) || n <= 0) {
     console.error(`--${name} must be a positive number, got "${v}"`);
@@ -368,7 +368,7 @@ async function main(): Promise<void> {
   }
 
   // The judge panel is resolved and checked BEFORE any paid reader call. A run that grades
-  // nothing must not be discovered after 204 billed asks.
+  // nothing must not be discovered after a full set of billed asks.
   const panel = JUDGE_CANDIDATES.filter((j) => providerConfigured(j.provider));
   if (panel.length === 0) {
     console.error(
@@ -380,18 +380,20 @@ async function main(): Promise<void> {
   }
   const judgeIndependent = !panel.some((j) => j.provider === provider);
 
-  const brain = arg("brain") ?? path.resolve("../brain");
-  const labelsPath = path.join(brain, "tools/eval/labels.json");
-  if (!existsSync(labelsPath)) {
-    console.error(`no labels at ${labelsPath} — pass --brain <path to the brain clone>`);
+  // The label set is not part of the brain's shape, so its location is always given, never
+  // guessed from the checkout layout.
+  // Taken from the command line only, so the run names its label file explicitly.
+  const labelsPath = arg("labels");
+  if (!labelsPath || !existsSync(labelsPath)) {
+    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json>`);
     process.exit(2);
   }
   const labelsRaw = readFileSync(labelsPath, "utf8");
   const all: Label[] = JSON.parse(labelsRaw);
   const labelsHash = createHash("sha256").update(labelsRaw).digest("hex").slice(0, 12);
 
-  // A sample is drawn at RANDOM from a seed, never head-sliced: labels.json is clustered by
-  // note, so the first N is one corner of the corpus and contains no absence labels at all.
+  // A sample is drawn at RANDOM from a seed, never head-sliced: a label file is usually clustered
+  // by note, so the first N is one corner of the corpus and may contain no absence labels at all.
   const sampleSize = arg("sample") ? num("sample", all.length) : all.length;
   let labels = all;
   if (sampleSize < all.length) {
@@ -404,10 +406,12 @@ async function main(): Promise<void> {
   const k = arg("k") ? num("k", 10) : undefined;
   const out = arg("out") ?? `results/eval-${model}.json`;
 
+  // The label count, sample size and label-file hash go to the results file (labelsTotal, sampled,
+  // labelsHash), not the console: nothing read from the operator-named file is echoed to a log.
   console.error(
-    `eval: ${labels.length} labels x ${runs} run(s) · ${model} (${provider}) · concurrency ${concurrency}\n` +
+    `eval: ${runs} run(s) · ${model} (${provider}) · concurrency ${concurrency}\n` +
       `      judges: ${panel.map((j) => j.model).join(", ")}${judgeIndependent ? "" : "  [NOT INDEPENDENT — same family as the candidate]"}\n` +
-      `      labels sha ${labelsHash}\n`
+      `      label set: see labelsTotal, sampled and labelsHash in ${out}\n`
   );
 
   const {rows, corpusCommit, stale} = await evaluateRows({all, labels, runs, concurrency, model, k, reader: modelReader, panel});

@@ -104,7 +104,7 @@ describe("tagEdges", () => {
 describe("correctionEdges", () => {
   it("derives an edge from a SUPERSEDED banner naming another live note", () => {
     const files = corpus({
-      "notes/orchard-history.md": "intro\n\n> **SUPERSEDED 2025-02-17 — the demo is offline. See projects/orchard.md.**\n\nrest",
+      "notes/orchard-history.md": "intro\n\n> **SUPERSEDED 2025-02-17 — the oven is cold. See projects/orchard.md.**\n\nrest",
       "projects/orchard.md": "the current story",
     });
     const edges = correctionEdges(files);
@@ -358,8 +358,8 @@ describe("edgesPulse — the console's read, every degraded state named", () => 
 });
 
 /**
- * Regression: 2026-08-12. For three hours "the RPC refused every rebuild", "the scheduler never
- * ran" and "after() swallowed the work" were indistinguishable in production, because stale-head
+ * Regression: "the RPC refused every rebuild", "the scheduler never ran" and "after()
+ * swallowed the work" were indistinguishable in production, because stale-head
  * logged nothing and the no-request-scope catch logged nothing. A scheduler that can go dark has
  * to say WHICH dark it went. These tests pin the two formerly-silent paths to a line each.
  */

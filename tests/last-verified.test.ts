@@ -25,7 +25,7 @@ describe("lastVerified — the page's current freshness claim", () => {
     "",
     "## A later section",
     "",
-    "_Facts last verified 2026-08-12 — bounded pass, live state only._",
+    "_Facts last verified 2026-08-12 — spot check, pantry only._",
     "",
   ].join("\n");
 
@@ -87,13 +87,13 @@ describe("stampVerified — the button writes the stamp the queue reads", () => 
     // refused with "has no stamp to refresh" on very nearly every page the queue flagged, which
     // read as the console being broken rather than the pattern being wrong.
     const real =
-      "_Facts last verified 2026-08-12 — bounded pass. Exit codes re-read live; the run tally\n" +
-      "came straight out of the log. Not re-checked: the sheet's tab titles. Prior: 08-09, 08-03._";
+      "_Facts last verified 2026-08-12 — spot check. Oven temperatures re-read from the probe; the\n" +
+      "flour count came off the delivery note. Not re-checked: the rota. Prior: 08-01, 07-20._";
     const out = stampVerified(real, "2026-08-17")!;
     expect(out).not.toBeNull();
     expect(lastVerified(out)).toBe("2026-08-17");
     // Everything the stamp says about WHAT was checked survives the date change untouched.
-    expect(out).toContain("Not re-checked: the sheet's tab titles. Prior: 08-09, 08-03._");
+    expect(out).toContain("Not re-checked: the rota. Prior: 08-01, 07-20._");
   });
 
   it("preserves the closing punctuation in both shapes the brain uses", () => {

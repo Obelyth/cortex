@@ -724,7 +724,7 @@ function registerHandoffTool(server: McpServer): void {
  *   scope    — out-of-scope notes are removed from the corpus BEFORE the reader runs, so no
  *              answer can be written from a sentence the guest was not entitled to.
  *   model    — always a Claude reader, whatever the console default is. The gate does not move
- *              when the operator changes his own reader.
+ *              when the operator changes their own reader.
  *   budget   — a daily ceiling, metered in KV, so a leaked URL is a bounded cost.
  *   shape    — k is capped and full=true does not exist here; no caller-driven way to widen
  *              the pack toward the whole corpus.
@@ -735,7 +735,7 @@ function registerGuestAskTool(server: McpServer): void {
     {
       title: "Ask the operator's brain a question",
       description:
-        "Answer a question from the operator's brain. You do NOT receive his notes — a reader model on the operator's side reads them and returns a short answer, drawn only from the parts of the brain he has shared with guests. The reply carries a verdict: VERIFIED means the supporting text was checked against the brain deterministically, NOT IN BRAIN means the shared notes do not contain the answer, and UNVERIFIED means treat it as unproven. Source paths and verbatim excerpts are not returned. There is a daily limit on these questions, so ask real ones.",
+        "Answer a question from the operator's brain. You do NOT receive the operator's notes — a reader model on the operator's side reads them and returns a short answer, drawn only from the parts of the brain they have shared with guests. The reply carries a verdict: VERIFIED means the supporting text was checked against the brain deterministically, NOT IN BRAIN means the shared notes do not contain the answer, and UNVERIFIED means treat it as unproven. Source paths and verbatim excerpts are not returned. There is a daily limit on these questions, so ask real ones.",
       inputSchema: {
         question: z.string().min(1).max(2000).describe("The question to answer from the brain."),
         k: z
@@ -833,7 +833,7 @@ function registerProposeTool(server: McpServer): void {
     {
       title: "Propose a note for the operator's brain",
       description:
-        "Suggest something be added to the brain. This does NOT write to the brain and does NOT return a commit — it leaves a proposal for the operator, or for the model he trusts, to accept or discard. Say exactly that to the user: the note is proposed, not saved. Use it so work done here is not lost when the conversation ends. Write the content as the finished note you would want in the brain, in the same voice as the surrounding notes, and give a short honest reason.",
+        "Suggest something be added to the brain. This does NOT write to the brain and does NOT return a commit — it leaves a proposal for the operator, or for the model they trust, to accept or discard. Say exactly that to the user: the note is proposed, not saved. Use it so work done here is not lost when the conversation ends. Write the content as the finished note you would want in the brain, in the same voice as the surrounding notes, and give a short honest reason.",
       inputSchema: {
         path: z
           .string()

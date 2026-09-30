@@ -116,12 +116,12 @@ describe("untar — tar formats git actually emits", () => {
   // real tarball, it is the SHORT sha even when you request a full one — so ~26 bytes for
   // this repo. git then splits at the last "/" at index <=155, and everything after it must
   // fit in 100 BYTES. So the trigger is: a note whose BASENAME exceeds 100 bytes (non-ASCII
-  // counts 2-4 bytes per character). The longest basename in the brain today is 47 bytes, so
-  // this is not firing — it fires the day a generated note title runs long.
+  // counts 2-4 bytes per character). Hand-written note names sit far below that, so this is not
+  // firing — it fires the day a generated note title runs long.
   it("OK: a pax extended header ('x') names the entry that follows it", () => {
     const wrapper = "brain-abc123/";
     const long = "a".repeat(110) + ".md";
-    const full = `${wrapper}memory-2026-07/${long}`;
+    const full = `${wrapper}backup-2025-01/${long}`;
     const oid = "29e8e3cd1b193db4d9e5e589fd1a800df2fca220";
     const record = paxRecord("path", full);
 
@@ -129,16 +129,16 @@ describe("untar — tar formats git actually emits", () => {
       // git writes this first, verbatim, on every tarball.
       entry({ name: "pax_global_header", type: "g" }, paxRecord("comment", oid)),
       entry({ name: wrapper, type: "5" }),
-      entry({ name: `${wrapper}memory-2026-07/`, type: "5" }),
+      entry({ name: `${wrapper}backup-2025-01/`, type: "5" }),
       entry({ name: `${oid}.paxheader`, type: "x" }, record),
       entry({ name: `${oid}.data`, type: "0" }, "long basename note\n"),
-      entry({ name: `${wrapper}memory-2026-07/short.md`, type: "0" }, "short\n"),
+      entry({ name: `${wrapper}backup-2025-01/short.md`, type: "0" }, "short\n"),
       END
     );
 
     const got = files(buf);
-    expect(got.get("memory-2026-07/short.md")).toBe("short\n"); // control: parser stayed aligned
-    expect(got.get(`memory-2026-07/${long}`)).toBe("long basename note\n");
+    expect(got.get("backup-2025-01/short.md")).toBe("short\n"); // control: parser stayed aligned
+    expect(got.get(`backup-2025-01/${long}`)).toBe("long basename note\n");
   });
 
   it("OK: a 'g' global header never renames the entries that follow it", () => {
@@ -377,8 +377,8 @@ describe("isLive — bypasses", () => {
 
   it("OK: the .md test is case-INsensitive, so a note named X.MD is in the corpus", () => {
     // Was the only bypass on this list the operator could trigger by hand, and it failed toward
-    // omission: the note exists and the brain answered NOT IN BRAIN for it. brain_ask.py's
-    // live_files() carries the same case-insensitive test, or the two corpora drift.
+    // omission: the note exists and the brain answered NOT IN BRAIN for it. The reference
+    // ranker's corpus walk carries the same case-insensitive test, or the two corpora drift.
     expect(isLive("notes/Setup.MD")).toBe(true);
     expect(isLive("notes/Setup.Md")).toBe(true);
     expect(isLive("notes/setup.markdown")).toBe(false);

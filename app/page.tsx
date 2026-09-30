@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { robots: { index: false, follow: false } };
 
 /**
- * The root IS the dashboard — for this operator's devices. Answering the passcode prompt once
- * (/s/<secret>/console) stamps the device cookie; from then on the bare domain forwards
+ * The root IS the dashboard — for a device that has answered the passcode prompt. Answering it
+ * once (/s/<secret>/console) stamps the device cookie; from then on the bare domain forwards
  * straight to the board. Any device without the stamp gets a 404: there is no public page,
  * no name, no hint. The deployment does not advertise what the secret protects — and a cookie
  * that merely repeats the path secret stopped being a stamp when the passcode arrived, so a

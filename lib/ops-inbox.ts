@@ -5,7 +5,7 @@
  * Not the Attention screen. That screen is a two-column working surface — a detail pane, a
  * 30px heading, three write buttons — and mounting it whole inside a 380px rail is what put its
  * buttons past the viewport edge and made the rail a 1400px block that shoved the controls to
- * the foot of the page (critique 2026-09-05, P0). A rail summarises and points; the Attention
+ * the foot of the page (design critique, P0). A rail summarises and points; the Attention
  * screen keeps its route and its job.
  */
 import type { TriageItem } from "./health";

@@ -52,7 +52,7 @@ describe("validatePath", () => {
   // archive/ is READ-only history: writable once, and unreadable ever after, because the corpus
   // predicate excludes the whole prefix. The write is refused with its own message so a caller
   // learns immediately rather than a month later.
-  it.each(["archive/old/x.md", "archive/memory-2026-07/a--b.md"])(
+  it.each(["archive/old/x.md", "archive/backup-2025-01/a--b.md"])(
     "refuses %s as a write target, and says why",
     (p) => expect(() => validatePath(p)).toThrow(/read-only/)
   );
@@ -578,9 +578,9 @@ describe("getContext with the bubble", () => {
 });
 
 /**
- * Regression: 2026-08-12. brain_write accepted a literal NUL byte into a project note and
- * committed it to git; Postgres cannot hold that byte, so every mirror sync from then on 400'd
- * whole and the mirror — and the connections graph riding it — froze silently for hours. The
+ * Regression: brain_write could accept a literal NUL byte into a note and commit it to git;
+ * Postgres cannot hold that byte, so every mirror sync from then on 400'd whole and the mirror —
+ * and the connections graph riding it — froze silently. The
  * write path is the INGRESS: the byte must never reach git at all. Scrubbing covers the whole
  * final file, not just the incoming piece, so a file poisoned before this guard existed heals
  * itself on its next write.

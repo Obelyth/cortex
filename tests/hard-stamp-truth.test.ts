@@ -11,8 +11,8 @@ import { splitBlocks, verifyQuote, isBannerText } from "../lib/verify";
  * That is how a fix shipped green and inert: `retraction()` was moved onto the new heading rule
  * and `retracted()` was left on the old one, so the pair became (superseded: true,
  * retraction: "none") — which matches NEITHER arm of render() and falls through to the absolute
- * "It is history, do not answer from it." Twelve blocks reclassified, zero stamps changed, 647
- * tests green.
+ * "It is history, do not answer from it." Blocks were reclassified, zero stamps changed, and the
+ * whole suite stayed green.
  *
  * The stamp is the product. A test that stops one level short of it is testing a private
  * implementation detail and calling it a guarantee, so this one reproduces render()'s branch
@@ -51,12 +51,12 @@ function walk(dir: string, base = ""): string[] {
 describe("the rendered stamp", () => {
   it("a prose 'correction' heading does not stamp its section dead", () => {
     // The exact shape that was reclassified but still rendered SUPERSEDED.
-    const text = "## Correction to the deploy section (2026-08-09)\n\nThe deploy is stateless and runs on Vercel.\n";
+    const text = "## Correction from review (2025-02-09)\n\nThe deploy is stateless and runs on Vercel.\n";
     expect(stampOf(text, "The deploy is stateless and runs on Vercel.")).not.toBe("SUPERSEDED");
   });
 
   it("a SHOUTED heading still stamps its section dead", () => {
-    const text = "## SUPERSEDED 2026-08-09 — see the newer page\n\nThe deploy runs on Fly.io.\n";
+    const text = "## SUPERSEDED 2025-02-09 — see the newer page\n\nThe deploy runs on Fly.io.\n";
     expect(stampOf(text, "The deploy runs on Fly.io.")).toBe("SUPERSEDED");
   });
 
@@ -76,7 +76,7 @@ describe("the rendered stamp", () => {
   });
 
   it("a marker too short to be a citation cannot retire one", () => {
-    // 17 of 79 markers in the corpus normalise below MIN_QUOTE. A three-character "..." in a
+    // Retired wordings are often shorter than MIN_QUOTE once normalised. A three-character "..." in a
     // neighbouring block must not swallow every quote that happens to contain it.
     const text = 'The pipeline is green and the backlog is clear.\n\nStatus reworded (was: "...").\n';
     expect(stampOf(text, "The pipeline is green and the backlog is clear.")).not.toBe("SUPERSEDED");
@@ -86,7 +86,7 @@ describe("the rendered stamp", () => {
 describe.skipIf(!present)("stamp truth against the live corpus", () => {
   /**
    * The regression that matters at scale: a block carrying its own `(was: "…")` correction, quoted
-   * WHOLE, must not come back dead. 55 passages were failing this way — every one current text.
+   * WHOLE, must not come back dead. Passages were failing this way — every one current text.
    */
   it("no whole-sentence house-style correction stamps as SUPERSEDED", () => {
     const wrong: string[] = [];
@@ -98,7 +98,7 @@ describe.skipIf(!present)("stamp truth against the live corpus", () => {
       const all = splitBlocks(text);
       for (const [bi, b] of all.entries()) {
         // A banner keyword anywhere in range — self, either neighbour, or the heading — takes the
-        // block out of scope. Some of those are genuine retractions; ~13 are the word used as
+        // block out of scope. Some of those are genuine retractions; others are the word used as
         // PROSE ("see the correction in the section above", "the SUPERSEDED block"), which is the
         // same wolf-crying one level down and is reported, not fixed here. Widening this suite to
         // cover them would imply a fix that does not exist.

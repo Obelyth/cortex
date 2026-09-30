@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * The bare domain is the operator's habit — and the exact page a leaked link's holder tries
- * next. It forwards only a device whose stamp validates against the passcode derivation;
- * everything else, including a device still carrying the pre-passcode cookie (the raw path
- * secret), gets the same anonymous 404 as a stranger.
+ * The bare domain is the first page anyone tries — including whoever holds a leaked link. It
+ * forwards only a device whose stamp validates against the passcode derivation; everything
+ * else, including a device still carrying the pre-passcode cookie (the raw path secret), gets
+ * the same anonymous 404 as a stranger.
  */
 
 const jar = vi.hoisted(() => new Map<string, string>());

@@ -57,14 +57,14 @@
  * checkout, instead of today's working tree — `git archive <sha>` exported read-only into a temp
  * dir (the brain checkout itself is never written to). This is what makes eval numbers
  * reproducible: the working brain changes, so a recall result only means something when
- * it names the tree it was measured on. Labels always come from the live checkout's
- * tools/eval/labels.json — the label set isn't part of what's being frozen.
+ * it names the tree it was measured on. Labels always come from the file named by `--labels`,
+ * never from the frozen tree — the label set isn't part of what's being frozen.
  *
- *   npx tsx scripts/eval-retrieval.ts                     # every strategy, working tree, production config
- *   npx tsx scripts/eval-retrieval.ts --k 5
- *   npx tsx scripts/eval-retrieval.ts --raw               # add the no-caps BM25 arm for comparison
- *   npx tsx scripts/eval-retrieval.ts --budget off --max-parts off
- *   npx tsx scripts/eval-retrieval.ts --sha <commit> --k 10
+ *   npx tsx scripts/eval-retrieval.ts --labels <file>          # every strategy, working tree, production config
+ *   npx tsx scripts/eval-retrieval.ts --labels <file> --k 5
+ *   npx tsx scripts/eval-retrieval.ts --labels <file> --raw    # add the no-caps BM25 arm for comparison
+ *   npx tsx scripts/eval-retrieval.ts --labels <file> --budget off --max-parts off
+ *   npx tsx scripts/eval-retrieval.ts --labels <file> --sha <commit> --k 10
  */
 import { readFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -294,9 +294,13 @@ async function main(): Promise<void> {
   const narrowOpts = { budgetBytes, maxPartsPerPage };
 
   const brain = process.env.BRAIN_DIR ?? path.join(process.cwd(), "..", "brain");
-  const labelsPath = path.join(brain, "tools/eval/labels.json");
-  if (!existsSync(labelsPath)) {
-    console.error(`no labels at ${labelsPath} — set BRAIN_DIR`);
+  // The label set is not part of the brain's shape, so its location is always given, never
+  // guessed from the checkout layout.
+  const labelsAt = argv.indexOf("--labels");
+  // Taken from the command line only, so the run names its label file explicitly.
+  const labelsPath = labelsAt >= 0 ? argv[labelsAt + 1] : undefined;
+  if (!labelsPath || !existsSync(labelsPath)) {
+    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json>`);
     process.exit(2);
   }
   const all = JSON.parse(readFileSync(labelsPath, "utf8")) as Label[];

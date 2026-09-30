@@ -9,12 +9,12 @@ const corpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
-    ["notes/sample-rollout.md", "> SUPERSEDED 2025-02-17 — see projects/sample.md.\n- LAUNCHED 2025-02-03: the demo is public."],
+    ["projects/sample.md", "**The oven is cold** (checked 2025-02-17). The thermometer reads 18C."],
+    ["notes/sample-bakes.md", "> SUPERSEDED 2025-02-17 — see projects/sample.md.\n- LIT 2025-02-03: the oven is hot."],
     ["projects/hotel.md", "The import queue was written to a dropped table."],
     // House style for a correction made in place: the CURRENT claim, with the wording it
     // replaced kept beside it. Both sentences are verbatim in the same block.
-    ["projects/atlas.md", 'The reader is pluggable (was: "the reader is always Claude" — updated 2026-08-03). Three providers are wired.'],
+    ["projects/atlas.md", 'The reader is pluggable (was: "the reader is always Claude" — updated 2025-02-20). Three providers are wired.'],
   ]),
 };
 
@@ -55,8 +55,8 @@ afterEach(() => { globalThis.fetch = restore; });
 
 describe("parseReply", () => {
   it("parses bare JSON", () => {
-    expect(parseReply('{"answer":"dark","tag":"abc0","quote":"still dark"}')).toEqual({
-      answer: "dark", tag: "abc0", quote: "still dark",
+    expect(parseReply('{"answer":"cold","tag":"abc0","quote":"still cold"}')).toEqual({
+      answer: "cold", tag: "abc0", quote: "still cold",
     });
   });
 
@@ -79,7 +79,7 @@ describe("parseReply", () => {
 
 describe("buildPrompt", () => {
   it("carries the contract and only the chosen files", () => {
-    const { prompt } = buildPrompt(corpus, "is sample live", ["projects/sample.md"]);
+    const { prompt } = buildPrompt(corpus, "is sample warm", ["projects/sample.md"]);
     expect(prompt).toContain(ANSWER_CONTRACT);
     expect(prompt).toContain("FILE: projects/sample.md");
     expect(prompt).not.toContain("FILE: projects/hotel.md");
@@ -103,17 +103,17 @@ describe("buildPrompt", () => {
   it("puts the question AFTER the pack, outside the cacheable prefix", () => {
     // Question-first would put the one varying string ahead of the stable bytes — exactly
     // backwards for a prefix-matched cache.
-    const p = buildPrompt(corpus, "is sample live", ["projects/sample.md"]);
+    const p = buildPrompt(corpus, "is sample warm", ["projects/sample.md"]);
     expect(p.prompt).toBe(`${p.stable}${p.question}`);
     expect(p.stable).not.toContain("QUESTION:");
-    expect(p.question).toContain("QUESTION: is sample live");
+    expect(p.question).toContain("QUESTION: is sample warm");
     expect(p.prompt.indexOf("FILE: projects/sample.md")).toBeLessThan(p.prompt.indexOf("QUESTION:"));
   });
 });
 
 describe("ask", () => {
   it("verifies a true citation and reports the commit", async () => {
-    const r = await ask("is sample live", citing("projects/sample.md", "The demo is offline", "No — the demo is offline."));
+    const r = await ask("is sample warm", citing("projects/sample.md", "The oven is cold", "No — the oven is cold."));
     expect(r.citation?.verified).toBe(true);
     expect(r.commit).toBe("eaf0a03e4849");
     expect(r.notInBrain).toBe(false);
@@ -150,7 +150,7 @@ describe("ask", () => {
   });
 
   it("flags a fabricated quote instead of passing it through", async () => {
-    const r = await ask("is sample live", citing("projects/sample.md", "The sample demo is public and working", "It launched."));
+    const r = await ask("is sample warm", citing("projects/sample.md", "The sample oven is hot and baking", "It is baking."));
     expect(r.citation?.verified).toBe(false);
     expect(render(r)).toMatch(/UNVERIFIED/);
     expect(render(r)).toMatch(/unproven/);
@@ -167,9 +167,9 @@ describe("ask", () => {
   it("keeps a provable citation even when the answer says the words NOT IN BRAIN", async () => {
     // Absence is structural. Matching the phrase anywhere in the answer threw away a correct,
     // verified citation whenever the reader happened to mention the contract or brain-index.
-    const r = await ask("is sample live", citing(
+    const r = await ask("is sample warm", citing(
       "projects/sample.md",
-      "The demo is offline",
+      "The oven is cold",
       "That detail is not in brain-index.md, but projects/sample.md covers it."
     ));
     expect(r.notInBrain).toBe(false);
@@ -205,8 +205,8 @@ describe("ask", () => {
     // The stale note outranks the live one lexically; the pack must contain BOTH so the
     // reader can see the SUPERSEDED stamp and resolve it. This is the architecture's
     // answer to the sample contradiction — the filter does not get to decide.
-    const r = await ask("is sample launched or is the demo offline", async () => "{}", { k: 2 });
-    expect(r.candidates).toContain("notes/sample-rollout.md");
+    const r = await ask("is the sample oven lit or is the oven cold", async () => "{}", { k: 2 });
+    expect(r.candidates).toContain("notes/sample-bakes.md");
     expect(r.candidates).toContain("projects/sample.md");
   });
 

@@ -17,8 +17,8 @@ const corpus: Corpus = {
   bytes: 400,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/sample.md", "The sample demo is offline; the preview link returns 404 as of 2025-02-17."],
-    ["profile.md", "the operator's home address is 12 Made Up Lane and his bank is Fictional Credit Union."],
+    ["projects/sample.md", "The sample oven is cold; the thermometer reads 18C as of 2025-02-17."],
+    ["profile.md", "the operator's home address is 12 Made Up Lane and their bank is Fictional Credit Union."],
     ["notes/private.md", "The spare key is under the third plant pot on the left."],
     ["log/2026-08-03.md", "09:20 — argued with the landlord about the lease."],
   ]),
@@ -101,10 +101,10 @@ describe("scope removes notes before the reader ever sees them", () => {
 
 describe("what a guest is told about the answer", () => {
   const cite = (path: string, quote: string) => async (prompt: ReaderPrompt) =>
-    JSON.stringify({ answer: "The demo is offline.", tag: tagOf(prompt, path), quote });
+    JSON.stringify({ answer: "The oven is cold.", tag: tagOf(prompt, path), quote });
 
   it("returns the verdict without the path or the verbatim evidence", async () => {
-    const r = await ask("is sample live", cite("projects/sample.md", "The sample demo is offline"), {
+    const r = await ask("is sample warm", cite("projects/sample.md", "The sample oven is cold"), {
       scope: ["projects/"],
     });
     const bare = render(r, { citations: false });
@@ -115,7 +115,7 @@ describe("what a guest is told about the answer", () => {
     expect(bare).not.toContain("projects/sample.md");
     expect(bare).not.toContain("source:");
     expect(bare).not.toContain("evidence:");
-    expect(bare).not.toContain("The sample demo is offline;");
+    expect(bare).not.toContain("The sample oven is cold;");
   });
 
   it("still distinguishes absence, unproven and retracted, because those change the answer's worth", async () => {
@@ -125,8 +125,8 @@ describe("what a guest is told about the answer", () => {
     expect(render(notFound, { citations: false })).toMatch(/^NOT IN BRAIN/);
 
     const fabricated = await ask(
-      "is sample live",
-      cite("projects/sample.md", "The sample demo launched and is fully working"),
+      "is sample warm",
+      cite("projects/sample.md", "The sample oven is lit and fully working"),
       { scope: ["projects/"] }
     );
     const bare = render(fabricated, { citations: false });
@@ -135,7 +135,7 @@ describe("what a guest is told about the answer", () => {
   });
 
   it("full citations still come back on the trusted path", async () => {
-    const r = await ask("is sample live", cite("projects/sample.md", "The sample demo is offline"));
+    const r = await ask("is sample warm", cite("projects/sample.md", "The sample oven is cold"));
     expect(render(r)).toContain("projects/sample.md");
     expect(render(r)).toContain("evidence:");
   });

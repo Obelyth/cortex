@@ -23,7 +23,7 @@ import { PROCESS_CEILING, spendOne, spentThisInstance } from "../ceiling";
  * rather than pretending to a distributed guarantee it does not have. The counter lives in
  * ../ceiling.ts so the screen can print it before the first ask.
  *
- * WHAT IT READ (v2, 2026-09-05): the reply carries the narrowing's working — the shortlist with
+ * WHAT IT READ (v2): the reply carries the narrowing's working — the shortlist with
  * scores and matched terms, every candidate a cap refused and why, the zero count, the caps by
  * name — plus the wall time and the ceiling. All of it is AskResult's own record; nothing here
  * re-derives a decision the library made. The call log and the MCP tool are untouched.

@@ -1,10 +1,9 @@
 /**
  * The export gate — nothing in this repo may quote the operator's real brain.
  *
- * WHY THIS EXISTS. Private note content has reached the public Obelyth/cortex twice. Both times
- * the sanitisation pass was a string search for known bad phrases, and both times it walked past
- * the same fact written a different way — once as note content, once as a code comment describing
- * a past leak. Searching for what you already know is leaked cannot find what you don't.
+ * WHY THIS EXISTS. A sanitisation pass that is a string search for known bad phrases walks past
+ * the same fact written a different way — as note content, or as a code comment that describes
+ * it. Searching for what you already know is sensitive cannot find what you don't.
  *
  * So this inverts the check. It does not carry a denylist of private words — a denylist committed
  * to a public repo publishes the very list it protects. Instead it reads the real brain at test
@@ -27,8 +26,8 @@
  *
  * WHOLE LINES ARE NOT ENOUGH. The line check below asks whether a full brain line was
  * reproduced; a credential never is. It is a short token INSIDE a longer line, so no secret
- * could ever trip that check — which is exactly how a live production password reached the
- * public repo with this suite green. The third test closes that: it extracts secret-shaped
+ * could ever trip that check, and a suite built only on it stays green while one ships. The
+ * third test closes that: it extracts secret-shaped
  * substrings from the brain using lib/redact's own patterns and asserts none of them appear in
  * shipped source, at any length.
  */
@@ -67,13 +66,10 @@ const SCAN_DIRS = ["lib", "app", "tests", "scripts", "docs", "ops", "supabase", 
 const SCAN_ROOT_SKIP = new Set(["package-lock.json"]);
 
 /**
- * NOTHING SHIPPED IS EXEMPT. On the private side this gate excluded tests/hard-*.test.ts and
- * docs/superpowers/specs/** — there, those files read the operator's real brain on purpose and
- * were never ported. This repo SHIPS both: the hard-* suites carry sanitized synthetic fixtures
- * and the specs are the sanitized design docs. Sanitized-from-private files are exactly where
- * residual leakage is most likely — the one time this gate walked past them, verbatim brain
- * lines rode a port inside a hard-* fixture — so the old exclusion list is gone rather than
- * narrowed. If a file cannot pass this scan, it cannot ship; there is no third category.
+ * NOTHING SHIPPED IS EXEMPT. There is no exclusion list: the adversarial hard-* suites and the
+ * design specs are scanned like every other file. Files that describe real behaviour in detail
+ * are exactly where copied text is most likely to hide, so they get the same scan, not a lighter
+ * one. If a file cannot pass this scan, it cannot ship; there is no third category.
  */
 function walk(dir: string, base = ""): string[] {
   const out: string[] = [];
@@ -178,13 +174,13 @@ function brainLines(): Map<string, string> {
  * The key=value rule contributes its value half; the vendor-token and JWT rules contribute the
  * whole match.
  *
- * The floor is 4 characters, deliberately low: the credential that actually leaked was FOUR
- * digits. A longer floor would have let it through and this test would be theatre. What keeps
- * that from drowning the run in noise is that a token must appear in BOTH the brain and shipped
- * source to count, so a common short string only trips when it genuinely sits in both.
+ * The floor is 4 characters, deliberately low: a PIN or a short numeric passcode is four digits,
+ * and a longer floor would let exactly that shape through. What keeps that from drowning the run
+ * in noise is that a token must appear in BOTH the brain and shipped source to count, so a common
+ * short string only trips when it genuinely sits in both.
  *
- * INDIRECTION IS NOT A SECRET. `TOKEN="$(security find-generic-password …)"` is a note about
- * Keychain hygiene — the practice this whole area exists to encourage — and lib/health.ts's
+ * INDIRECTION IS NOT A SECRET. `TOKEN="$(pass show example/token)"` is a note about
+ * secret-manager hygiene — the practice this whole area exists to encourage — and lib/health.ts's
  * plausibleSecret() already excludes exactly that shape. Documenting it in a comment must not
  * read as leaking it.
  */
@@ -193,20 +189,19 @@ const PLACEHOLDER = /^(x+|\.+|<.*>|\{.*\}|changeme|your[-_]?\w*|placeholder|reda
 /**
  * A short run of plain letters is prose, not a credential this check can police.
  *
- * Against a real brain, the extractor yields a handful of distinct tokens: most are shell
- * indirection, one is the credential, and the rest are words like "temp" and "user" — which
- * appear in ordinary source everywhere and would flag dozens of files. A password that IS a short dictionary
- * word is indistinguishable from prose by any rule that does not also flag the prose, so it is
- * out of scope here and belongs to rotation instead. Digits and mixed-class tokens stay in,
- * which is what the leaked value was.
+ * Run over ordinary notes, the extractor yields mostly shell indirection and words like "temp"
+ * and "user" — which appear in ordinary source everywhere and would flag dozens of files. A
+ * password that IS a short dictionary word is indistinguishable from prose by any rule that does
+ * not also flag the prose, so it is out of scope here and belongs to rotation instead. Digits and
+ * mixed-class tokens stay in: that is what a PIN or a generated secret looks like.
  */
 const WORDLIKE = /^[A-Za-z]{1,11}$/;
 
 /**
- * AN IDENTIFIER IS NOT A SECRET. A field-ops note that quotes the design system it builds on
- * hands the extractor a CSS custom-property name — and `--ob-ink-900` extracted as a "value"
- * collides with every stylesheet that defines it, which is how the 2026-08 false positive put
- * app/globals.css on this gate's report. A custom property's name is published verbatim in
+ * AN IDENTIFIER IS NOT A SECRET. A note that quotes a design system hands the extractor a CSS
+ * custom-property name — and `--ob-ink-900` extracted as a "value" collides with every
+ * stylesheet that defines it, putting app/globals.css on this gate's report for nothing. A
+ * custom property's name is published verbatim in
  * every sheet and every devtools pane that uses it; treating one as a credential flags the
  * design system for existing, and a gate people learn to ignore is a dead gate. The exclusion
  * is exactly the custom-property shape — two dashes, a letter, then identifier characters —
@@ -299,13 +294,13 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
   });
 
   /**
-   * THE PATH TEST ABOVE MATCHES A FULL PATH, AND THAT IS HOW SIX REAL NOTE NAMES SHIPPED.
+   * THE PATH TEST ABOVE MATCHES A FULL PATH, AND A FULL PATH IS NOT THE ONLY WAY TO NAME A NOTE.
    *
    * It does `text.indexOf("notes/aurora-authoring.md")`. Source that writes the same note as
    * `[[notes/aurora-authoring]]` (no extension), `[[alpha-beats-beta]]` (no directory),
    * `"name: feedback-keep-building"` (a frontmatter value), or `about-stamps.md` (no directory)
-   * matches none of them — every one of those is the note's name, and six real ones were green
-   * here on 2026-09-03 while sitting in lib/ and tests/ on main.
+   * matches none of them — every one of those is the note's name, and a path-only check passes
+   * all of them green.
    *
    * The examples above are synthetic. This test file is scanned too: explanations and fixtures
    * must pass the same privacy checks as every other shipped source file.
@@ -350,9 +345,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
 
   it("no credential-shaped value from the brain appears in any shipped source file", () => {
     // THE CHECK THE LINE TEST STRUCTURALLY CANNOT DO. A secret is a token inside a line, so
-    // indexOf on whole brain lines can never match one. This is how ADMIN_PASSWORD=<value> for a
-    // live site sat in tests/redact.test.ts, tests/health-outline.test.ts and
-    // tests/hard-surface.test.ts and rode four commits into the public repo with this suite green.
+    // indexOf on whole brain lines can never match one: a KEY=<value> pair pasted into a fixture,
+    // inside a longer line, passes every whole-line check green.
     const secrets = brainSecrets();
     const hits: string[] = [];
 
@@ -391,8 +385,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
     // qualifier dropped; `garden-policy` against a real `garden-targets` is two different notes
     // that happen to start with an ordinary word, and policing that would fire on English.
     //
-    // The examples here are fictional on purpose. Describing a leak is how the last two got
-    // reintroduced: the note came out, and the comment explaining the note went back in.
+    // The examples here are fictional on purpose: a comment that names a real note to explain
+    // the rule would reintroduce the very name it describes.
     const truncates = (a: string, b: string) =>
       a !== b && a.length > 4 && b.startsWith(a) && b[a.length] === "-";
 
@@ -422,24 +416,44 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
   });
 });
 
-describe.skipIf(!present)("corpus definition parity — the live differential", () => {
-  // Both sides announce "a parity test asserts the two agree" (lib/corpus.ts, brain_ask.py:38).
-  // Until 2026-08-18 that test was a hand-synced copy — which is how ".claude/" landed on the
-  // python side first and the two definitions of "the live corpus" spent a day disagreeing with
-  // every assertion green. This reads the real python source out of the brain checkout, so the
-  // next divergence fails the gate instead of waiting for someone to notice a count mismatch.
+/**
+ * Corpus definition parity — the live differential against the brain-side reference ranker.
+ *
+ * lib/corpus.ts's SKIP_PREFIX and SKIP_NAME define "the live corpus". A brain-side reference
+ * implementation that scores retrieval outside this server carries its own copy of both lists,
+ * and a hand-synced copy of them in this repo can drift from the real one with every assertion
+ * green. So this reads the reference source itself, and the next divergence fails here instead
+ * of surfacing as a count that does not add up.
+ *
+ * Where that file lives is deployment detail, not part of this repo: BRAIN_PARITY_RANKER names
+ * it. Unset, the check is skipped VISIBLY; set to a path that does not exist, it fails.
+ */
+const RANKER = process.env.BRAIN_PARITY_RANKER;
+const haveRanker = Boolean(RANKER) && existsSync(RANKER as string);
+
+if (RANKER && !haveRanker) {
+  throw new Error(`BRAIN_PARITY_RANKER is set to ${RANKER}, which does not exist. Point it at the reference ranker or unset it.`);
+}
+
+if (!haveRanker) {
+  describe.skip("corpus definition parity SKIPPED — BRAIN_PARITY_RANKER is not set, so nothing compared lib/corpus.ts with the reference ranker", () => {
+    it("did not run", () => {});
+  });
+}
+
+describe.skipIf(!haveRanker)("corpus definition parity — the live differential", () => {
   function pyTuple(name: string): string[] {
-    const src = readFileSync(join(BRAIN, "tools", "brain_ask.py"), "utf8");
+    const src = readFileSync(RANKER as string, "utf8");
     const m = src.match(new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, "m"));
-    expect(m, `${name} tuple not found in brain_ask.py — update this parser alongside the py`).toBeTruthy();
+    expect(m, `${name} tuple not found in the reference ranker — update this parser alongside it`).toBeTruthy();
     return [...m![1].matchAll(/["']([^"']*)["']/g)].map((x) => x[1]);
   }
 
-  it("SKIP_PREFIX matches brain_ask.py, order and all", () => {
+  it("SKIP_PREFIX matches the reference ranker's, order and all", () => {
     expect(SKIP_PREFIX).toEqual(pyTuple("SKIP_PREFIX"));
   });
 
-  it("SKIP_NAME matches brain_ask.py SKIP_NAMES, order and all", () => {
+  it("SKIP_NAME matches the reference ranker's SKIP_NAMES, order and all", () => {
     expect(SKIP_NAME).toEqual(pyTuple("SKIP_NAMES"));
   });
 });

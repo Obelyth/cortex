@@ -1,10 +1,11 @@
 /**
  * live brain corpus — what the boot call actually costs.
  *
- * The old `brain_context` measured ~11.8k tokens on this corpus, and that was a floor: it shipped
- * `profile.md`, a bare `INDEX.md`, and seven raw day-logs, so it grew with every day logged. This
- * suite is the standing proof that the new shape stays bounded, measured against the operator's real
- * notes rather than a fixture that cannot surprise anyone.
+ * The old `brain_context` shipped `profile.md`, a bare `INDEX.md`, and seven raw day-logs, so it
+ * grew with every day logged. This suite is the standing proof that the new shape stays bounded,
+ * measured against whatever brain clone is present rather than a fixture that cannot surprise
+ * anyone. No figure from any particular brain is written into this file: the old dump is priced
+ * on the same clone at run time.
  */
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
@@ -43,19 +44,24 @@ describe.skipIf(!present)("live brain corpus", () => {
 
   afterAll(() => __setCache(null));
 
-  it("costs a fraction of the 11.8k tokens the raw dump cost", () => {
+  it("costs a fraction of what the raw dump cost", () => {
     const tokens = Math.round(ctx.length / 4);
 
-    // The claim in this test's NAME is the one worth asserting: boot is a fraction of the 11,777
-    // tokens the raw dump cost. The old assertion was `< 8000`, a hand-picked number that was
-    // never derivable from anything -- and it failed at 8010 the day the brain grew, which is a
-    // threshold expiring rather than a regression happening.
+    // The claim in this test's NAME is the one worth asserting: boot is a fraction of what the
+    // raw dump cost. A hand-picked ceiling was never derivable from anything -- it failed the day
+    // the brain grew, which is a threshold expiring rather than a regression happening.
     //
     // It cannot be derived, either, because boot is deliberately NOT bounded in total: profile
     // carries no budget on purpose ("the one thing that must never be summarised"), so any fixed
     // ceiling is a promise the design refuses to make. The bounded parts have their own budgets
     // and are asserted separately below; what is asserted here is the comparison the name makes.
-    const RAW_DUMP_TOKENS = 11_777;
+    // What the old dump shipped, priced on this same clone: profile.md, the bare INDEX.md and
+    // the seven most recent day-logs, raw.
+    const read = (rel: string) => (existsSync(join(BRAIN, rel)) ? readFileSync(join(BRAIN, rel), "utf8") : "");
+    const recentLogs = walk(BRAIN).filter((r) => /^log\/\d{4}-\d{2}-\d{2}\.md$/.test(r)).sort().slice(-7);
+    const RAW_DUMP_TOKENS = Math.round(
+      [read("profile.md"), read("INDEX.md"), ...recentLogs.map(read)].reduce((a, t) => a + t.length, 0) / 4
+    );
     expect(tokens).toBeLessThan(RAW_DUMP_TOKENS * 0.75);
 
     // And the direction has to be visible, not just the bound. A boot that creeps back toward the
@@ -68,10 +74,10 @@ describe.skipIf(!present)("live brain corpus", () => {
     // so every note renders hot. That is the documented degrade path and the expensive one, which
     // makes it the right case to bound: the router's byte budget exists precisely because
     // "temperature was doing the bounding implicitly" until a Supabase hiccup proved it was not.
-    // Asserted on buildRouter itself rather than by slicing the payload. My first attempt sliced
-    // from "# ROUTER" to the end and measured 27,066 B against a 20,000 B budget -- a failure that
-    // was entirely my slice running past the router into the section after it. The router is
-    // 18,110 B. A test that parses a rendered document to check a budget is measuring the
+    // Asserted on buildRouter itself rather than by slicing the payload. An earlier attempt sliced
+    // from "# ROUTER" to the end and reported the router over budget -- a failure that was
+    // entirely the slice running past the router into the section after it, while the router
+    // itself fit. A test that parses a rendered document to check a budget is measuring the
     // document's layout, not the budget.
     expect(ctx).toContain("# ROUTER");
     const files = new Map<string, string>();
