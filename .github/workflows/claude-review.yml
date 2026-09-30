@@ -1,8 +1,7 @@
 # Claude PR Review
 #
 # Reviews every non-draft pull request, once per push: one summary comment plus inline comments
-# on the lines at issue. Rolled out across ShootJackal and Obelyth on 2026-09-17, from the
-# version that has reviewed ShootJackal/cortex since #205; claude.yml, the sibling, only answers
+# on the lines at issue. A sibling claude.yml workflow, where a repository has one, only answers
 # @claude mentions and reviews nothing on its own.
 #
 # It reads and comments; it does not write to the tree. That is a property of the tool list in
@@ -64,10 +63,10 @@ jobs:
 
       - name: Review PR
         id: review
-        uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1.0.227 (where v1 pointed on 2026-09-17)
+        uses: anthropics/claude-code-action@3b8197d3d486006dd4af54613517f21ac6ac625e # v1.0.227
         with:
           # Subscription-billed. On Obelyth repositories this is the org secret (visibility: all
-          # repositories); on ShootJackal repositories it is a repository secret. If the first run
+          # repositories); elsewhere it can be a repository secret. If the first run
           # fails at auth, the one-line swap is anthropic_api_key from secrets.ANTHROPIC_API_KEY.
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # The CI auto-fixer pushes to open PRs as github-actions[bot], and the action refuses
