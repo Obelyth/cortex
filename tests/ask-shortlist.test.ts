@@ -118,11 +118,11 @@ const askCorpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["projects/sample.md", "**The oven is cold** (checked 2025-02-17). The thermometer reads 18C."],
     ["projects/hotel.md", "The import queue was written to a dropped table."],
     ["notes/unrelated.md", "gardening and soil"],
-    ["log/2026-08-01.md", "sample offline today"],
-    ["log/2026-08-02.md", "sample still offline"],
+    ["log/2026-08-01.md", "sample oven cold today"],
+    ["log/2026-08-02.md", "sample oven still cold"],
   ]),
 };
 
@@ -135,9 +135,9 @@ const citing = (path: string, quote: string) => async ({ stable }: ReaderPrompt)
 
 describe("ask() carries the working, and the tool path does not change", () => {
   it("returns the shortlist, the cuts, the zero count and the caps by name", async () => {
-    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus });
+    const r = await ask("is oven cold", citing("projects/sample.md", "The oven is cold"), { corpus: askCorpus });
     expect(r.shortlist.map((s) => s.path)).toEqual(r.candidates);
-    expect(r.shortlist[0]).toMatchObject({ rank: 1, path: "projects/sample.md", terms: expect.arrayContaining(["offline"]) });
+    expect(r.shortlist[0]).toMatchObject({ rank: 1, path: "projects/sample.md", terms: expect.arrayContaining(["cold"]) });
     expect(r.shortlist.every((s) => typeof s.score === "number" && s.bytes > 0)).toBe(true);
     expect(r.cut.map((c) => c.by)).toContain("log-cap");
     expect(r.zeroCount).toBe(2); // hotel, unrelated
@@ -145,7 +145,7 @@ describe("ask() carries the working, and the tool path does not change", () => {
   });
 
   it("a full read has no ranking: null scores, no terms, no cuts, the mode says so", async () => {
-    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus, full: true });
+    const r = await ask("is oven cold", citing("projects/sample.md", "The oven is cold"), { corpus: askCorpus, full: true });
     expect(r.narrowing.mode).toBe("full");
     expect(r.narrowing.maxLogs).toBeNull();
     expect(r.shortlist.map((s) => s.path)).toEqual(r.candidates);
@@ -155,7 +155,7 @@ describe("ask() carries the working, and the tool path does not change", () => {
   });
 
   it("render() — what the MCP tool and the call log read — is byte-identical with the working stripped", async () => {
-    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus });
+    const r = await ask("is oven cold", citing("projects/sample.md", "The oven is cold"), { corpus: askCorpus });
     const stripped = { ...r, shortlist: [], cut: [], zeroCount: 0 } as AskResult;
     for (const citations of [true, false]) {
       const a = render(r, { citations });

@@ -63,9 +63,9 @@ export async function POST(
   }
   // A day log is a dated record: the health check excludes it from every clock (DATED_ENTRY, the
   // diary doctrine), so no queue item can honestly point here and every one of these actions
-  // would be a write nothing ever reads. It happened: on 2026-08-17 a press landed a `reverify:`
-  // block on log/2026-08-17.md — frontmatter on a note that by convention carries none — which
-  // broke the router's description invariant while the request itself went nowhere. Refuse
+  // would be a write nothing ever reads. Without this guard a press could land a `reverify:`
+  // block on a day log — frontmatter on a note that by convention carries none — which breaks
+  // the router's description invariant while the request itself goes nowhere. Refuse
   // loudly instead of committing a marker to a page no check will ever visit.
   if (DATED_ENTRY.test(b.path)) {
     return bad(
@@ -76,8 +76,8 @@ export async function POST(
   let current: string;
   try {
     // RAW, never readNote(). This is a read-modify-write: readNote() redacts for egress, so
-    // reading through it saved the redaction into the brain and destroyed two real lines on
-    // 2026-08-17. See readNoteRaw()'s comment for the incident and the general rule.
+    // reading through it would save the redaction into the brain and destroy the lines it
+    // masked. See readNoteRaw()'s comment for the general rule.
     current = await readNoteRaw(b.path);
   } catch (e) {
     return bad(e instanceof Error ? e.message : "could not read the note");

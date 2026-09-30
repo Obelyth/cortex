@@ -149,7 +149,7 @@ export async function POST(
     const current = await readGuestPolicy();
     // A read-modify-write must never merge onto a fallback. readGuestPolicy() fails OPEN to
     // GUEST_DEFAULTS, so without this check a 1.5s Upstash blip while the operator ticked one
-    // checkbox would persist the defaults as if he had chosen them — widening a narrowed scope
+    // checkbox would persist the defaults as if they had chosen them — widening a narrowed scope
     // back to projects/ and a budget of 5 back to 50, durably, under an ok:true reply.
     if (current.source !== "store") {
       return bad(

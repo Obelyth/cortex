@@ -23,8 +23,8 @@ describe("main transport route HEAD short-circuit (FIX E)", () => {
   // WAS: "GET still delegates to the shared handler" — the companion assertion proving the HEAD
   // fix had not caught GET by accident. It has now, deliberately. Streamable HTTP's GET is the
   // channel for server-initiated messages and this server sends none, so mcp-handler held the
-  // request open until the platform killed it at 60s: 622 times between 2026-08-12 and
-  // 2026-09-02. Refusing it is not a regression on a stream that never delivered anything.
+  // request open until the platform killed it at 60s, every time. Refusing it is not a
+  // regression on a stream that never delivered anything.
   it("GET is refused too — the notification stream this server never writes to", async () => {
     const req = new Request("https://cortex.test/api/mcp", { method: "GET" });
     const res = await GET(req);

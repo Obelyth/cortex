@@ -39,11 +39,11 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("attention/verify route", () => {
   it("refuses every action on a day log — a dated record is never on the clock", async () => {
-    // It happened: a press on 2026-08-17 landed a `reverify:` block on log/2026-08-17.md —
-    // frontmatter on a note that carries none by convention — breaking the router's description
-    // invariant while the request went nowhere, because no check ever reads a day log.
+    // was: a press could land a `reverify:` block on a day log — frontmatter on a note that
+    // carries none by convention — breaking the router's description invariant while the
+    // request went nowhere, because no check ever reads a day log.
     for (const action of ["checked", "settled", "queue"] as const) {
-      const res = await post({ path: "log/2026-08-17.md", action });
+      const res = await post({ path: "log/2025-02-17.md", action });
       expect(res.status, action).toBe(400);
       expect((await res.json()).error).toMatch(/day log/);
     }
@@ -67,7 +67,7 @@ describe("attention/verify route", () => {
 
   it("'settled' writes decays: false through the raw read — never the redacting one", async () => {
     // The read half of this read-modify-write MUST be readNoteRaw: reading through the egress
-    // function saved `<redacted>` into a real page on 2026-08-17. The mock surface itself pins
+    // function would save `<redacted>` into the page itself. The mock surface itself pins
     // this — the route imports readNoteRaw, and a regression to readNote would throw here.
     vi.mocked(readNoteRaw).mockResolvedValue("# Hotel\n\nbody\n");
     const res = await post({ path: "projects/hotel.md", action: "settled" });

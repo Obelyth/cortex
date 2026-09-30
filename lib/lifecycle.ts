@@ -2,11 +2,11 @@
  * lifecycle — what the brain does with a note that stopped being used.
  *
  * THE MACHINERY WAS BUILT AND NEVER CALLED. note_scores has bucketed every note hot/warm/cold
- * since 2026-08-06, and `propose_deletions(min_age_days)` has been able to nominate the ones that
- * are cold AND never read AND unpinned AND untouched for six months since the same day. A grep
- * across lib/, app/, ops/, scripts/ and .github/ on 2026-09-04 found no caller for that function
- * and exactly one consumer of the table it fills: a number on a console card. So the corpus grew
- * for a month with a retirement path that nothing walked.
+ * since its migration, and `propose_deletions(min_age_days)` has been able to nominate the ones
+ * that are cold AND never read AND unpinned AND untouched for six months since the same
+ * migration. A grep across lib/, app/, ops/, scripts/ and .github/ found no caller for that
+ * function and exactly one consumer of the table it fills: a number on a console card. So the
+ * corpus grew with a retirement path that nothing walked.
  *
  * PROPOSING IS NOT DELETING, and this module keeps that line. propose_deletions inserts rows with
  * a reason and stops; the decision column stays null until a person fills it. Nothing here removes

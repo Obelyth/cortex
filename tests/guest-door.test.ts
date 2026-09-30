@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The guest door is the one place in this system where a party the operator does not control touches
- * his brain. Everything here is a boundary test: what it may reach, what it may not, and what
+ * their brain. Everything here is a boundary test: what it may reach, what it may not, and what
  * happens when the two secrets are confused for each other.
  */
 

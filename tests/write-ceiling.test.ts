@@ -23,8 +23,8 @@ import type { McpServer } from "@modelcontextprotocol/server";
  *
  * The literal 500_000 is pinned deliberately, roster-style: raising or lowering the ceiling
  * should be a red build and a conscious edit to this file, not a drift. The number leaves
- * 2.3x headroom over the largest live note (~218K chars as of 2026-08-18), so a full
- * replace of any real page still fits.
+ * generous headroom over any realistically sized note, so a full replace of a large page
+ * still fits.
  */
 
 // Spread the real module so MAX_WRITE_CHARS — the constant under test — stays real; only the

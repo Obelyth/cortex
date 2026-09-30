@@ -6,7 +6,7 @@ export function Glyph({ name, size = 20, tone = "ink", label }: Readonly<{ name:
   // tone="paper" means paper-on-ink: the glyph sits on an ink ground. It must read the token
   // that IS paper on ink (--band-ink-on), not --paper, because .bandInk re-points --paper at the
   // ink itself so that sunk wells stay dark there — which painted every timeline glyph ink on
-  // ink, invisible (critique 2026-09-05).
+  // ink, invisible (design critique).
   const color = tone === "signal" ? "var(--signal)" : tone === "paper" ? "var(--band-ink-on)" : "var(--ink)";
   return (
     <svg className="glyph" width={size} height={size} viewBox="0 0 20 20" role={label ? "img" : undefined} aria-label={label} aria-hidden={label ? undefined : true} style={{ color, display: "block", flex: "none" }}>

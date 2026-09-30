@@ -27,8 +27,8 @@
  *      of the two. Both sides now pin an explicit space class and delete zero-width characters
  *      outright.
  *
- * Port of brain/tools/eval/verify_citation.py; the two must agree exactly or the eval's
- * numbers do not describe the serving path. Every failure path fails CLOSED.
+ * Port of the brain-side reference verifier the eval scores with; the two must agree exactly or
+ * the eval's numbers do not describe the serving path. Every failure path fails CLOSED.
  */
 
 /** Explicit, because JS \s and Python \s disagree — and disagreed in the unsafe direction. */
@@ -173,8 +173,7 @@ export function splitBlocks(text: string): Block[] {
 /**
  * Text the brain uses to retract a claim while keeping it on the page. All three conventions
  * are in use, and a quote pulled from inside one is the single most dangerous false VERIFIED:
- * `LAUNCHED 2025-02-03 ... the demo is public` can be verbatim in a note whose next line says
- * not to answer from it.
+ * `the oven is lit` can be verbatim in a note whose next line says not to answer from it.
  */
 const SUPERSEDED_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|was:\s*["\u201c]|\bDo not answer\b/i;
 
@@ -199,7 +198,7 @@ const BANNER_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|\bDo not answer\
 /**
  * The same markers, but as they appear in a HEADING — and headings need a stricter test.
  *
- * BANNER_RE is case-insensitive, so `### Correction to the guest door section above` matched it and
+ * BANNER_RE is case-insensitive, so `### Correction from review` matched it and
  * retraction() returned "banner" before the `(was: "…")` logic ever ran. A heading announcing
  * "this section IS the correction" was read as "this section HAS BEEN retracted" — the meaning
  * inverted. Every quote drawn from the freshest passage in the note came back "It is history, not
@@ -270,7 +269,7 @@ export function retracted(blocks: Block[], i: number): boolean {
   // different rules is how the previous fix became a no-op: retraction() stopped calling a prose
   // heading a banner, retracted() carried on saying it was, and render() branches on
   // `superseded && retraction === "correction"` -- so the new pair (true, "none") matched neither
-  // arm and fell through to the absolute wording. Twelve blocks reclassified, zero stamps changed.
+  // arm and fell through to the absolute wording. Blocks reclassified, zero stamps changed.
   // A classifier nobody reads is not a fix.
   for (const b of [blocks[i], blocks[i - 1], blocks[i + 1]]) {
     // One rule, whatever shape the block is. `was:` still counts here because an in-place
@@ -320,11 +319,10 @@ export function retraction(blocks: Block[], i: number, matched?: string): Retrac
         // and little else -- so the test is containment the other way, with a floor.
         if (!old.includes(needle)) continue;
 
-        // F3. `old` had no minimum length while the quote has MIN_QUOTE. 17 of 79 markers in the
-        // corpus normalise shorter than that -- "...", "<old>", "a week", "7 weeks" -- so a
-        // three-character marker in a NEIGHBOURING block could swallow any quote containing it.
-        // One live passage was already dying this way. A retired wording too short to be quoted
-        // on its own cannot be what a citation is quoting.
+        // F3. `old` had no minimum length while the quote has MIN_QUOTE. Retired wordings are
+        // often shorter than that -- "...", "<old>", "a week" -- so a three-character marker in
+        // a NEIGHBOURING block could swallow any quote containing it. A retired wording too
+        // short to be quoted on its own cannot be what a citation is quoting.
         if (old.length < MIN_QUOTE) continue;
 
         return "banner";
@@ -346,7 +344,7 @@ export interface Verdict {
    * `matched` is capped at 400 characters because it is printed. That cap is a display
    * decision, and it leaked: the eval harness scored "did the reader quote the labelled
    * passage" against `matched`, so any labelled span sitting past character 400 of its own
-   * block was unreachable — a perfect reader capped at 83.5% because of a formatting constant.
+   * block was unreachable — a perfect reader capped below full marks by a formatting constant.
    * Anything measuring rather than showing reads this field.
    */
   block?: string;

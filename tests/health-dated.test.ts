@@ -15,9 +15,9 @@ beforeEach(() => vi.resetAllMocks());
  * takes such files off the retired-tool check for exactly this reason; they must be off the
  * stale-stamp clock too.
  *
- * Regression this guards: `log/2026-08-17.md` carried an old stamp and rode the groundskeeper's
- * re-verify queue every night, asking the operator to re-verify his own diary — a slot burned on
- * a page that can never resolve.
+ * Regression this guards: a day log that carries an old stamp would ride the groundskeeper's
+ * re-verify queue every night, asking the operator to re-verify their own diary — a slot burned
+ * on a page that can never resolve.
  *
  * Failure direction, same as decays: a standing claim wrongly skipped is a stale fact answered as
  * current, so the control note MUST still be flagged. The exclusion is narrow by filename shape.

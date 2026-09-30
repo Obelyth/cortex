@@ -1,7 +1,7 @@
 # Historical proposal: the learning layer
 
-> **Archived design proposal, not current product documentation.** This August 2026
-> proposal predates the current dashboard. Its benchmark figures, cost estimates,
+> **Archived design proposal, not current product documentation.** This proposal
+> predates the current dashboard. Its benchmark figures, cost estimates,
 > data-collection statements, and sequencing describe an earlier development context,
 > not a new installation or a verified product guarantee. `brain_handoff` now ships;
 > the Map is removed. Planned learning mechanisms below are not a feature checklist.
@@ -10,7 +10,7 @@
 
 The original proposal is retained below for development history only.
 
-**Decided 2026-08-11 by the deployment owner:** the brain learns as we go and thinks ahead, but stays
+**Decided by the deployment owner:** the brain learns as we go and thinks ahead, but stays
 **passive**. The decision approved usage-learning (layer 1) and structure-learning (layer 2) and
 rejected the proactive/push layer outright. This spec is those two layers,
 plus the response-caching work, because they share one insight: *the corpus at a commit is
@@ -27,22 +27,22 @@ replayed, and rebuilt without ever becoming a second source of truth.*
    boot, handoff bundles, ask narrowing, the console. It never initiates contact and never
    writes. The attention inbox (which the owner opens themselves) is the outermost surface allowed.
 3. **No model calls in v1.** Every mechanism below is lexical, structural, or statistical.
-   Embeddings stay behind the measured trigger (the 1.8% situation-vocabulary gap in
-   ROADMAP.md); fine-tuning on the corpus is permanently out — weights can't cite and can't
+   Embeddings stay behind a measured trigger (a vocabulary gap large enough to show up in
+   the retrieval eval); fine-tuning on the corpus is permanently out — weights can't cite and can't
    unlearn, and receipts are the product.
 4. **Measured gates, same as FTS.** A ranking change ships only if it beats the incumbent on
-   `scripts/eval-retrieval.ts` (97.6% recall@10 to beat) or on the new prediction eval
+   `scripts/eval-retrieval.ts` (the incumbent's recall@10 is the bar) or on the new prediction eval
    (below). FTS lost and stayed off the default path; this layer plays by the identical rule.
 
 ## Layer 1 — usage learning: the brain pre-assembles what you're about to need
 
-**Data already collecting:** `note_access` (since 08-06), the bubble, the call log,
+**Data already collecting:** `note_access`, the bubble, the call log,
 day-log tags, commit history. Nothing new to instrument.
 
 - **Co-access edges.** A materialized view over `note_access`: P(note B touched | note A
   touched within the same session/hour window). Nightly `pg_cron` refresh, pure SQL.
   Cold-start prior: directory + shared tags + explicit `[[links]]`, so day one isn't random.
-- **The product surface is `brain_handoff` (roadmap #5), made anticipatory.** A bundle =
+- **The product surface is `brain_handoff`, made anticipatory.** A bundle =
   project page + open bubble items for that project + recent log mentions + top co-accessed
   and linked notes, ranked by temperature × co-access × link weight, budgeted like the boot
   call. The groundskeeper pre-warms bundles nightly for projects with open bubble items —
@@ -65,7 +65,7 @@ the same way an answer is. Rebuilt nightly from scratch; never hand-edited.
 
 Surfaces, all passive:
 - **Ask narrowing gets one graph hop:** candidates = BM25 top-k ∪ 1-hop neighbors of the
-  top hits. Ships only if eval-retrieval says it beats 97.6/95.3 — otherwise it stays a
+  top hits. Ships only if eval-retrieval says it beats the incumbent — otherwise it stays a
   query surface like `search_notes()`.
 - **Handoff bundles** pull 1-hop neighbors of the project page.
 - **Console:** the corpus screen gains a connections panel per note (edges + their
@@ -79,7 +79,7 @@ Surfaces, all passive:
 ## Caching — the ask gets cheap
 
 Serving is already ~free (compute cost is effectively a rounding error); the only real spend is
-**reader input tokens on `brain_ask` (~32k/ask, measured)**. Two caches, both keyed on the
+**reader input tokens on `brain_ask`**. Two caches, both keyed on the
 thing that makes them honest — the corpus head commit:
 
 1. **Answer cache.** Key: `(normalised question, corpus head SHA, reader model, scope)` →
@@ -92,11 +92,11 @@ thing that makes them honest — the corpus head commit:
 2. **Prompt caching on the reader call.** Restructure the ask prompt as
    `[stable: system + note pack] [variable: question]` with a cache breakpoint after the
    pack. Between commits the pack is byte-identical, so burst usage (a session asking five
-   questions, an eval run) pays the write once (+25%) and reads at −90%. Side effect: the
-   204-label eval drops from ~6.5M effective input tokens to roughly a sixth of that.
+   questions, an eval run) pays the write once (+25%) and reads at −90%. Side effect: a full
+   eval run drops to a fraction of its uncached input cost.
 
 **Deliberately uncached:** the console (its whole claim is that its numbers are true — the
-stale-read lever stays unpulled, as decided 2026-08-09) and anything on the write path.
+stale-read lever stays unpulled) and anything on the write path.
 
 ## Sequencing
 
@@ -111,7 +111,7 @@ stale-read lever stays unpulled, as decided 2026-08-09) and anything on the writ
 
 No fine-tuning or training on the corpus, ever — it breaks freshness, provenance, and
 correction at once. No push/webhook nudges and no model-initiated writes (decided
-2026-08-11 — this reframes roadmap #8: at most mechanical event delivery survives there,
-and the brain never speaks first). No embeddings until the measured trigger moves. No new
+with this proposal: at most mechanical event delivery survives, and the brain never speaks
+first). No embeddings until the measured trigger moves. No new
 MCP tools in v1 — the tool surface budget stands; `brain_handoff` arrives with v2 as
 already committed on the roadmap.

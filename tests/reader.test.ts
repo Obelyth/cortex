@@ -370,11 +370,12 @@ describe("gemini reader", () => {
     // The fake key is assembled at runtime: the commit-time secret scanner fails CLOSED when
     // its lookup service is down, so a literal with Google's key shape blocks every commit
     // that touches this file. Same bytes on the wire — the test is about the shape.
-    const fakeKey = ["AIzaSyD", "9tSrke72PouQMnMX", "a7eZSW0jkFMBWY"].join("-");
+    const fakeKey = ["AIza", "EXAMPLE", "0".repeat(28)].join("");
     stubFetch(`{"error":{"message":"API key not valid: ${fakeKey}"}}`, 400);
     const err = String(await geminiReader(P("p"), "gemini-3.6-flash").catch((e: Error) => e));
     expect(err).toMatch(/Gemini returned 400/);
-    expect(err).not.toContain("AIzaSyD");
+    expect(err).not.toContain(fakeKey);
+    expect(err).not.toContain("AIzaEXAMPLE");
     expect(err).toContain("<redacted-token>");
   });
 });

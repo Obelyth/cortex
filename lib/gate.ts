@@ -11,9 +11,9 @@ import { STAMP_COOKIE, stampIsValid } from "./stamp";
  *
  * Two factors, checked in order. The URL's secret first, answered with the same empty 404 as
  * every other gate — a wrong secret never learns that a second factor exists. Then the device
- * stamp (see lib/stamp.ts): the link alone stopped being entry the day one leaked into a
- * transcript, so an unstamped device is sent to the entry route to answer the passcode prompt
- * — a redirect only a proven secret ever sees.
+ * stamp (see lib/stamp.ts): the link alone is not entry, because a link can leak into a
+ * transcript or a log, so an unstamped device is sent to the entry route to answer the passcode
+ * prompt — a redirect only a proven secret ever sees.
  */
 export async function requireSecret(params: Promise<{ secret: string }>): Promise<string> {
   const { secret } = await params;

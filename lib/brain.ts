@@ -59,8 +59,8 @@ export function validatePath(path: string): void {
  * an intact payload past ~4.5MB dies at Vercel's request cap as an opaque 413 the tool never
  * sees, so refuse the oversized write HERE, loudly, with the remedy in the message — and
  * advertise the number in the schema, which steers clients toward write sizes that survive
- * generation in the first place. 500K leaves 2.3x headroom over the largest live note
- * (~218K chars as of 2026-08-18), so a full replace of any real page still fits.
+ * generation in the first place. 500K leaves generous headroom over any realistically sized
+ * note, so a full replace of a large page still fits.
  */
 export const MAX_WRITE_CHARS = 500_000;
 
@@ -149,7 +149,7 @@ export const BOUNDARY_RE = /(={6,}\s*FILE\b|^---\s+\S+\.md\b.*---\s*$)/im;
  * its derived digest line instead. A quiet week shows several days in full; one enormous day shows
  * as a digest and says so. Either way the boot call has a ceiling.
  *
- * HALVED 2026-09-01 (8_000 → 4_000): the first write-day big enough to fill the old budget pushed
+ * HALVED (8_000 → 4_000): the first write-day big enough to fill the old budget pushed
  * the whole boot over the fraction-of-the-raw-dump line the gate holds it to — an 8KB day rode
  * every boot on every surface all day. Two to three ordinary days still expand in full; a heavy
  * day digests to its tag line and is one brain_read away, which the output states. Context is
@@ -565,7 +565,7 @@ export async function readNote(path: string): Promise<string> {
   if (!f) throw new Error(`Note not found: ${path}`);
   // Redaction is announced, not silent: a reader who sees `<redacted>` and no explanation
   // cannot tell whether the note literally says that. Announcing it also tells the operator a
-  // credential is sitting in his notes, which is the thing he actually needs to know.
+  // credential is sitting in their notes, which is the thing they actually need to know.
   const safe = redact(f.content);
   return safe === f.content
     ? safe
@@ -577,13 +577,12 @@ export async function readNote(path: string): Promise<string> {
  * ONLY. Never return this to a caller; that is what readNote() above is for.
  *
  * readNote() is an EGRESS function: it redacts credential-shaped values and appends a note saying
- * it did. Feeding its output back into writeNote() therefore saves the redaction INTO the brain,
- * which is exactly what happened on 2026-08-17. The console's inbox buttons read through
- * readNote(), edited the frontmatter, and wrote the result back with mode `replace`. One press on
- * the biggest project page destroyed two real lines — `TOKEN="$(security find-generic-password …)"`
- * and a `CONNECTOR_PATH_SECRET=devpreview` launch override, both of them documentation ABOUT
- * credential handling rather than credentials — and baked the "values in this file were redacted
- * on the way out" footer into the note as if the note said it. Recovered from git.
+ * it did. Feeding its output back into writeNote() therefore saves the redaction INTO the brain.
+ * The console's inbox buttons once read through readNote(), edited the frontmatter, and wrote the
+ * result back with mode `replace`: one press replaced every credential-SHAPED line on the page —
+ * including lines that were documentation ABOUT credential handling rather than credentials —
+ * with `<redacted>`, and baked the "values in this file were redacted on the way out" footer into
+ * the note as if the note said it. Only git history could undo it.
  *
  * The general shape, worth more than the incident: a function that makes data SAFE TO LEAVE is
  * never the right way to LOAD data you intend to write back. Redaction is lossy by design, and
@@ -641,7 +640,7 @@ async function regenerateIndexes(): Promise<void> {
  * an append: the new truth landed at the bottom of the file while the stale claim stayed
  * standing above it, verbatim, still quotable — the exact shape the hard-verify landmine test
  * kept catching in long-lived project notes. replace-the-whole-note was the only alternative, and
- * nobody rewrites 18,000 tokens to fix one line. Now the one line is the operation.
+ * nobody rewrites a whole long page to fix one line. Now the one line is the operation.
  *
  * Spliced by index, not String.replace: a replacement containing `$&` or `$'` would be
  * interpreted as a substitution pattern, and a correction that quotes shell or regex is not
@@ -708,7 +707,7 @@ export async function writeNote(
   // storableText on the WHOLE final content, not just the incoming piece: an append or edit
   // joins against the existing file, and a file poisoned before this guard existed would
   // otherwise re-commit its NUL forever. Scrubbing here heals such a file on its next write.
-  // (A NUL in one note froze the mirror — and the graph riding it — for hours on 2026-08-12:
+  // (A NUL in one note can freeze the mirror — and the graph riding it — for hours:
   // Postgres cannot hold the byte, so every sync_apply batch containing that file 400'd whole.)
   const finalContent = storableText(
     mode === "append"

@@ -13,7 +13,7 @@ import { ConnectSection } from "../app/s/[secret]/console/settings/connect-secti
  * and what needs guarding is the shape of the code: which states render, what the copy promises,
  * and that the opt-in law (no SUPABASE_URL → no panel) survives refactors.
  *
- * The panel lives in the note lens on Ask since the Notes screen folded in (v2, 2026-09-05);
+ * The panel lives in the note lens on Ask since the Notes screen folded in (v2);
  * the page is ask/page.tsx and the view is ask-lens.tsx. The panel's DATA behaviour — grouping,
  * caps, direction, evidence scrubbing — is held still with fixtures in tests/edges.test.ts; this
  * file guards the rendering seam above it.

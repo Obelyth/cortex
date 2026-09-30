@@ -11,7 +11,7 @@ import { BusyHours, MemoryVsTyping, Patterns, Pulse, TrendsProvider, WhoAnswered
  * the reader settings and renders this; scripts/dev/render-trends.tsx renders it from fixtures
  * so the layout can be looked at on both grounds without a store, a token or a deploy.
  *
- * Two windows on one log, on purpose (PRODUCT.md, stated 2026-09-01): the hourly instruments
+ * Two windows on one log, on purpose (PRODUCT.md): the hourly instruments
  * keep the 48 h window they caption, but the VALUE claim — tokens the brain saved — is a
  * lifetime number. The alternative it prices is re-dropping docs and code to bring each new
  * session up to speed, and nobody re-reflects on that in 48 h slices.

@@ -75,7 +75,9 @@ async function exerciseGate(addition: string) {
     }
     write(brain, "notes/public-task-runner.md", "# Synthetic reference collision\n");
     write(brain, "notes/fictional-cabinet-ledger.md", inventedSentence + `\nPASSWORD=${inventedCredential}\n`);
-    write(brain, "tools/brain_ask.py", [
+    // A synthetic reference ranker, named by BRAIN_PARITY_RANKER below, so the corpus parity
+    // block runs instead of reporting a skip.
+    write(brain, "tools/reference-ranker.py", [
       `SKIP_PREFIX = (${SKIP_PREFIX.map(value => JSON.stringify(value)).join(", ")},)`,
       `SKIP_NAMES = (${SKIP_NAME.map(value => JSON.stringify(value)).join(", ")},)`,
       "",
@@ -91,7 +93,7 @@ async function exerciseGate(addition: string) {
       ], {
         cwd: repo,
         // No inherited application credentials, actual brain path, or user NODE_OPTIONS.
-        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, NODE_ENV: "test", CI: "1", NO_COLOR: "1", BRAIN_DIR: brain, REQUIRE_EXPORT_GATE: "1" },
+        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, NODE_ENV: "test", CI: "1", NO_COLOR: "1", BRAIN_DIR: brain, BRAIN_PARITY_RANKER: join(brain, "tools/reference-ranker.py"), REQUIRE_EXPORT_GATE: "1" },
         timeout: 20_000,
         maxBuffer: 2_000_000,
       });

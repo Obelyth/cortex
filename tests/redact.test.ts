@@ -16,7 +16,7 @@ describe("redact", () => {
   });
 
   it("leaves prose alone: a scheme word followed by a word is a sentence, not a header", () => {
-    // Each of these came back censored from brain_ask on 2026-09-09 — the memory system
+    // Each of these used to come back censored from brain_ask — the memory system
     // redacting its own notes. A word after "bearer" has no digit, no underscore and no
     // 24-character run; a header value has at least one of them, or a scheme in front of it.
     for (const value of [
@@ -35,16 +35,15 @@ describe("redact", () => {
     }
     expect(redact("https://one.test/?next=https://two.test/?token=syntheticValue")).not.toContain("syntheticValue");
   });
-  it("catches the shape actually sitting in this brain", () => {
-    // The brain's archive carries a real ADMIN_PASSWORD=… line. A plain \b(password) misses it
-    // entirely — underscore is a word character, so the boundary never matches inside
-    // ADMIN_PASSWORD. That near-miss is the whole reason the key-name pattern allows a prefix.
+  it("catches the prefixed ADMIN_PASSWORD=… shape", () => {
+    // A plain \b(password) misses an ADMIN_PASSWORD=… line entirely — underscore is a word
+    // character, so the boundary never matches inside ADMIN_PASSWORD. That near-miss is the whole
+    // reason the key-name pattern allows a prefix.
     //
-    // THE VALUE HERE IS SYNTHETIC, and must stay that way. These fixtures used to carry the
-    // real production password for a live site, which is how it ended up committed to the
-    // public port — the export gate could not catch it, because that gate matches whole brain
-    // lines and a secret is a short token inside a longer one. Redaction behaviour is proven by
-    // the SHAPE of the input; the true value never adds coverage and only adds exposure.
+    // THE VALUE HERE IS SYNTHETIC, and must stay that way. The export gate cannot catch a real
+    // one, because that gate matches whole brain lines and a secret is a short token inside a
+    // longer one. Redaction behaviour is proven by the SHAPE of the input; a true value never
+    // adds coverage and only adds exposure.
     expect(redact("ADMIN_PASSWORD=synthetic-not-a-real-secret is set for Production")).toBe(
       "ADMIN_PASSWORD=<redacted> is set for Production"
     );
@@ -71,11 +70,11 @@ describe("redact", () => {
     expect(redact("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N")).toBe(
       "<redacted-jwt>"
     );
-    // Google's key shape — the one vendor form the operator's GAS/Sheets stack actually mints, and
-    // the shape a Gemini invalid-key error body echoes back.
-    expect(redact("API key not valid: AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY")).toBe(
-      "API key not valid: <redacted-token>"
-    );
+    // Google's key shape — the one a Gemini invalid-key error body echoes back. The value is
+    // synthetic and assembled at runtime, so no key-shaped literal sits in the source.
+    const fakeGoogleKey = ["AIza", "EXAMPLE", "0".repeat(28)].join("");
+    expect(fakeGoogleKey).toHaveLength(39);
+    expect(redact(`API key not valid: ${fakeGoogleKey}`)).toBe("API key not valid: <redacted-token>");
   });
 
   it("catches the shapes provider error bodies actually use", () => {
@@ -98,7 +97,7 @@ describe("redact", () => {
     // Over-redaction is not free: it corrupts quotes and makes verification fail on honest
     // notes. These are the shapes this brain is full of.
     for (const line of [
-      "The demo is offline and the preview link returns 404.",
+      "The oven is cold and the thermometer reads 18C.",
       "Rotate the admin password before the next release.",
       "A save is only real if a tool result returned a 40-hex commit SHA.",
       "type: feedback",

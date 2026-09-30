@@ -14,8 +14,8 @@ import { PROPOSAL_QUEUE_SCRIPT } from "./proposal-queue";
  *
  * So a guest proposes and nothing more. Proposals live here, in KV, NEVER in the repo: every
  * write to the brain is a commit, and a commit per rejected proposal would turn the memory into
- * a changelog of things that were never true. Acceptance — by the operator, or by the model he
- * actually trusts, through a door a guest cannot reach — is what performs the real write.
+ * a changelog of things that were never true. Acceptance — by the operator, or by the model they
+ * actually trust, through a door a guest cannot reach — is what performs the real write.
  *
  * PROPOSAL CONTENT IS HOSTILE UNTIL PROVEN OTHERWISE. It was written by a model this server
  * does not control, and it is read back by the model that decides whether to accept it. That is

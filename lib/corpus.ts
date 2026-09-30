@@ -25,16 +25,16 @@ const gunzip = promisify(zlib.gunzip);
 
 /** Excluded from the reader tier. archive/ holds superseded material;
  *  a reader given both answers from the dead one. tools/ is code, not memory. */
-// Must stay identical to brain/tools/brain_ask.py SKIP_PREFIX and SKIP_NAMES. Two definitions
-// of "the live corpus" that disagree is the dual-implementation drift this rebuild exists to
-// delete; when they diverge, an answer can silently miss a note. Exported for parity checks: the live
-// differential in tests/no-brain-leakage.test.ts reads the real python source from the brain
-// checkout and runs where a brain checkout exists; tests/corpus.test.ts pins the shape brain-free.
+// Must stay identical to the brain-side reference ranker's SKIP_PREFIX and SKIP_NAMES. Two
+// definitions of "the live corpus" that disagree is the dual-implementation drift this rebuild
+// exists to delete; when they diverge, an answer can silently miss a note. Exported for parity
+// checks: the live differential in tests/no-brain-leakage.test.ts reads the reference source from
+// the path in BRAIN_PARITY_RANKER when it is set; tests/corpus.test.ts pins the shape without it.
 // ".claude/" is the nested-worktree guard: Claude Code's EnterWorktree checks out at
 // .claude/worktrees/<name>/ INSIDE the repo, a full second copy of every file. That can duplicate
 // the reader corpus and re-admit retired archive content as current. Cortex reads the committed
 // tree where .gitignore already blocks these, so this
-// entry is parity with brain_ask.py's filesystem walk, not a live hole here.
+// entry is parity with the reference ranker's filesystem walk, not a live hole here.
 export const SKIP_PREFIX = [".git/", ".claude/", "tools/", "archive/", "brain-v2/", ".github/"];
 export const SKIP_NAME = ["brain-index.md", "INDEX.md", "README.md"];
 
@@ -52,7 +52,7 @@ let cached: Corpus | null = null;
 export function isLive(path: string): boolean {
   // Extension compared case-insensitively: a note saved as `Setup.MD` is a note. The old
   // exact-match test dropped it silently, which is the one bypass on this list reachable by
-  // hand. brain_ask.py's live_files() matches this.
+  // hand. The reference ranker's corpus walk matches this.
   if (!/\.md$/i.test(path)) return false;
   if (SKIP_PREFIX.some((p) => path.startsWith(p))) return false;
   return !SKIP_NAME.includes(path.split("/").pop() ?? "");

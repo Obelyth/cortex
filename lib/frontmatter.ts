@@ -56,10 +56,10 @@ export interface Frontmatter {
   /**
    * Whether this note's facts can go stale. `false` opts it out of the verification-stamp check.
    *
-   * The check treats every stamped note alike, and the notes are not alike. "MEGAsync was removed
-   * on 2026-07-26" cannot stop being true; "backups run nightly and here is the recovery path"
-   * decays the moment the machine changes. Nagging about the first teaches you to skim past the
-   * second, which is the one that matters.
+   * The check treats every stamped note alike, and the notes are not alike. "The legacy build
+   * server was decommissioned on 2025-01-12" cannot stop being true; "backups run nightly and
+   * here is the recovery path" decays the moment the machine changes. Nagging about the first
+   * teaches you to skim past the second, which is the one that matters.
    *
    * Undefined means "assume it decays" — the safe default. A note only stops being watched when
    * someone says so deliberately, never by omission.
@@ -329,9 +329,9 @@ export const MAX_ROW_TAGS = 6;
  * The one byte a note may never carry: U+0000. PostgreSQL `text` cannot hold NUL and jsonb
  * refuses the \u0000 escape outright (22P05) — so a single NUL in ONE note 400s the entire
  * sync_apply batch, and because the poisoned file rides in every subsequent diff, the mirror
- * freezes at the last clean commit until a human notices. That is not hypothetical: it froze
- * the mirror AND the connections graph riding it for three hours on 2026-08-12, silently,
- * because every layer above the 400 degraded politely.
+ * freezes at the last clean commit until a human notices. That is not hypothetical: it can
+ * freeze the mirror AND the connections graph riding it for hours, silently, because every
+ * layer above the 400 degrades politely.
  *
  * Applied at write ingress (lib/brain.ts) so the byte never reaches git, and again at the sync
  * seam (lib/mirror.ts) so history already carrying it cannot brick the mirror. Exactly NUL and

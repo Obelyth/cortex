@@ -131,14 +131,14 @@ export function AttentionClient({ queue }: { queue: Health["triage"] }) {
               nightly run. All three change the note.
 
               The watch kinds (superseded-link, coaccess-gap, correction-chain) get the SETTLED
-              button and nothing else (2026-08-17). Their real fixes -- repointing a reference,
+              button and nothing else. Their real fixes -- repointing a reference,
               writing a [[link]], collapsing a correction chain -- are still edits this console
               cannot make for you, and there is still no button pretending otherwise. But "this
               note is a record of something finished" is an answer that fits them exactly as well
-              as it fits a stale stamp, and until today there was no way to give it: three project
-              pages were retired on 2026-08-17 and went on generating watch items about work
-              nobody will ever do. `decays: false` now takes a note out of these checks too, so
-              the button is not a lie about where the item goes.
+              as it fits a stale stamp, and there used to be no way to give it: a retired project
+              page went on generating watch items about work nobody will ever do. `decays: false`
+              now takes a note out of these checks too, so the button is not a lie about where
+              the item goes.
 
               Findings with no `kind` -- a credential-shaped line, an unmarked retired-tool claim
               -- get no button at all, and that is not an oversight. Those are about danger, not

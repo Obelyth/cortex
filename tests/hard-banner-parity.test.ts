@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { splitBlocks, retraction, isBannerText } from "../lib/verify";
+import { splitBlocks, retraction, isBannerText, normalise, MIN_QUOTE } from "../lib/verify";
 
 /**
  * The heading rule was loosened. This proves nothing stopped being caught.
  *
- * `retraction()` used a case-insensitive test on the heading, so `### Correction to the guest door
- * section above` marked its whole section retracted — the freshest passage in the note stamped
+ * `retraction()` used a case-insensitive test on the heading, so `### Correction from the race
+ * officer` marked its whole section retracted — the freshest passage in the note stamped
  * "history, not the current state". The fix requires a heading's marker to be SHOUTED (all-caps or
  * bold) before it counts as a banner.
  *
@@ -34,14 +34,14 @@ function walk(dir: string, base = ""): string[] {
 
 describe("headingIsBanner", () => {
   it("counts a SHOUTED marker — the house style for a real banner", () => {
-    for (const h of ["SUPERSEDED 2025-02-17", "CORRECTION — the toolset was backwards", "DEPRECATED"]) {
+    for (const h of ["SUPERSEDED 2025-05-06", "CORRECTION — the tide table was a year old", "DEPRECATED"]) {
       expect(isBannerText(h), h).toBe(true);
     }
   });
 
   it("counts a bold marker whatever its case", () => {
     expect(isBannerText("**Superseded** — see the newer page")).toBe(true);
-    expect(isBannerText("**correction** to the guest door")).toBe(true);
+    expect(isBannerText("**correction** to the start times")).toBe(true);
   });
 
   it("counts an explicit directive", () => {
@@ -49,16 +49,48 @@ describe("headingIsBanner", () => {
   });
 
   it("does NOT count the word used as ordinary prose — the bug", () => {
-    // Every one of these is a real heading from the corpus. Each marked its whole section dead.
+    // Invented headings that use a marker word as an ordinary noun or adjective. The old
+    // case-insensitive rule would have marked each whole section dead.
     for (const h of [
-      "Correction to the guest door section above (2026-08-03, PR #39 `6f8b168`)",
-      "Framing correction (2025-02-17)",
-      "Pipeline correction (recovered 2026-07-26)",
-      "Correction and full audit 2026-07-26",
-      "DEFECT — `brain_recall` can answer from a superseded archive page",
+      "Correction from the race officer",
+      "Why the regatta results needed a correction",
+      "Superseded sail numbers still painted on the old dinghies",
+      "Deprecated fittings the chandlery still stocks",
+      "TODO — find out which of the old tide tables are superseded",
     ]) {
       expect(isBannerText(h), h).toBe(false);
     }
+  });
+
+  it("a PROSE reference to a correction does NOT retract the text around it", () => {
+    // The other half, and the reason this change exists. Invented lines that mention a marker
+    // word in lowercase without retracting anything.
+    for (const line of [
+      "the club kept the superseded sail numbers on two of the old dinghies",
+      "the treasurer's correction to the bar prices went up on Friday",
+      "we swapped the deprecated shackles for stainless ones over the winter",
+      "ask the harbourmaster about the correction to the tide gauge",
+    ]) {
+      expect(isBannerText(line), line).toBe(false);
+    }
+  });
+});
+
+describe("retraction() reads a sentence-case correction heading as a correction", () => {
+  // The concrete regression, pinned without a brain. A heading that starts with the word
+  // "Correction" introduces the CURRENT text; if the heading were read with the
+  // case-insensitive block rule, every quote under it would come back as history.
+  const text = '## Correction from the race officer\n\nThe first gun fires at 10:55 (was: "the first gun fires at 11:00").\n';
+  const blocks = splitBlocks(text);
+  const i = blocks.findIndex((b) => b.text.includes("10:55"));
+
+  it("stamps the current claim under that heading as a correction", () => {
+    expect(i).toBeGreaterThan(0);
+    expect(retraction(blocks, i, "The first gun fires at 10:55")).toBe("correction");
+  });
+
+  it("still stamps the retired wording in the same block as retracted", () => {
+    expect(retraction(blocks, i, "the first gun fires at 11:00")).toBe("banner");
   });
 });
 
@@ -72,7 +104,7 @@ describe.skipIf(!present)("banner parity against the live corpus", () => {
     // The guarantee, restated for a uniform rule. It used to assert that any block whose text
     // contained the WORD still fired — which is the bug, not the contract. What must never
     // regress is that a real banner, the kind house style writes in caps or bold, is caught
-    // wherever it sits. Measured across the brain: 67 such lines, and all 67 are caps or bold.
+    // wherever it sits. House style writes every real banner in caps or bold.
     const missed: string[] = [];
     let checked = 0;
 
@@ -87,18 +119,6 @@ describe.skipIf(!present)("banner parity against the live corpus", () => {
 
     expect(checked, "no shouted banners found — the corpus or the walk is wrong").toBeGreaterThan(20);
     expect(missed, `shouted banners that stopped firing:\n  ${missed.join("\n  ")}`).toEqual([]);
-  });
-
-  it("a PROSE reference to a correction does NOT retract the text around it", () => {
-    // The other half, and the reason this change exists. Lines shaped like real corpus prose.
-    for (const line of [
-      "and #33 (superseded draft wizard), and live-edits files mid-session",
-      "The operator's correction: the console overview design is the ENTIRE landing",
-      "hwdb is native and survives updates vs. compiling deprecated libinput-config",
-      "see the correction in the recovered-session section above",
-    ]) {
-      expect(isBannerText(line), line).toBe(false);
-    }
   });
 
   it("every heading reclassified by this change is prose, never a shouted banner", () => {
@@ -124,23 +144,31 @@ describe.skipIf(!present)("banner parity against the live corpus", () => {
   });
 
   it("the corrected sections now read as corrections, not as retractions", () => {
-    // The concrete regression. A quote of the CURRENT claim beside a `(was: "…")` marker, under a
-    // heading that says the section is a correction, must stamp CORRECTED.
-    const rel = "projects/cortex.md";
-    if (!existsSync(join(BRAIN, rel))) return;
-    const blocks = splitBlocks(readFileSync(join(BRAIN, rel), "utf8"));
+    // The concrete regression. A quote of the CURRENT claim beside a `(was: "…")` marker, in a
+    // passage no banner covers, must stamp CORRECTED. The passages are found by shape at run
+    // time — a block carrying its own quoted marker — so no note path or note text is pinned in
+    // this file. A brain with no such passage fails the floor below instead of passing silently.
+    let asserted = 0;
+    for (const rel of walk(BRAIN)) {
+      const blocks = splitBlocks(readFileSync(join(BRAIN, rel), "utf8"));
+      blocks.forEach((b, i) => {
+        if (isBannerText(b.heading)) return;
+        if ([blocks[i - 1], b, blocks[i + 1]].some((n) => n && isBannerText(n.text))) return;
+        const m = /was:\s*"([^"]+)"/.exec(b.text);
+        if (!m) return;
+        // The current claim is the text in front of the marker, in the same block.
+        const claim = b.text.slice(0, m.index).replace(/\(\s*$/, "").replace(/^[ \t]*[-*+>]\s*/, "").trim();
+        if (normalise(claim).length < MIN_QUOTE) return;
+        expect(retraction(blocks, i, claim), `${rel}:${b.line}`).toBe("correction");
+        asserted++;
 
-    const i = blocks.findIndex(
-      (b) => /A guest gets/.test(b.text) && /was:/.test(b.text)
-    );
-    if (i < 0) return; // the note was rewritten; nothing to assert
-
-    const claim = "brain_ask (scoped) and brain_propose, and nothing else";
-    expect(retraction(blocks, i, claim)).toBe("correction");
-
-    // ...and quoting the RETIRED wording out of the same block still reads as retracted, which is
-    // the half of the split that must not regress.
-    const old = /was:\s*"([^"]+)"/.exec(blocks[i].text)?.[1];
-    if (old) expect(retraction(blocks, i, old)).toBe("banner");
+        // ...and quoting the RETIRED wording out of the same block still reads as retracted,
+        // which is the half of the split that must not regress.
+        if (normalise(m[1]).length >= MIN_QUOTE) {
+          expect(retraction(blocks, i, m[1]), `${rel}:${b.line}`).toBe("banner");
+        }
+      });
+    }
+    expect(asserted, "no current claim beside a (was: \"…\") marker found — the corpus or the walk is wrong").toBeGreaterThan(0);
   });
 });

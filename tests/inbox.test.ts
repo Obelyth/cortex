@@ -120,13 +120,13 @@ describe("check 1 — live link to a superseded note", () => {
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
 
-  it("PRECISION PIN — the LOOSE unquoted (was: …) form is excluded too — the live design-brand-note shape", () => {
+  it("PRECISION PIN — the LOOSE unquoted (was: …) form is excluded too", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      // Replica of the live shape: the note explaining what it USED to say, with the pointer
-      // to the retired page inside the parenthetical.
+      // An invented note in the loose shape: an unquoted aside about what the page used to say,
+      // with the pointer to the retired page inside the parenthetical.
       "projects/hotel.md":
-        "# Hotel\n\n- **Alpha** — uses this brand. (was: this page used to cover the old plan instead — updated 2026-07-24; see notes/dead.md.)\n",
+        "# Hotel\n\nBreakfast is served until ten (was: until nine, per notes/dead.md, before the kitchen moved).\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -413,7 +413,7 @@ describe("check 2 — co-read pair with no link", () => {
 });
 
 describe("check 3 — correction chain crossing notes", () => {
-  // The live shape that gated this check: each page's correcting block names the other.
+  // The mutual shape this check exists for: each page's correcting block names the other.
   const mutual = corpus({
     "projects/alpha.md":
       "# Alpha\n\n**CORRECTION 2026-08-01:** the port in notes/beta.md was wrong; it is 9443.\n",

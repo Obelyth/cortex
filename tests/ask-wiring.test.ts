@@ -2,16 +2,12 @@
  * What `ask()` actually REQUESTS — the wiring, not the library.
  *
  * tests/narrow.test.ts proves `narrow()` honours `maxLogs`, `budgetBytes` and `maxPartsPerPage`
- * when it is handed them. Nothing proved the production caller hands them over. Measured by
- * mutation against the full suite (2026-09-03, BRAIN_DIR=brain-work, 1111 tests):
+ * when it is handed them. Nothing proved the production caller hands them over: deleting both
+ * caps from the narrow() call in lib/ask.ts, or changing DEFAULT_K, left the whole suite green.
  *
- *   lib/ask.ts — delete both caps from the narrow() call   1111/1111 still passed
- *   lib/ask.ts — DEFAULT_K 15 → 10                          1111/1111 still passed
- *
- * So the two headline behaviours of this branch, and the k change measured beside them, were
- * unguarded: a refactor that dropped the opts object would have left every test green and every
- * number in the README wrong. The log cap (task 3) was the one properly pinned, and this file is
- * that shape applied to the other two.
+ * So the two headline behaviours, and the k beside them, were unguarded: a refactor that dropped
+ * the opts object would have left every test green and every number in the README wrong. The
+ * log cap was the one properly pinned, and this file is that shape applied to the other two.
  *
  * These assertions are deliberately on the OUTPUT of `ask()` — the candidate pack a reader is
  * actually handed — not on narrow() called with explicit parameters, because "narrow honours what
