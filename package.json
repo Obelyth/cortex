@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/server": "2.0.0",
     "@sentry/nextjs": "^10.69.0",
     "@upstash/redis": "^1.38.2",
     "mcp-handler": "2.1.0",
@@ -37,7 +37,6 @@
     "vitest": "4.1.11"
   },
   "overrides": {
-    "hono": "4.13.5",
     "sharp": "0.35.4"
   },
   "description": "CORTEX by OBELYTH: a private Markdown brain and dashboard for compatible MCP clients, with verified citations.",

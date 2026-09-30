@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 
 /** Below this a token is almost certainly a truncated paste. WARNED about, never enforced —
  *  see verifyToken(). */
