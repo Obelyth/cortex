@@ -10,9 +10,9 @@ register it as a scheduled task in Claude Code.
 
 ## What the brain is
 - A private repo of plain markdown, served to every device by the cortex MCP
-  (tools: `brain_accept`, `brain_ask`, `brain_capture`, `brain_context`,
-  `brain_corpus`, `brain_proposals`, `brain_read`, `brain_reject`,
-  `brain_write`). ALWAYS write through those tools — the server regenerates
+  (tools: `brain_accept`, `brain_ask`, `brain_bubble`, `brain_capture`,
+  `brain_context`, `brain_corpus`, `brain_handoff`, `brain_proposals`,
+  `brain_read`, `brain_reject`, `brain_write`). ALWAYS write through those tools — the server regenerates
   INDEX.md and makes the commit.
 - A save is only real if a tool returned a 40-hex commit SHA.
 - Corrections stay on the page: `(was: "…" — updated <date>)`, or a SUPERSEDED

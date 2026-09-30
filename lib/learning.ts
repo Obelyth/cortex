@@ -36,10 +36,10 @@ import {
  * The co-read floor for the coaccess-gap inbox check — the CODE DEFAULT the console knob sits
  * on. The floor means exactly one thing and the check's precision filters did not change it:
  * the minimum shared one-hour windows before a pair is even a CANDIDATE, applied before the
- * mutual-top-K ranking and the mention scan (lib/inbox.ts) decide what surfaces. Measured on
- * the live note_edges 2026-08-11 — weights: 6×4, 5×2, 4×10, 3×41, 2×264 edges, and 272 of the
- * 321 pairs have no link either way. A floor of 4 admits eleven unlinked pairs as candidates
- * and 3 admits fifty-two — dozens, which is how the last queue died. 5 keeps the candidate set
+ * mutual-top-K ranking and the mention scan (lib/inbox.ts) decide what surfaces. On a real edge
+ * table the weights pile up at the bottom and most pairs have no link either way, so each step
+ * down multiplies the candidates; a low floor admits dozens, which is how the last queue died.
+ * 5 keeps the candidate set
  * to a handful before the specificity filters even run, and a pair that genuinely belongs
  * together keeps accruing windows until it crosses whatever the floor is. Lives here (not
  * lib/inbox.ts) because it is now a knob's default and the registry below is the one home for

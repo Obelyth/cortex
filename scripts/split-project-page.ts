@@ -94,7 +94,7 @@ export interface HistoryFileReport {
    *
    * The distinction is load-bearing and the earlier version of this got it wrong. Sections keep
    * the order the page wrote them, and a page written by appending is not in date order: one
-   * part here runs 2026-08-09 … 2026-08-31 while the part after it holds a single 2026-08-31
+   * part can run 2026-03-09 … 2026-03-31 while the part after it holds a single 2026-03-31
    * section. Reporting min and max would present that as a tidy range and quietly claim an
    * ordering the file does not have.
    */
@@ -191,7 +191,7 @@ const ISO_DATE = new RegExp(DATE);
  * A provenance stamp, which is the second place a section's date can live.
  *
  * Sections written as an append under an existing heading carry their date inline
- * (`**[stated, 2026-08-20]** …`) rather than in the heading. Reading only headings would file
+ * (`**[stated, 2026-03-05]** …`) rather than in the heading. Reading only headings would file
  * those under whatever heading happened to be above them with no date at all.
  */
 const STAMP = new RegExp(String.raw`\[(?:stated|inferred|unconfirmed),\s*(${DATE})\]`);
@@ -202,8 +202,8 @@ const FENCE = /^ {0,3}(`{3,}|~{3,})/;
 /**
  * The comparable form of a heading: everything before the first ` — ` or ` (`, folded.
  *
- * Headings in this corpus are titles with their circumstances attached — "Known defects (found
- * 2026-07-25 — two fixed 2026-07-27)". `--keep "Known defects"` has to match that, and so does
+ * Headings in this corpus are titles with their circumstances attached — "Open issues (logged
+ * 2026-07-02 — two closed 2026-07-04)". `--keep "Open issues"` has to match that, and so does
  * pasting the whole heading back in, so BOTH sides go through this. Nothing else is normalised:
  * two sections sharing a leading phrase are MEANT to collide, since that is how a page's
  * recurring "Next" blocks are named — `keptSectionIndexes` then decides which of them stays.
@@ -286,7 +286,7 @@ function monthLabel(month: string): string {
 /**
  * How a file's contents are described, in the terms that are actually true of them.
  *
- * "2026-08-09 to 2026-08-31" reads as a range, and a range implies the file is ordered and
+ * "2026-03-09 to 2026-03-31" reads as a range, and a range implies the file is ordered and
  * complete between its ends. Neither is so: the sections are in the order the page wrote them,
  * and a neighbouring part can hold an earlier date. So the wording says what it is — sections in
  * document order, with the date the first one carries and the date the last one carries.
@@ -568,9 +568,9 @@ export function verifySplit(
  * The page-month a history file belongs to: `history/<name>-YYYY-MM[-n].md` → `history/<name>-YYYY-MM`.
  *
  * Greedy on purpose, and for the same reason `historyPageName` is: a page whose own name ends in
- * something year-month shaped (`tricam-2025-01`) must resolve to that page's month, not to a month
+ * something year-month shaped (`alpha-2025-01`) must resolve to that page's month, not to a month
  * invented out of the middle of its name. Backtracking from the longest match gives
- * `history/tricam-2025-01-2026-08-2.md` → `history/tricam-2025-01-2026-08`, which is right.
+ * `history/alpha-2025-01-2026-08-2.md` → `history/alpha-2025-01-2026-08`, which is right.
  */
 const PAGE_MONTH = /^(history\/[a-z0-9-]+-\d{4}-\d{2})(?:-\d+)?\.md$/;
 
@@ -622,7 +622,7 @@ function filedAlready(brain: string, destinations: string[]): string[] {
  * under any part count, the run refuses.
  *
  * The same check covers the other route into the same hole: `name` comes from the basename, so
- * `projects/harbor.md` and `notes/harbor.md` both emit `history/harbor-YYYY-MM.md`, and splitting
+ * `projects/project-alpha.md` and `notes/project-alpha.md` both emit `history/project-alpha-YYYY-MM.md`, and splitting
  * the second would land on the first's months. All of it is one question — "is something already
  * filed here?" — and one answer.
  *

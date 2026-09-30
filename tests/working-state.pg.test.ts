@@ -53,12 +53,12 @@ describe.runIf(enabled)("console working state on native PostgreSQL", () => {
     expect(aged.rows[0].status).toBe("aged"); expect(Number(aged.rows[0].version)).toBe(2);
   });
   it("concurrent same-key adds create one item, refuse changed input, and replay current filed state", async () => {
-    const sql = `select bubble_console_add($1,'handoff','Next: finish review',' Projects/Harbor.md ') value`;
+    const sql = `select bubble_console_add($1,'handoff','Next: finish review',' Projects/Hotel.md ') value`;
     const [a,b] = await Promise.all([db.query(sql,[key]), other.query(sql,[key])]);
     expect(a.rows[0].value.item.id).toBe(b.rows[0].value.item.id);
     expect(a.rows[0].value.outcome).toBe("saved");
     expect((await db.query(`select count(*)::int n from bubble_items where console_request_key=$1`,[key])).rows[0].n).toBe(1);
-    expect((await db.query(`select bubble_console_add($1,'handoff','Different','harbor') value`,[key])).rows[0].value.outcome).toBe("key_conflict");
+    expect((await db.query(`select bubble_console_add($1,'handoff','Different','hotel') value`,[key])).rows[0].value.outcome).toBe("key_conflict");
     await db.query(`update bubble_items set body='Model revised the saved item' where console_request_key=$1`,[key]);
     const editedReplay=(await db.query(sql,[key])).rows[0].value;
     expect(editedReplay.item.body).toBe("Model revised the saved item");expect(editedReplay.item.version).toBe(2);
@@ -72,8 +72,8 @@ describe.runIf(enabled)("console working state on native PostgreSQL", () => {
     expect(agedReplay.item.status).toBe("aged");expect(agedReplay.item.version).toBe(3);
   });
   it("CAS edit has one winner and cannot overwrite filed, expired or intervening model state", async () => {
-    const id = (await db.query(`insert into bubble_items(kind,body,project) values('handoff','Draft','harbor') returning id`)).rows[0].id;
-    const sql = `select bubble_console_edit($1,1,'handoff',$2,'harbor',false) value`;
+    const id = (await db.query(`insert into bubble_items(kind,body,project) values('handoff','Draft','hotel') returning id`)).rows[0].id;
+    const sql = `select bubble_console_edit($1,1,'handoff',$2,'hotel',false) value`;
     const results = await Promise.all([db.query(sql,[id,"First correction"]),other.query(sql,[id,"Second correction"])]);
     expect(results.map(r=>r.rows[0].value.outcome).sort()).toEqual(["conflict","saved"]);
     await db.query(`update bubble_items set body='Model correction' where id=$1`,[id]);

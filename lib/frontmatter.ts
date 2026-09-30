@@ -13,7 +13,7 @@
  * nothing. What is here reads the keys it knows and ignores everything else, including the nested
  * `metadata:` blocks the existing feedback notes carry.
  *
- * ABSENCE IS A NON-EVENT, and that is the load-bearing rule. On day one, 74 of 83 notes have no
+ * ABSENCE IS A NON-EVENT, and that is the load-bearing rule. On day one, most notes have no
  * frontmatter at all. A parser that threw, or a router that skipped what it could not describe,
  * would make those notes invisible in the one surface that is supposed to list everything — the
  * silent-loss failure the rest of this system is built to prevent. So every path here degrades to
@@ -444,7 +444,7 @@ interface MonthTally {
  * Three tags on a month row, against MAX_ROW_TAGS's six on a note.
  *
  * A note's tags describe that note. A month's tags describe thirty days at once, so the tail is
- * long and mostly noise — the point of the row is "August was mostly cortex and mocap", which the
+ * long and mostly noise — the point of the row is "August was mostly cortex and project-alpha", which the
  * first few carry and the rest dilute. Overflow is not announced here either: on a note the
  * hidden tags are that note's own, and worth counting; on a month they are a distribution's tail,
  * and `+19 more` says nothing a reader can act on.
@@ -585,9 +585,8 @@ export function routerCut(
   // THE BUDGET IS THE DOCUMENT'S, NOT THE ROWS'. The walk above counts row bytes only, but what
   // the boot call actually spends is renderRouterDoc's output — rows PLUS the header, the
   // coverage line, the cold/dropped notes and one `## <dir>` heading per group. That wrapper was
-  // unaccounted for, so the "budget" quietly ran ~121 bytes over on the live corpus (measured
-  // 2026-08-17) and drifted with the shape of the corpus rather than staying where it was
-  // written. So: render the candidate, and if the document overshoots, tighten the row budget by
+  // unaccounted for, so the "budget" quietly ran over and drifted with the shape of the corpus
+  // rather than staying where it was written. So: render the candidate, and if the document overshoots, tighten the row budget by
   // exactly the overshoot and re-walk. Convergence is fast — dropping rows shrinks the document
   // faster than the dropped-note line grows — and the loop is bounded anyway. Measuring by
   // rendering, rather than by a parallel arithmetic model of the wrapper, means the two cannot
@@ -624,11 +623,11 @@ export function routerCut(
  * The router table, rendered.
  *
  * Every live note gets a row. What varies with scale is how much of this table is rendered into
- * context — today all of it, since 83 notes is ~2.5k tokens; past a few hundred the hot/warm
+ * context — all of it while the corpus is small; past a few hundred notes the hot/warm
  * split governs. The split itself lives in routerCut above; this function is the render.
  *
- * Coverage is reported out loud. A router that quietly described 9 notes and shrugged at 74 would
- * read as complete, and the gap is the single most useful thing to know while the backfill is in
+ * Coverage is reported out loud. A router that quietly described a few notes and shrugged at the
+ * rest would read as complete, and the gap is the single most useful thing to know while the backfill is in
  * progress.
  */
 export function buildRouter(

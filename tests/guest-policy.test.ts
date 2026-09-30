@@ -17,7 +17,7 @@ const corpus: Corpus = {
   bytes: 400,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/beacon.md", "Beacon production is dark; both URLs return 404 as of 2026-07-25."],
+    ["projects/sample.md", "The sample demo is offline; the preview link returns 404 as of 2025-02-17."],
     ["profile.md", "the operator's home address is 12 Made Up Lane and his bank is Fictional Credit Union."],
     ["notes/private.md", "The spare key is under the third plant pot on the left."],
     ["log/2026-08-03.md", "09:20 — argued with the landlord about the lease."],
@@ -63,7 +63,7 @@ describe("scope removes notes before the reader ever sees them", () => {
       },
       { scope: ["projects/"], k: 40 }
     );
-    expect(seen).toContain("FILE: projects/beacon.md");
+    expect(seen).toContain("FILE: projects/sample.md");
     // The point of filtering BEFORE rather than after: these strings never entered the prompt,
     // so no amount of persuasion in the question can produce them.
     expect(seen).not.toContain("profile.md");
@@ -101,10 +101,10 @@ describe("scope removes notes before the reader ever sees them", () => {
 
 describe("what a guest is told about the answer", () => {
   const cite = (path: string, quote: string) => async (prompt: ReaderPrompt) =>
-    JSON.stringify({ answer: "Production is dark.", tag: tagOf(prompt, path), quote });
+    JSON.stringify({ answer: "The demo is offline.", tag: tagOf(prompt, path), quote });
 
   it("returns the verdict without the path or the verbatim evidence", async () => {
-    const r = await ask("is beacon live", cite("projects/beacon.md", "Beacon production is dark"), {
+    const r = await ask("is sample live", cite("projects/sample.md", "The sample demo is offline"), {
       scope: ["projects/"],
     });
     const bare = render(r, { citations: false });
@@ -112,10 +112,10 @@ describe("what a guest is told about the answer", () => {
     // It learns the answer was proven — the part that matters to it.
     expect(bare).toContain("verified against the brain at commit");
     // It does not learn the brain's shape, nor get a verbatim excerpt on every answer.
-    expect(bare).not.toContain("projects/beacon.md");
+    expect(bare).not.toContain("projects/sample.md");
     expect(bare).not.toContain("source:");
     expect(bare).not.toContain("evidence:");
-    expect(bare).not.toContain("Beacon production is dark;");
+    expect(bare).not.toContain("The sample demo is offline;");
   });
 
   it("still distinguishes absence, unproven and retracted, because those change the answer's worth", async () => {
@@ -125,8 +125,8 @@ describe("what a guest is told about the answer", () => {
     expect(render(notFound, { citations: false })).toMatch(/^NOT IN BRAIN/);
 
     const fabricated = await ask(
-      "is beacon live",
-      cite("projects/beacon.md", "Beacon shipped and is fully live"),
+      "is sample live",
+      cite("projects/sample.md", "The sample demo launched and is fully working"),
       { scope: ["projects/"] }
     );
     const bare = render(fabricated, { citations: false });
@@ -135,8 +135,8 @@ describe("what a guest is told about the answer", () => {
   });
 
   it("full citations still come back on the trusted path", async () => {
-    const r = await ask("is beacon live", cite("projects/beacon.md", "Beacon production is dark"));
-    expect(render(r)).toContain("projects/beacon.md");
+    const r = await ask("is sample live", cite("projects/sample.md", "The sample demo is offline"));
+    expect(render(r)).toContain("projects/sample.md");
     expect(render(r)).toContain("evidence:");
   });
 });

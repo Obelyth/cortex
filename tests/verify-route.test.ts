@@ -57,7 +57,7 @@ describe("attention/verify route", () => {
       "## Late\n\n_Facts last verified 2026-08-12 — the page's claim._\n";
     vi.mocked(readNoteRaw).mockResolvedValue(page);
 
-    const res = await post({ path: "projects/harbor.md", action: "checked" });
+    const res = await post({ path: "projects/hotel.md", action: "checked" });
     expect(res.status).toBe(200);
     const written = vi.mocked(writeNote).mock.calls[0][1] as string;
     expect(written).toContain("_Facts last verified 2026-08-01 — that section._");
@@ -69,13 +69,13 @@ describe("attention/verify route", () => {
     // The read half of this read-modify-write MUST be readNoteRaw: reading through the egress
     // function saved `<redacted>` into a real page on 2026-08-17. The mock surface itself pins
     // this — the route imports readNoteRaw, and a regression to readNote would throw here.
-    vi.mocked(readNoteRaw).mockResolvedValue("# Harbor\n\nbody\n");
-    const res = await post({ path: "projects/harbor.md", action: "settled" });
+    vi.mocked(readNoteRaw).mockResolvedValue("# Hotel\n\nbody\n");
+    const res = await post({ path: "projects/hotel.md", action: "settled" });
     expect(res.status).toBe(200);
-    expect(readNoteRaw).toHaveBeenCalledWith("projects/harbor.md");
+    expect(readNoteRaw).toHaveBeenCalledWith("projects/hotel.md");
     const written = vi.mocked(writeNote).mock.calls[0][1] as string;
     expect(written).toMatch(/^---\ndecays: false\n---/);
-    expect(written).toContain("# Harbor\n\nbody");
+    expect(written).toContain("# Hotel\n\nbody");
   });
 
   it("'checked' on a page with no stamp refuses rather than inventing a claim", async () => {

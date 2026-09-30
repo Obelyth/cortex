@@ -249,8 +249,8 @@ const LOG_SHARE = 0.5;
  * BUDGETED LIKE THE BOOT CALL, and the walk continues past an oversized piece rather than
  * breaking — one enormous log entry must not hide the neighbour notes behind it. The project
  * page is the one piece that always rides, budget or no: a handoff without the project page is
- * not a smaller handoff, it is a different product. But it rides BOUNDED — measured on the live
- * brain, the most active project's page is 168 KB against a 24 KB default budget, so "the whole
+ * not a smaller handoff, it is a different product. But it rides BOUNDED — the most active
+ * project's page can be several times the default budget, so "the whole
  * page always" would make the budget a fiction on exactly the project most worth resuming. A
  * page that cannot fit whole rides as its TAIL (project pages append newest last, so the tail
  * is the freshest end), and the WHY says so with the numbers and the way to the rest.
@@ -397,9 +397,9 @@ export function renderHandoff(i: HandoffInputs): {
 
   // ── The budget walk ──────────────────────────────────────────────────────────────────────
   // Log mentions carry one extra rule: they may take at most LOG_SHARE of what the page and the
-  // bubble leave behind. Measured live before this existed: an active week put fifteen log
-  // sections ahead of the graph's eight nominations, the logs ate the whole remainder, and the
-  // bundle shipped zero neighbours — the one section the connections graph exists to feed.
+  // bubble leave behind. Without it, an active week can put many log sections ahead of the
+  // graph's nominations, the logs eat the whole remainder, and the bundle ships zero neighbours
+  // — the one section the connections graph exists to feed.
   // Unspent log share flows on to the neighbours; nothing is reserved for a section that has
   // nothing to say.
   const rendered: Array<{ block: string; pieceIndex: number }> = [];

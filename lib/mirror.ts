@@ -259,8 +259,8 @@ function pgrstStore(base: string, key: string): MirrorStore {
     },
 
     async apply(expectedHead, newHead, upserts, removes) {
-      // One POST, one transaction, one winner. The whole corpus at today's size is ~500 KB of
-      // JSON — nowhere near a request-body limit worth engineering around.
+      // One POST, one transaction, one winner. A whole corpus is a modest JSON body — nowhere
+      // near a request-body limit worth engineering around.
       const res = await call("rpc/sync_apply", {
         method: "POST",
         body: JSON.stringify({

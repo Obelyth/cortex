@@ -18,11 +18,10 @@ import { pendingMigrationTriage } from "./migrations";
  * Global, and read from the END, because a brain page is an append-only build log: each dated
  * section carries the stamp it was verified under, and the page's CURRENT claim is the last one.
  * Reading the first match asked "when was the OLDEST section of this page checked?" and answered
- * a question nobody had. Measured 2026-08-17: two long project pages sat in the inbox reading 16
- * days stale off an early section stamp while each carried a stamp five days old at its foot, and
- * both had been reported that way every night for a fortnight. Every page that keeps per-section
- * stamps was permanently flagged — the failure mode where a real finding hides among rows you
- * have learned mean nothing.
+ * a question nobody had: a long project page read as stale off an early section stamp while it
+ * carried a recent stamp at its foot, and it was reported that way every night. Every page that
+ * keeps per-section stamps was permanently flagged — the failure mode where a real finding hides
+ * among rows you have learned mean nothing.
  *
  * Positional-last, deliberately NOT max-by-date: the newest stamp anywhere on a page would let
  * one freshly-checked section vouch for the whole page, and a wrong answer here has to land on
@@ -77,9 +76,9 @@ const RETIRED = ["brain_recall", "brain_search", "brain-index.md", "build_index"
  */
 export const DATED_ENTRY = /(^|\/)\d{4}-\d{2}-\d{2}\.md$/;
 /**
- * The same rule for headings: a section titled "… found on the Linux box 2026-07-31" is a
+ * The same rule for headings: a section titled "… found on the test machine 2026-01-31" is a
  * record OF that date. A cleanup story that names the tool it deleted is not a live claim,
- * and flagging it asks the operator to falsify his own history.
+ * and flagging it asks the operator to falsify their own history.
  */
 export const DATED_HEADING = /\b\d{4}-\d{2}-\d{2}\b/;
 
@@ -301,10 +300,9 @@ export async function health(now = new Date()): Promise<Health> {
         // the threshold does. The check treated every stamped note alike and the notes are not
         // alike: a note recording that a package was uninstalled on a date cannot stop being
         // true, while a runbook describing how a machine is configured decays the moment the
-        // machine changes. Measured before this: 7 findings, 6 of them settled history, all of
-        // them arriving within two days of each other because the threshold is a clock. An inbox
-        // that is mostly noise is one you stop reading, and the item it buried here was the
-        // recovery runbook with an unmitigated risk in it.
+        // machine changes. Without the opt-out, settled history crowds the findings, and it all
+        // arrives at once because the threshold is a clock. An inbox that is mostly noise is one
+        // you stop reading, and the item it buries is the one that still matters.
         // `!dated`: a note whose filename is a date is a record OF that date, not a standing
         // claim (the DATED_ENTRY doctrine above, already applied to the retired-tool check).
         // Its stamp cannot go stale, so it never rides the re-verify queue — otherwise a day

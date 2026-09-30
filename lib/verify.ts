@@ -15,12 +15,12 @@
  *
  *   1. Whitespace was collapsed across the WHOLE file, so the corpus normalised to one line
  *      per file and a "quote" could be spliced from the end of one paragraph and the start of
- *      the next. Measured on the live brain: ~80,000 verifying spans existed on no single
- *      line of any file, 192 of them across a heading. Matching is now scoped to one BLOCK, so
+ *      the next. On a real corpus a large share of verifying spans existed on no single
+ *      line of any file, some of them across a heading. Matching is now scoped to one BLOCK, so
  *      soft-wrapped lines still join inside a paragraph and nothing joins across a boundary.
  *   2. `[*_\`>#]` was stripped everywhere, not where those characters mean markdown. That made
  *      `brain_ask` == `brainask`, `#7` == `7`, `notes/*.md` == `notes/.md`, and — worst —
- *      `top-1 > 58.4%` == `top-1 58.4%`, turning a measurement into an inequality. Stripping
+ *      `top-1 > 50%` == `top-1 50%`, turning a measurement into an inequality. Stripping
  *      is now positional: line-leading markers, and balanced emphasis pairs only.
  *   3. JS `\s` and Python `\s` are different sets, so the eval scored a function the server
  *      does not run. U+FEFF is `\s` in JS but not Python — production was the more permissive
@@ -45,7 +45,7 @@ export const MIN_QUOTE = 12;
 // Emphasis markers are recognised POSITIONALLY, by the characters either side, never by
 // pairing. Pair-matching looked more principled and is wrong here: a quote is a FRAGMENT of a
 // document, so a quote that starts or ends mid-span pairs differently from the file it came
-// from and stops matching it. Measured on the eval, pair-matching broke 10 of 71 evidence
+// from and stops matching it. On an evidence-label eval, pair-matching broke a sizeable share of
 // labels — every one a quote that cut through an inline code span.
 //
 // A local rule cannot have that problem: both sides see the same neighbours.
@@ -57,11 +57,10 @@ export const MIN_QUOTE = 12;
 const CODE = /`+/g;
 // The predecessor class is "anything except space, a marker, or `/`". Naming the allowed
 // characters instead was too narrow and cost real recall: `%`, `.`, `:` and accented letters
-// were all excluded, so `**58.4%**,` normalised to `58.4%**,` and the flagship metric line in
-// a bolded headline metric stopped verifying when a reader dropped the bold. Measured before the
-// widening: 267 of 1162 blocks kept a stray marker and 259 of 727 markdown-bearing blocks
-// failed the exact fold normalise() exists to permit. `/` stays excluded on both sides so
-// `notes/*.md` keeps its glob.
+// were all excluded, so `**41.2%**,` normalised to `41.2%**,` and a bolded headline metric
+// stopped verifying when a reader dropped the bold — blocks kept a stray marker and failed the
+// exact fold normalise() exists to permit. `/` stays excluded on both sides so `notes/*.md`
+// keeps its glob.
 const OPEN = /(^|[\s([{"'])([*_]{1,3})(?=\S)/g;
 const CLOSE = /([^\s*_/])([*_]{1,3})(?=[\s)\]}"'.,;:!?/]|$)/g;
 
@@ -82,8 +81,8 @@ function stripEmphasis(s: string): string {
  * Meaning-preserving comparison form: unify unicode, drop markdown that is acting as markup,
  * collapse space.
  *
- * Deliberately NOT lowercasing. Case is part of an identifier — `By Rig` vs `By rig` is the
- * exact bug that has had the OTS pipeline dead for a month — so a quote that changes case has
+ * Deliberately NOT lowercasing. Case is part of an identifier — a sheet tab renamed from
+ * `Weekly Totals` to `Weekly totals` is a different tab — so a quote that changes case has
  * changed the fact.
  */
 export function normalise(s: string): string {
@@ -173,16 +172,16 @@ export function splitBlocks(text: string): Block[] {
 
 /**
  * Text the brain uses to retract a claim while keeping it on the page. All three conventions
- * are live in the corpus, and a quote pulled from inside one is the single most dangerous
- * false VERIFIED: `SHIPPED 2026-07-14 ... live in production` is verbatim in a note whose next
- * line says not to answer from it.
+ * are in use, and a quote pulled from inside one is the single most dangerous false VERIFIED:
+ * `LAUNCHED 2025-02-03 ... the demo is public` can be verbatim in a note whose next line says
+ * not to answer from it.
  */
 const SUPERSEDED_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|was:\s*["\u201c]|\bDo not answer\b/i;
 
 /**
  * The two markers say different things, and conflating them cost the stamp its credibility.
  *
- * A BANNER retires a passage: `> **SUPERSEDED 2026-07-25 \u2026**`, `DEPRECATED`, `Do not answer`.
+ * A BANNER retires a passage: `> **SUPERSEDED 2025-02-17 \u2026**`, `DEPRECATED`, `Do not answer`.
  * Everything near it is history.
  *
  * An IN-PLACE CORRECTION does the opposite. House style is `<current claim> (was: "<old
@@ -204,10 +203,10 @@ const BANNER_RE = /\bSUPERSEDED\b|\bCORRECTION\b|\bDEPRECATED\b|\bDo not answer\
  * retraction() returned "banner" before the `(was: "…")` logic ever ran. A heading announcing
  * "this section IS the correction" was read as "this section HAS BEEN retracted" — the meaning
  * inverted. Every quote drawn from the freshest passage in the note came back "It is history, not
- * the current state. Do not answer from it." Five headings in the corpus had that shape.
+ * the current state. Do not answer from it." Several headings in a real corpus had that shape.
  *
  * The distinction the house style already makes is volume. A banner SHOUTS: `> **SUPERSEDED
- * 2026-07-25 …**`, `**CORRECTION …**`. A heading that merely contains the word uses it as an
+ * 2025-02-17 …**`, `**CORRECTION …**`. A heading that merely contains the word uses it as an
  * ordinary noun in sentence case. So a heading counts as a banner only when the marker is
  * ALL-CAPS or wrapped in bold.
  *
@@ -257,11 +256,11 @@ export type Retraction = "none" | "banner" | "correction";
 
 /**
  * The banner usually sits in its own block immediately above or below the text it retracts —
- * `> **SUPERSEDED 2026-07-25 ...**` on one line, the dead claim on the next. Checking only the
+ * `> **SUPERSEDED 2025-02-17 ...**` on one line, the dead claim on the next. Checking only the
  * matched block misses every one of them.
  *
  * Neighbours only, deliberately. Flagging everything below a banner until the next heading
- * would mark most of beacon-beacon.md, and a warning that fires on healthy text stops being
+ * would mark most of a long status page, and a warning that fires on healthy text stops being
  * read. Erring toward over-flagging is still the right direction — a spurious "check this"
  * costs a glance, a missed retraction costs a wrong answer with a green stamp — so the radius
  * is one block, not zero.
@@ -314,7 +313,7 @@ export function retraction(blocks: Block[], i: number, matched?: string): Retrac
         // ANSWER_CONTRACT tells the reader to return "a VERBATIM sentence from that file". A
         // reader that obeys quotes the whole thing, which CONTAINS the retired wording, and the
         // live claim came back "history, not the current state. Do not answer from it."
-        // Measured on the corpus: 55 passages, every one current. Quoting a sentence that
+        // Checked across a corpus, every such passage was current. Quoting a sentence that
         // carries its own correction is the house style working, not a stale citation.
         //
         // What still counts as citing the dead wording is quoting the INSIDE of the parenthetical

@@ -32,18 +32,18 @@ afterEach(() => {
 
 describe("resolveRef — [[slug]] resolution", () => {
   const files = corpus({
-    "notes/harbor-tuning-results.md": "",
+    "notes/hotel-tuning-results.md": "",
     "notes/kiln-firing.md": "",
-    "projects/harbor.md": "",
+    "projects/hotel.md": "",
     "log/2026-08-01.md": "",
   });
 
   it.each([
     ["notes/kiln-firing.md", "notes/kiln-firing.md"], // exact path
     ["notes/kiln-firing", "notes/kiln-firing.md"], // path minus .md — live in the corpus today
-    ["harbor-tuning-results", "notes/harbor-tuning-results.md"], // bare basename — the house norm
-    ["harbor", "projects/harbor.md"],
-    ["Harbor", "projects/harbor.md"], // hand-written refs vary in case; the note does not
+    ["hotel-tuning-results", "notes/hotel-tuning-results.md"], // bare basename — the house norm
+    ["hotel", "projects/hotel.md"],
+    ["Hotel", "projects/hotel.md"], // hand-written refs vary in case; the note does not
   ])("resolves [[%s]] to %s", (ref, path) => {
     expect(resolveRef(ref, files)).toBe(path);
   });
@@ -62,12 +62,12 @@ describe("resolveRef — [[slug]] resolution", () => {
 describe("linkEdges", () => {
   it("derives one directed edge per (src, dst) with weight = reference count and line-ref evidence", () => {
     const files = corpus({
-      "projects/harbor.md": "line one\nSee [[soundings]] for numbers.\nAnd [[soundings]] again, plus [[nothing-real]].",
+      "projects/hotel.md": "line one\nSee [[soundings]] for numbers.\nAnd [[soundings]] again, plus [[nothing-real]].",
       "notes/soundings.md": "the numbers",
     });
     const edges = linkEdges(files);
     expect(edges).toHaveLength(1);
-    expect(edges[0]).toMatchObject({ src: "projects/harbor.md", dst: "notes/soundings.md", kind: "link", weight: 2 });
+    expect(edges[0]).toMatchObject({ src: "projects/hotel.md", dst: "notes/soundings.md", kind: "link", weight: 2 });
     // Evidence names the first referencing line and counts the rest — a weight of 2 must never
     // render as a single quote pretending to be the whole story.
     expect(edges[0].evidence).toContain("L2:");
@@ -86,7 +86,7 @@ describe("tagEdges", () => {
 
   it("weights by overlap count, stores once with src < dst, and names the shared tags", () => {
     const files = corpus({
-      "notes/b.md": fm("swift, ble, gopro"),
+      "notes/b.md": fm("swift, ble, radio"),
       "notes/a.md": fm("swift, ble, python"),
       "notes/c.md": fm("sql"),
     });
@@ -104,7 +104,7 @@ describe("tagEdges", () => {
 describe("correctionEdges", () => {
   it("derives an edge from a SUPERSEDED banner naming another live note", () => {
     const files = corpus({
-      "notes/orchard-history.md": "intro\n\n> **SUPERSEDED 2026-07-25 — production is dark. See projects/orchard.md.**\n\nrest",
+      "notes/orchard-history.md": "intro\n\n> **SUPERSEDED 2025-02-17 — the demo is offline. See projects/orchard.md.**\n\nrest",
       "projects/orchard.md": "the current story",
     });
     const edges = correctionEdges(files);
@@ -116,7 +116,7 @@ describe("correctionEdges", () => {
 
   it("derives an edge from a (was:) correction naming another note", () => {
     const files = corpus({
-      "projects/harbor.md": 'The relay lives in notes/relay.md now (was: "it lived in the beacon project").',
+      "projects/hotel.md": 'The relay lives in notes/relay.md now (was: "it lived in the sample project").',
       "notes/relay.md": "relay details",
     });
     expect(correctionEdges(files)).toHaveLength(1);

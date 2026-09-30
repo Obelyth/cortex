@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { HandoffPreview } from "../lib/handoff";
 import { readProjectOptions, requestHandoffPreview } from "../lib/handoff-client";
 
-const preview = (project = "harbor"): HandoffPreview => ({
+const preview = (project = "hotel"): HandoffPreview => ({
   project,
   pagePath: `projects/${project}.md`,
   sha: "deadbeefcafe",
@@ -21,13 +21,13 @@ afterEach(() => vi.unstubAllGlobals());
 describe("requestHandoffPreview", () => {
   it("keeps a connector secret named console intact", async () => {
     const request = vi.fn(async () => Response.json(preview()));
-    await requestHandoffPreview("/s/console/console/overview/", "harbor", request);
+    await requestHandoffPreview("/s/console/console/overview/", "hotel", request);
     expect(request).toHaveBeenCalledWith("/s/console/console/heat/handoff", expect.anything());
   });
   it("posts the canonical selected project with a bounded abort signal", async () => {
-    const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json(preview("harbor")));
+    const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json(preview("hotel")));
 
-    await expect(requestHandoffPreview("/s/synthetic/console/overview", " Projects/Harbor.MD ", request)).resolves.toEqual(preview("harbor"));
+    await expect(requestHandoffPreview("/s/synthetic/console/overview", " Projects/Hotel.MD ", request)).resolves.toEqual(preview("hotel"));
 
     expect(request).toHaveBeenCalledOnce();
     const [url, init] = request.mock.calls[0];
@@ -35,7 +35,7 @@ describe("requestHandoffPreview", () => {
     expect(init).toMatchObject({
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ project: "harbor" }),
+      body: JSON.stringify({ project: "hotel" }),
     });
     expect(init?.signal).toBeInstanceOf(AbortSignal);
   });
@@ -50,15 +50,15 @@ describe("requestHandoffPreview", () => {
   it("rejects a valid preview for a different project", async () => {
     const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json(preview("kiln")));
 
-    await expect(requestHandoffPreview("/s/synthetic/console/overview", "harbor", request)).rejects.toThrow("malformed handoff preview: project did not match request");
+    await expect(requestHandoffPreview("/s/synthetic/console/overview", "hotel", request)).rejects.toThrow("malformed handoff preview: project did not match request");
   });
 
   it("does not expose response or provider error details", async () => {
     const responseFailure = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ error: "password=synthetic-hidden" }, { status: 503 }));
-    await expect(requestHandoffPreview("/s/synthetic/console/overview", "harbor", responseFailure)).rejects.toThrow("preview failed (HTTP 503)");
+    await expect(requestHandoffPreview("/s/synthetic/console/overview", "hotel", responseFailure)).rejects.toThrow("preview failed (HTTP 503)");
 
     const providerFailure = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => { throw new Error("Authorization: Bearer syntheticOpaqueCredential123"); });
-    await expect(requestHandoffPreview("/s/synthetic/console/overview", "harbor", providerFailure)).rejects.toThrow("Handoff preview is unavailable. Retry when the server returns.");
+    await expect(requestHandoffPreview("/s/synthetic/console/overview", "hotel", providerFailure)).rejects.toThrow("Handoff preview is unavailable. Retry when the server returns.");
   });
 
   it("combines caller cancellation with its request deadline", async () => {
@@ -71,7 +71,7 @@ describe("requestHandoffPreview", () => {
       });
     });
 
-    const pending = requestHandoffPreview("/s/synthetic/console/overview", "harbor", request, controller.signal);
+    const pending = requestHandoffPreview("/s/synthetic/console/overview", "hotel", request, controller.signal);
     controller.abort();
 
     await expect(pending).rejects.toThrow("Handoff preview was cancelled.");
@@ -87,10 +87,10 @@ describe("readProjectOptions", () => {
     expect(request).toHaveBeenCalledWith("/s/console/console/working-state/projects", expect.anything());
   });
   it("reads the authenticated no-store endpoint with a bounded response DTO", async () => {
-    const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ projects: ["harbor", "kiln"], truncated: false }));
+    const request = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ projects: ["hotel", "kiln"], truncated: false }));
     vi.stubGlobal("fetch", request);
 
-    await expect(readProjectOptions("/s/synthetic/console/overview")).resolves.toEqual({ projects: ["harbor", "kiln"], truncated: false });
+    await expect(readProjectOptions("/s/synthetic/console/overview")).resolves.toEqual({ projects: ["hotel", "kiln"], truncated: false });
 
     expect(request).toHaveBeenCalledOnce();
     const [url, init] = request.mock.calls[0];
@@ -102,10 +102,10 @@ describe("readProjectOptions", () => {
   it.each([
     ["too many projects", { projects: Array.from({ length: 501 }, (_, i) => `p-${i}`), truncated: true }],
     ["an unbounded project", { projects: ["x".repeat(81)], truncated: false }],
-    ["an uncanonical project", { projects: ["Projects/Harbor.md"], truncated: false }],
-    ["duplicate projects", { projects: ["harbor", "harbor"], truncated: false }],
-    ["unsorted projects", { projects: ["kiln", "harbor"], truncated: false }],
-    ["a non-boolean truncation marker", { projects: ["harbor"], truncated: "false" }],
+    ["an uncanonical project", { projects: ["Projects/Hotel.md"], truncated: false }],
+    ["duplicate projects", { projects: ["hotel", "hotel"], truncated: false }],
+    ["unsorted projects", { projects: ["kiln", "hotel"], truncated: false }],
+    ["a non-boolean truncation marker", { projects: ["hotel"], truncated: "false" }],
   ])("rejects %s in the project options DTO", async (_label, body) => {
     vi.stubGlobal("fetch", async () => Response.json(body));
     await expect(readProjectOptions("/s/synthetic/console/overview")).rejects.toThrow("Project options returned an invalid response.");

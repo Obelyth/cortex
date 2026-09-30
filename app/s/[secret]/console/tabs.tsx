@@ -18,7 +18,7 @@ export { LANDING_SEG, TABS };
  * the register lives and controls act. Ask sits right after Overview: it is the only screen
  * that uses the brain rather than measuring it, and the one a newcomer needs first once they've
  * seen the board is healthy. Everything after it is telemetry. The Inbox tab is gone — its
- * queue moved into the Ops rail, and its badge count now feeds the notices bell (Task 13).
+ * queue moved into the Ops rail, and its badge count now feeds the notices bell.
  */
 const MERGED = new Set(["readers", "guide", "attention"]);   // attention → ops
 

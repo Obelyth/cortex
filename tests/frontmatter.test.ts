@@ -34,13 +34,13 @@ describe("parseFrontmatter", () => {
     expect(parseFrontmatter(text).tags).toEqual(["cortex", "supabase"]);
   });
 
-  // The 74 notes that predate the convention must not become invisible or throw. Absence is
+  // Notes that predate the convention must not become invisible or throw. Absence is
   // the common case on day one, and it has to be a non-event.
   it("degrades to an empty record when there is no frontmatter", () => {
-    const fm = parseFrontmatter("# Quarry\n\n## Status\nRetired.");
+    const fm = parseFrontmatter("# Project Beta\n\n## Status\nArchived.");
     expect(fm.description).toBe("");
     expect(fm.tags).toEqual([]);
-    expect(fm.body).toBe("# Quarry\n\n## Status\nRetired.");
+    expect(fm.body).toBe("# Project Beta\n\n## Status\nArchived.");
   });
 
   // A note that merely CONTAINS `---` (a horizontal rule, or a `--- log/x.md ---` banner) is not
@@ -80,14 +80,14 @@ describe("routerLine", () => {
 
   it("renders path, description, tags and date", () => {
     const line = routerLine({
-      path: "projects/quarry.md",
-      description: "Retired 3-tier relay; Harbor replaced it.",
-      tags: ["quarry", "retired"],
+      path: "projects/project-beta.md",
+      description: "Archived prototype; kept for reference.",
+      tags: ["project-beta", "archived"],
       updated: "2026-07-24",
       stale: false,
     });
     expect(line).toBe(
-      "- projects/quarry.md · Retired 3-tier relay; Harbor replaced it. · quarry, retired · 2026-07-24"
+      "- projects/project-beta.md · Archived prototype; kept for reference. · project-beta, archived · 2026-07-24"
     );
   });
 
@@ -178,7 +178,7 @@ describe("buildRouter — the budget is the document's, wrapper included", () =>
 
   it("BUG GUARD: the returned document never exceeds the budget — wrapper bytes included", () => {
     // The old cut enforced row bytes only, so the rendered document ran over by exactly the
-    // wrapper (~121 bytes on the live corpus, measured 2026-08-17) and the overshoot drifted
+    // wrapper and the overshoot drifted
     // with the shape of the corpus. Probe budgets across the whole range, including ones that
     // land mid-row, and demand the contract the constant's name promises.
     const uncapped = buildRouter(many).length;
@@ -193,7 +193,7 @@ describe("buildRouter — the budget is the document's, wrapper included", () =>
     for (let i = 0; i < 400; i++) {
       const year = 1900 + Math.floor(i / 12);
       const month = String((i % 12) + 1).padStart(2, "0");
-      months.set(`log/${year}-${month}-01.md`, `# Log\n\n## 09:00 · harbor\n\nmonth ${i}`);
+      months.set(`log/${year}-${month}-01.md`, `# Log\n\n## 09:00 · hotel\n\nmonth ${i}`);
     }
     const out = buildRouter(months, new Map(), 2_000);
     const cut = routerCut(months, new Map(), 2_000);

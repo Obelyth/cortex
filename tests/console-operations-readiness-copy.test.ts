@@ -11,7 +11,7 @@ let host:HTMLDivElement,root:Root;
 beforeEach(async()=>{
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT",true);
   host=document.createElement("div");document.body.append(host);root=createRoot(host);
-  await act(async()=>root.render(createElement(OperationsReadinessPanel,{view:getOperationsReadiness({CORTEX_VERCEL_TOKEN:"secret-canary"})})));
+  await act(async()=>root.render(createElement(OperationsReadinessPanel,{view:getOperationsReadiness({CORTEX_VERCEL_TOKEN:"secret-sentinel"})})));
 });
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.unstubAllGlobals();});
 
@@ -25,11 +25,11 @@ describe("readiness copy-name controls",()=>{
     await act(async()=>button!.click());
     expect(writeText).toHaveBeenCalledExactlyOnceWith("CORTEX_VERCEL_TOKEN");
     expect(button!.closest("tr")!.textContent).toContain("Name copied");
-    expect(host.textContent).not.toContain("secret-canary");
+    expect(host.textContent).not.toContain("secret-sentinel");
   });
 
   it("keeps the exact name selectable and announces a denied clipboard write without success",async()=>{
-    const writeText=vi.fn().mockRejectedValue(new Error("denied-canary"));
+    const writeText=vi.fn().mockRejectedValue(new Error("denied-sentinel"));
     vi.stubGlobal("navigator",{clipboard:{writeText}});
     const button=host.querySelector<HTMLButtonElement>('button[aria-label="Copy name CORTEX_VERCEL_PROJECT_ID"]');
     expect(button).not.toBeNull();
@@ -38,6 +38,6 @@ describe("readiness copy-name controls",()=>{
     expect(row.textContent).toContain("select the name");
     expect(row.querySelector("code")!.textContent).toBe("CORTEX_VERCEL_PROJECT_ID");
     expect(row.textContent).not.toContain("Name copied");
-    expect(host.textContent).not.toContain("denied-canary");
+    expect(host.textContent).not.toContain("denied-sentinel");
   });
 });

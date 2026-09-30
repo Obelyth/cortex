@@ -11,13 +11,13 @@ import type { Corpus } from "../lib/corpus";
  * handed is byte-for-byte what narrow() returned before — the MCP tool and the call log read
  * only render(), which must not change by a character.
  *
- * Invented notes only; `harbor` is the house synthetic project.
+ * Invented notes only; `hotel` is the house synthetic project.
  */
 function corpus(): Map<string, string> {
   const m = new Map<string, string>();
-  for (let d = 1; d <= 4; d++) m.set(`log/2026-08-0${d}.md`, `## 09:00 · harbor\nrouter budget harbor router budget day ${d}`);
-  m.set("notes/router-budget.md", "the router budget rule: 6000 tokens, harbor router budget");
-  m.set("projects/harbor.md", "harbor server page: router, budget, tools");
+  for (let d = 1; d <= 4; d++) m.set(`log/2026-08-0${d}.md`, `## 09:00 · hotel\nrouter budget hotel router budget day ${d}`);
+  m.set("notes/router-budget.md", "the router budget rule: 6000 tokens, hotel router budget");
+  m.set("projects/hotel.md", "hotel server page: router, budget, tools");
   m.set("notes/unrelated.md", "gardening and soil");
   return m;
 }
@@ -25,13 +25,13 @@ function corpus(): Map<string, string> {
 describe("rankTerms — one scorer, the terms kept", () => {
   it("scores exactly as rank() does, in the same order", () => {
     const files = corpus();
-    expect(rankTerms(files, "harbor router budget").map(({ path, score }) => ({ path, score }))).toEqual(rank(files, "harbor router budget"));
+    expect(rankTerms(files, "hotel router budget").map(({ path, score }) => ({ path, score }))).toEqual(rank(files, "hotel router budget"));
   });
 
   it("names the question's own tokens the file contains, in question order", () => {
     const files = corpus();
-    const byPath = new Map(rankTerms(files, "budget harbor gardening").map((r) => [r.path, r.terms]));
-    expect(byPath.get("projects/harbor.md")).toEqual(["budget", "harbor"]);
+    const byPath = new Map(rankTerms(files, "budget hotel gardening").map((r) => [r.path, r.terms]));
+    expect(byPath.get("projects/hotel.md")).toEqual(["budget", "hotel"]);
     expect(byPath.get("notes/unrelated.md")).toEqual(["gardening"]);
   });
 });
@@ -40,13 +40,13 @@ describe("narrowDetail — the pack, and why", () => {
   it("returns byte-for-byte the paths narrow() returns for the same arguments", () => {
     const files = corpus();
     for (const k of [1, 2, 3, 6]) {
-      expect(narrowDetail(files, "harbor router budget", k).paths).toEqual(narrow(files, "harbor router budget", k));
+      expect(narrowDetail(files, "hotel router budget", k).paths).toEqual(narrow(files, "hotel router budget", k));
     }
   });
 
   it("ranks the shortlist 1..n with a score, the matched terms and real UTF-8 bytes", () => {
     const files = corpus();
-    const d = narrowDetail(files, "harbor router budget", 6);
+    const d = narrowDetail(files, "hotel router budget", 6);
     expect(d.mode).toBe("scored");
     expect(d.shortlist.map((s) => s.rank)).toEqual(d.shortlist.map((_, i) => i + 1));
     for (const s of d.shortlist) {
@@ -59,7 +59,7 @@ describe("narrowDetail — the pack, and why", () => {
   });
 
   it("records the day-logs the log cap refused, with the cap, and counts the files with no signal", () => {
-    const d = narrowDetail(corpus(), "harbor router budget", 6);
+    const d = narrowDetail(corpus(), "hotel router budget", 6);
     expect(DEFAULT_MAX_LOGS).toBe(1);
     expect(d.paths.filter((p) => p.startsWith("log/"))).toHaveLength(1);
     const logCuts = d.cut.filter((c) => c.by === "log-cap");
@@ -71,14 +71,14 @@ describe("narrowDetail — the pack, and why", () => {
 
   it("records the part the per-page cap refused", () => {
     const files = new Map([
-      ["history/harbor-2026-08-1.md", "harbor harbor harbor part one"],
-      ["history/harbor-2026-08-2.md", "harbor harbor part two"],
-      ["history/harbor-2026-08-3.md", "harbor part three"],
-      ["notes/other.md", "harbor once"],
+      ["history/hotel-2026-08-1.md", "hotel hotel hotel part one"],
+      ["history/hotel-2026-08-2.md", "hotel hotel part two"],
+      ["history/hotel-2026-08-3.md", "hotel part three"],
+      ["notes/other.md", "hotel once"],
     ]);
-    const d = narrowDetail(files, "harbor", 10, { maxPartsPerPage: 2 });
-    expect(d.paths).toEqual(["history/harbor-2026-08-1.md", "history/harbor-2026-08-2.md", "notes/other.md"]);
-    expect(d.cut).toEqual([{ path: "history/harbor-2026-08-3.md", score: expect.any(Number), by: "parts-cap" }]);
+    const d = narrowDetail(files, "hotel", 10, { maxPartsPerPage: 2 });
+    expect(d.paths).toEqual(["history/hotel-2026-08-1.md", "history/hotel-2026-08-2.md", "notes/other.md"]);
+    expect(d.cut).toEqual([{ path: "history/hotel-2026-08-3.md", score: expect.any(Number), by: "parts-cap" }]);
   });
 
   it("records the candidate the byte budget refused, and every one behind it as refused by the same closure", () => {
@@ -95,7 +95,7 @@ describe("narrowDetail — the pack, and why", () => {
   });
 
   it("records what ranked below k as refused by k, not by a cap it never met", () => {
-    const d = narrowDetail(corpus(), "harbor router budget", 2);
+    const d = narrowDetail(corpus(), "hotel router budget", 2);
     expect(d.paths).toHaveLength(2);
     const byK = d.cut.filter((c) => c.by === "k");
     expect(byK.length).toBeGreaterThan(0);
@@ -118,11 +118,11 @@ const askCorpus: Corpus = {
   bytes: 200,
   fetchedAt: Date.now(),
   files: new Map([
-    ["projects/beacon.md", "**Production is still dark** (re-checked 2026-07-25). Both URLs still return 404."],
-    ["projects/harbor.md", "The plates backlog went into a deleted database."],
+    ["projects/sample.md", "**The demo is offline** (checked 2025-02-17). The preview link returns 404."],
+    ["projects/hotel.md", "The import queue was written to a dropped table."],
     ["notes/unrelated.md", "gardening and soil"],
-    ["log/2026-08-01.md", "beacon dark today"],
-    ["log/2026-08-02.md", "beacon still dark"],
+    ["log/2026-08-01.md", "sample offline today"],
+    ["log/2026-08-02.md", "sample still offline"],
   ]),
 };
 
@@ -135,17 +135,17 @@ const citing = (path: string, quote: string) => async ({ stable }: ReaderPrompt)
 
 describe("ask() carries the working, and the tool path does not change", () => {
   it("returns the shortlist, the cuts, the zero count and the caps by name", async () => {
-    const r = await ask("is production still dark", citing("projects/beacon.md", "Production is still dark"), { corpus: askCorpus });
+    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus });
     expect(r.shortlist.map((s) => s.path)).toEqual(r.candidates);
-    expect(r.shortlist[0]).toMatchObject({ rank: 1, path: "projects/beacon.md", terms: expect.arrayContaining(["dark"]) });
+    expect(r.shortlist[0]).toMatchObject({ rank: 1, path: "projects/sample.md", terms: expect.arrayContaining(["offline"]) });
     expect(r.shortlist.every((s) => typeof s.score === "number" && s.bytes > 0)).toBe(true);
     expect(r.cut.map((c) => c.by)).toContain("log-cap");
-    expect(r.zeroCount).toBe(2); // harbor, unrelated
+    expect(r.zeroCount).toBe(2); // hotel, unrelated
     expect(r.narrowing).toEqual({ mode: "narrowed", k: DEFAULT_K, budgetBytes: NARROW_BUDGET_BYTES, maxLogs: DEFAULT_MAX_LOGS, maxPartsPerPage: DEFAULT_MAX_PARTS_PER_PAGE });
   });
 
   it("a full read has no ranking: null scores, no terms, no cuts, the mode says so", async () => {
-    const r = await ask("is production still dark", citing("projects/beacon.md", "Production is still dark"), { corpus: askCorpus, full: true });
+    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus, full: true });
     expect(r.narrowing.mode).toBe("full");
     expect(r.narrowing.maxLogs).toBeNull();
     expect(r.shortlist.map((s) => s.path)).toEqual(r.candidates);
@@ -155,7 +155,7 @@ describe("ask() carries the working, and the tool path does not change", () => {
   });
 
   it("render() — what the MCP tool and the call log read — is byte-identical with the working stripped", async () => {
-    const r = await ask("is production still dark", citing("projects/beacon.md", "Production is still dark"), { corpus: askCorpus });
+    const r = await ask("is demo offline", citing("projects/sample.md", "The demo is offline"), { corpus: askCorpus });
     const stripped = { ...r, shortlist: [], cut: [], zeroCount: 0 } as AskResult;
     for (const citations of [true, false]) {
       const a = render(r, { citations });

@@ -9,8 +9,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 let root: Root;
 let host: HTMLDivElement;
 let requests: Array<{ url: URL; init?: RequestInit }>;
-const item = { id: 7, version: 1, kind: "handoff", project: "harbor", body: "Next: review the release", status: "open", touchedAt: "2026-09-10T00:00:00Z", bodyRedacted: false, projectRedacted: false };
-const preview = (project = "harbor") => ({ project, pagePath: `projects/${project}.md`, sha: "deadbeef", budgetBytes: 24000, coverage: `Preview for ${project}`, pieces: [{ kind: "page", label: `projects/${project}.md`, why: "project page", bytes: 100, included: true }], rankExcluded: [], rankExcludedTotal: 0, warnings: [], bubble: "read", graph: "off" });
+const item = { id: 7, version: 1, kind: "handoff", project: "hotel", body: "Next: review the release", status: "open", touchedAt: "2026-09-10T00:00:00Z", bodyRedacted: false, projectRedacted: false };
+const preview = (project = "hotel") => ({ project, pagePath: `projects/${project}.md`, sha: "deadbeef", budgetBytes: 24000, coverage: `Preview for ${project}`, pieces: [{ kind: "page", label: `projects/${project}.md`, why: "project page", bytes: 100, included: true }], rankExcluded: [], rankExcludedTotal: 0, warnings: [], bubble: "read", graph: "off" });
 let previewRequest: (init: RequestInit) => Promise<Response>;
 
 beforeEach(() => {
@@ -21,7 +21,7 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
     const url = new URL(input, window.location.href);
     requests.push({ url, init });
-    if (url.pathname.endsWith("/working-state/projects")) return Response.json({ projects: ["harbor", "kiln"], truncated: false });
+    if (url.pathname.endsWith("/working-state/projects")) return Response.json({ projects: ["hotel", "kiln"], truncated: false });
     if (url.pathname.endsWith("/heat/handoff")) return previewRequest(init!);
     if (init?.method === "POST") {
       const command = JSON.parse(String(init.body));
@@ -62,7 +62,7 @@ it("starts with None and cannot preview or save just by selecting or clearing a 
   expect(select, "explicit None option instead of a silently selected first project").not.toBeNull();
   expect(select!.value).toBe(""); expect(select!.selectedOptions[0].textContent).toMatch(/None/);
   expect(button("Preview context").disabled).toBe(true);
-  await selectProject("harbor"); expect(button("Preview context").disabled).toBe(false);
+  await selectProject("hotel"); expect(button("Preview context").disabled).toBe(false);
   await selectProject(""); expect(button("Preview context").disabled).toBe(true);
   expect(host.textContent).toContain(item.body); expect(posts()).toEqual([]);
 });
@@ -70,17 +70,17 @@ it("starts with None and cannot preview or save just by selecting or clearing a 
 it("clearing to None fences a late preview and retains saved context", async () => {
   let finish!: (response: Response) => void;
   previewRequest = () => new Promise(resolve => { finish = resolve; });
-  await mount(); await selectProject("harbor"); await click("Preview context");
+  await mount(); await selectProject("hotel"); await click("Preview context");
   await selectProject("");
   await act(async () => { finish(Response.json(preview())); await flush(); });
-  expect(host.textContent).not.toContain("Preview for harbor");
+  expect(host.textContent).not.toContain("Preview for hotel");
   expect(host.textContent).toContain(item.body);
   expect(posts()).toHaveLength(1);
   expect(posts()[0].init!.signal!.aborted).toBe(true);
 });
 
 it("keeps saved notes visible when None leaves the existing All projects filter unchanged", async () => {
-  await mount(); await selectProject("harbor");
+  await mount(); await selectProject("hotel");
   const filter = host.querySelector<HTMLSelectElement>('section[aria-labelledby="working-saved"] select')!;
   await act(async () => { filter.value = "all"; filter.dispatchEvent(new Event("change", { bubbles: true })); await flush(); });
   expect(host.textContent).toContain(item.body);
@@ -91,14 +91,14 @@ it("keeps saved notes visible when None leaves the existing All projects filter 
 });
 
 it("opens a fresh preview for the selected project and closes it without saving", async () => {
-  await mount(); await selectProject("harbor"); await click("Preview context");
-  expect(host.textContent).toContain("Preview for harbor");
+  await mount(); await selectProject("hotel"); await click("Preview context");
+  expect(host.textContent).toContain("Preview for hotel");
   await click("Close preview");
   await selectProject("kiln"); await click("Preview context");
   expect(host.textContent).toContain("Preview for kiln");
-  expect(host.textContent).not.toContain("Preview for harbor");
+  expect(host.textContent).not.toContain("Preview for hotel");
   await click("Close preview"); await click("Preview context");
-  expect(posts().map(r => JSON.parse(String(r.init!.body)))).toEqual([{ project: "harbor" }, { project: "kiln" }, { project: "kiln" }]);
+  expect(posts().map(r => JSON.parse(String(r.init!.body)))).toEqual([{ project: "hotel" }, { project: "kiln" }, { project: "kiln" }]);
 });
 
 it("an explicit Ask shortcut selects only its project and never previews on arrival", async () => {

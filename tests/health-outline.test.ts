@@ -24,17 +24,17 @@ describe("note self-description", () => {
     mLoad.mockResolvedValue(
       corpus([
         [
-          "projects/harbor.md",
-          "# Harbor — plates intake\n\nThe plates backlog went into a deleted database.\n\n## Recovery\n\ndetails here\n\n## Status\n\nmore\n",
+          "projects/hotel.md",
+          "# Hotel — import intake\n\nThe import queue was written to a dropped table.\n\n## Recovery\n\ndetails here\n\n## Status\n\nmore\n",
         ],
       ])
     );
     const h = await health();
     const n = h.notes[0];
-    expect(n.title).toBe("Harbor — plates intake");
-    expect(n.desc).toBe("The plates backlog went into a deleted database.");
+    expect(n.title).toBe("Hotel — import intake");
+    expect(n.desc).toBe("The import queue was written to a dropped table.");
     expect(n.headings).toEqual([
-      { h: "Harbor — plates intake", line: 1 },
+      { h: "Hotel — import intake", line: 1 },
       { h: "Recovery", line: 5 },
       { h: "Status", line: 9 },
     ]);

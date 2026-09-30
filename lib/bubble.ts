@@ -203,12 +203,12 @@ function age(touched: string): string {
  * disclosed too: an item the reaper took is reported, never disappeared.
  *
  * SCOPED when brain_context is called for one project: only that project's items and the general
- * (project-less) ones ride, so a session picking up cortex is not handed the ego backlog. General
+ * (project-less) ones ride, so a session picking up cortex is not handed another project's backlog. General
  * items always ride because they belong to no project and so bleed into none — they are the
  * cross-cutting working state. Scoping changes the "not shown" accounting: the store's total
  * counts every open item across every project, which is not what a scoped view left out, so a
  * scoped section names the filter and points at `brain_bubble list` for the global total rather
- * than quoting a subtraction that would read as "12 more cortex items" when they are ego ones.
+ * than quoting a subtraction that would read as "12 more cortex items" when they are another project's.
  */
 export function bubbleView(read: BubbleRead, project?: string): { text: string; usableItems: number; renderedItems: number } {
   const { total, swept } = read;

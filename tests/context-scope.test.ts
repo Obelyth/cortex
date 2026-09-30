@@ -55,15 +55,15 @@ function bubbleOf(items: BubbleItem[]) {
 }
 
 // Invented notes only — the export gate forbids real brain paths in shipped source, and synthetic
-// fixtures are the house style. harbor = the project in focus, pier = the other project whose week
+// fixtures are the house style. hotel = the project in focus, pier = the other project whose week
 // must not bleed in, galley = a mundane un-tracked topic.
 const CORPUS = {
   "profile.md": "P",
   "notes/galley.md": "---\ndescription: dinners\n---\n# Meals",
-  "projects/harbor.md": "---\ndescription: the harbor server\n---\n# Harbor",
+  "projects/hotel.md": "---\ndescription: the hotel server\n---\n# Hotel",
   "projects/pier.md": "---\ndescription: pier ops\n---\n# Pier",
   "log/2026-07-24.md":
-    "# Log\n\n## 09:00 · harbor, mcp\n\nharbor passcode work today\n\n## 14:00 · pier, audit\n\npier audit numbers\n\n## 16:00 · galley\n\nchili recipe notes",
+    "# Log\n\n## 09:00 · hotel, mcp\n\nhotel passcode work today\n\n## 14:00 · pier, audit\n\npier audit numbers\n\n## 16:00 · galley\n\nchili recipe notes",
 };
 
 beforeEach(() => {
@@ -79,30 +79,30 @@ describe("brain_context scoped to a project", () => {
   it("keeps the router complete but narrows RECENT to the project's own entries", async () => {
     corpusOf(CORPUS);
     bubbleOf([]);
-    const ctx = await getContext("harbor");
+    const ctx = await getContext("hotel");
 
     // Router (index) is untouched — every note still has its row, whatever project it belongs to.
     expect(ctx).toContain("projects/pier.md");
     expect(ctx).toContain("notes/galley.md");
 
-    // RECENT is scoped: the heading says so, the harbor entry rides, the others do not.
-    expect(ctx).toContain("# RECENT (last 7 days · harbor)");
-    expect(ctx).toContain("harbor passcode work today");
+    // RECENT is scoped: the heading says so, the hotel entry rides, the others do not.
+    expect(ctx).toContain("# RECENT (last 7 days · hotel)");
+    expect(ctx).toContain("hotel passcode work today");
     expect(ctx).not.toContain("pier audit numbers");
     expect(ctx).not.toContain("chili recipe notes");
-    expect(ctx).toContain("scoped to harbor");
+    expect(ctx).toContain("scoped to hotel");
   });
 
   it("shows this project's bubble items and the general ones, never another project's", async () => {
     corpusOf(CORPUS);
     bubbleOf([
-      item({ id: 1, project: "harbor", body: "harbor phase in flight" }),
+      item({ id: 1, project: "hotel", body: "hotel phase in flight" }),
       item({ id: 2, project: "pier", body: "pier backlog item" }),
       item({ id: 3, project: "", body: "general reminder" }),
     ]);
-    const ctx = await getContext("harbor");
+    const ctx = await getContext("hotel");
     expect(ctx).toContain("# BUBBLE");
-    expect(ctx).toContain("harbor phase in flight");
+    expect(ctx).toContain("hotel phase in flight");
     expect(ctx).toContain("general reminder");
     expect(ctx).not.toContain("pier backlog item");
   });
@@ -114,7 +114,7 @@ describe("brain_context scoped to a project", () => {
     expect(ctx).toContain("# RECENT (last 7 days · lighthouse)");
     expect(ctx).toContain("no entries in the last 7 days mention lighthouse");
     // And it did not leak another project's log text on the way.
-    expect(ctx).not.toContain("harbor passcode work today");
+    expect(ctx).not.toContain("hotel passcode work today");
     expect(ctx).not.toContain("pier audit numbers");
   });
 
@@ -122,11 +122,11 @@ describe("brain_context scoped to a project", () => {
     // Unscoped, a live bubble replaces the raw log dump. Scoped, the point is the opposite: SHOW
     // this project's recent trail. So a scoped boot with a live bubble carries BOTH.
     corpusOf(CORPUS);
-    bubbleOf([item({ id: 1, project: "harbor", body: "harbor phase in flight" })]);
-    const ctx = await getContext("harbor");
-    expect(ctx).toContain("harbor phase in flight");
-    expect(ctx).toContain("harbor passcode work today");
-    expect(ctx).toContain("# RECENT (last 7 days · harbor)");
+    bubbleOf([item({ id: 1, project: "hotel", body: "hotel phase in flight" })]);
+    const ctx = await getContext("hotel");
+    expect(ctx).toContain("hotel phase in flight");
+    expect(ctx).toContain("hotel passcode work today");
+    expect(ctx).toContain("# RECENT (last 7 days · hotel)");
   });
 
   it("an empty or whitespace project is treated as unscoped, not as a scope matching nothing", async () => {
@@ -135,7 +135,7 @@ describe("brain_context scoped to a project", () => {
     const scoped = await getContext("   ");
     // Unscoped RECENT has no project suffix, and every project's entry is present verbatim.
     expect(scoped).toContain("# RECENT (last 7 days)");
-    expect(scoped).not.toContain("· harbor)");
+    expect(scoped).not.toContain("· hotel)");
     expect(scoped).toContain("pier audit numbers");
     expect(scoped).toContain("chili recipe notes");
   });
@@ -143,8 +143,8 @@ describe("brain_context scoped to a project", () => {
   it("normalises a projects/…​.md argument down to the bare name", async () => {
     corpusOf(CORPUS);
     bubbleOf([]);
-    const ctx = await getContext("projects/harbor.md");
-    expect(ctx).toContain("# RECENT (last 7 days · harbor)");
-    expect(ctx).toContain("harbor passcode work today");
+    const ctx = await getContext("projects/hotel.md");
+    expect(ctx).toContain("# RECENT (last 7 days · hotel)");
+    expect(ctx).toContain("hotel passcode work today");
   });
 });

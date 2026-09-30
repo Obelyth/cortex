@@ -41,7 +41,7 @@ const notes: ExplorerNote[] = [
   note("profile.md", { tokens: 1100 }),
   note("projects/example-fixture.md", { tokens: 18_900, retracted: 2, age: 1 }),
   note("projects/example-two.md", { tokens: 2000, age: 30 }),
-  note("notes/example-1.md", { title: "Harbor soundings", tokens: 700, age: 3 }),
+  note("notes/example-1.md", { title: "Hotel soundings", tokens: 700, age: 3 }),
   note("notes/example-2.md", { tokens: 900, age: 20 }),
   note("notes/example-3.md", { tokens: 400, age: 30, decays: false }),
   note("notes/example-4.md", { tokens: 300, age: null }),
@@ -178,7 +178,7 @@ describe("the row's facts", () => {
   });
 
   it("names the leaf, the directory and the title", () => {
-    expect(rows.get("notes/example-1.md")).toMatchObject({ leaf: "example-1.md", dir: "notes", title: "Harbor soundings", depth: 1, off: false });
+    expect(rows.get("notes/example-1.md")).toMatchObject({ leaf: "example-1.md", dir: "notes", title: "Hotel soundings", depth: 1, off: false });
     expect(rows.get("profile.md")).toMatchObject({ leaf: "profile.md", dir: "root" });
   });
 });
@@ -258,7 +258,7 @@ describe("find — local, over paths and titles", () => {
   });
 
   it("matches a title, case-insensitively", () => {
-    const x = build({ find: "HARBOR" });
+    const x = build({ find: "HOTEL" });
     expect(flattenRows(x.groups).map((r) => r.path)).toEqual(["notes/example-1.md"]);
   });
 
@@ -308,7 +308,7 @@ describe("archive/ — outside the reader tier", () => {
 describe("findAlso — units and tools under the input", () => {
   const units = [
     { id: "groundskeeper", name: "Brain groundskeeper", state: "Succeeded" },
-    { id: "canary", name: "Site canary", state: "Running" },
+    { id: "nightly-check", name: "Nightly check", state: "Running" },
     { id: "workstation-test", name: "Test workstation", state: "Seen" },
   ];
   const tools = [

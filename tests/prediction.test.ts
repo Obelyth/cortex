@@ -97,9 +97,9 @@ describe("candidateScores — the blend the eval measures", () => {
   });
 
   it("lets a structural link pull in a note the log has never seen", () => {
-    const prior = [ev("2026-08-10T14:00:00Z", "projects/harbor.md")];
+    const prior = [ev("2026-08-10T14:00:00Z", "projects/hotel.md")];
     const structure: StructuralEdges = {
-      links: new Set([pairKey("projects/harbor.md", "notes/soundings.md")]),
+      links: new Set([pairKey("projects/hotel.md", "notes/soundings.md")]),
       tags: new Map(),
     };
     const s = candidateScores(prior, sessionize(prior), structure, now);

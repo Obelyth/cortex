@@ -61,10 +61,10 @@ describe("bubbleStore — configuration is a mode", () => {
       request = { url: String(url), body: JSON.parse(String(init?.body)) };
       return { ok: true, json: async () => ({ total: 1, swept: 0, items: [] }) } as unknown as Response;
     }));
-    await bubbleStore()!.open({ project: " Projects/Harbor.MD ", includeGeneral: true });
+    await bubbleStore()!.open({ project: " Projects/Hotel.MD ", includeGeneral: true });
     expect(request).toEqual({
       url: "https://x.supabase.co/rest/v1/rpc/bubble_open_scoped",
-      body: { max_age_days: 14, max_items: 200, project_name: "harbor", include_general: true },
+      body: { max_age_days: 14, max_items: 200, project_name: "hotel", include_general: true },
     });
   });
 
@@ -109,8 +109,8 @@ describe("renderBubble — the boot section", () => {
     const view = bubbleView({
       total: 1,
       swept: 4,
-      items: [{ id: 1, kind: "decision", body: "ship the correction", project: "harbor", status: "open", filed_into: "", surface: "test", created_at: touched, touched_at: touched }],
-    }, "harbor");
+      items: [{ id: 1, kind: "decision", body: "ship the correction", project: "hotel", status: "open", filed_into: "", surface: "test", created_at: touched, touched_at: touched }],
+    }, "hotel");
     expect(view.usableItems).toBe(1);
     expect(view.renderedItems).toBe(1);
     expect(view.text).toContain("ship the correction");
@@ -131,8 +131,8 @@ describe("renderBubble — the boot section", () => {
   });
 
   it("uses the scoped total when rows beyond the database page are not shown", () => {
-    const out = renderBubble({ items: [item({ project: "harbor" })], total: 201, swept: 0 }, "harbor");
-    expect(out).toContain("200 more harbor/general items not shown");
+    const out = renderBubble({ items: [item({ project: "hotel" })], total: 201, swept: 0 }, "hotel");
+    expect(out).toContain("200 more hotel/general items not shown");
   });
 
   it("shows id, kind, project and age — the handles a session needs to act on an item", () => {

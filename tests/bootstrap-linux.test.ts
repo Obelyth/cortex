@@ -155,7 +155,7 @@ describe("Linux hosted-setup entry point", () => {
     expect(interactions(result.calls)).toEqual([]);
   });
 
-  it.each(["49.9.9", "50.5.0", "50.5.1-canary", "invalid"])("rejects insufficient Vercel CLI %s before installing or signing in", vercel => {
+  it.each(["49.9.9", "50.5.0", "50.5.1-beta", "invalid"])("rejects insufficient Vercel CLI %s before installing or signing in", vercel => {
     const result = runSetup({ vercel });
     expect(result.status).not.toBe(0);
     expect(result.output).toContain("50.5.1");

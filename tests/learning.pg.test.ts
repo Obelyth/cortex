@@ -90,7 +90,7 @@ describe.runIf(process.env.CORTEX_NATIVE_PG==="1")("native learning freshness an
     expect(await build(s)).toBe("current");
   });
   it("production and replay share UTC, exclusions, horizon, fanout, distinct-path and evidence semantics",async()=>{
-    await db.query("set timezone='America/Los_Angeles'");
+    await db.query("set timezone='America/New_York'");
     const cutoff=Date.parse((await stamp()).cutoff),rows:{at:string;path:string;mode:string}[]=[];
     const add=(h:number,paths:string[],mode="read")=>paths.forEach(path=>rows.push({at:new Date(cutoff-h*3600000).toISOString(),path,mode}));
     add(1,["a.md","a.md","b.md"]);add(2,["a.md","b.md"]);add(3,["a.md","b.md"],"maintenance");

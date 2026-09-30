@@ -21,16 +21,16 @@ const { OpsDecisions } = await import("../app/s/[secret]/console/ops/ops-decisio
  * the page must be honest and complete without one: every unit on the register, its state in
  * words, the receipts with their days, the strip's window on every figure.
  */
-const T0 = new Date("2026-09-05T08:40:00Z");
+const T0 = new Date("2026-09-05T13:40:00Z");
 const base: Omit<Unit, "id" | "name" | "kind" | "owner"> = { period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: null, notes: null };
 const units: Unit[] = [
-  { ...base, id: "console-secret", name: "Console secret", kind: "item", owner: "manager", period_s: null },
+  { ...base, id: "cert-renewal", name: "Certificate renewal", kind: "item", owner: "manager", period_s: null },
   { ...base, id: "groundskeeper", name: "Brain groundskeeper", kind: "routine", owner: "manager", run_now: { kind: "dispatch", target: "run-groundskeeper" } },
 ];
-const done: Run = { id: 41, unit_id: "groundskeeper", run_key: "2026-09-04", trigger: "cron", scheduled_at: null, started_at: "2026-09-04T09:17:00Z", ended_at: "2026-09-04T09:31:12Z", lease_until: null, state: "succeeded", exit_reason: null, attempt: 1, summary: "3 stamps refreshed", error: null, evidence: ["https://github.com/example/brain/commit/8be1c5c0"], cost: null, facts: null };
+const done: Run = { id: 41, unit_id: "groundskeeper", run_key: "2026-09-04", trigger: "cron", scheduled_at: null, started_at: "2026-09-04T14:20:00Z", ended_at: "2026-09-04T14:31:12Z", lease_until: null, state: "succeeded", exit_reason: null, attempt: 1, summary: "3 stamps refreshed", error: null, evidence: ["https://github.com/example/brain/commit/8be1c5c0"], cost: null, facts: null };
 const events: OpsEvent[] = [
-  { id: 118, unit_id: "console-secret", run_id: null, at: "2026-09-05T07:15:00Z", actor: "unit", kind: "transition", body: {}, from_state: "scheduled", to_state: "needs_you" },
-  { id: 117, unit_id: "groundskeeper", run_id: null, at: "2026-09-04T09:31:12Z", actor: "unit", kind: "finish", body: { summary: "3 stamps refreshed", evidence: ["https://github.com/example/brain/commit/8be1c5c0"] } },
+  { id: 118, unit_id: "cert-renewal", run_id: null, at: "2026-09-05T12:15:00Z", actor: "unit", kind: "transition", body: {}, from_state: "scheduled", to_state: "needs_you" },
+  { id: 117, unit_id: "groundskeeper", run_id: null, at: "2026-09-04T14:31:12Z", actor: "unit", kind: "finish", body: { summary: "3 stamps refreshed", evidence: ["https://github.com/example/brain/commit/8be1c5c0"] } },
 ];
 const board = buildBoard(units, new Map([["groundskeeper", done]]), new Map(), new Map(), events, T0);
 const items = decisionItems([{ sev: "warn", kind: "stale-stamp", title: "Verification stamp is stale", loc: "projects/example-b.md", evidence: "e", why: "w", action: "a" }], []);
@@ -52,7 +52,7 @@ describe("the Ops screen's server render", () => {
     expect(html).toContain("Needs you");
     expect(html).toContain("Succeeded");
     expect(html).toMatch(/id="groundskeeper"[^>]*class="opsRow opsRowOn"[^>]*aria-current="true"/);
-    expect(html).toMatch(/id="console-secret"[^>]*class="opsRow opsRowCrit"/);
+    expect(html).toMatch(/id="cert-renewal"[^>]*class="opsRow opsRowCrit"/);
     expect(html.match(/class="opsGo"/g)).toHaveLength(2);
   });
   it("offers explicit browser enrollment independently of reporter data", () => {
@@ -76,8 +76,8 @@ describe("the Ops screen's server render", () => {
     expect(html).not.toContain(' style="');
   });
   it("prints the receipts under their day rules, newest first, with the outcome in words", () => {
-    expect(html).toMatch(/2026-09-05.*07:15.*2026-09-04.*09:31/s);
-    expect(html).toContain("Console secret: Scheduled → Needs you");
+    expect(html).toMatch(/2026-09-05.*12:15.*2026-09-04.*14:31/s);
+    expect(html).toContain("Certificate renewal: Scheduled → Needs you");
     expect(html).toContain("· 8be1c5c0");
   });
   it("renders Decisions with its count and the item's severity, and the honesty copy", () => {
@@ -92,7 +92,7 @@ describe("degraded and quiet renders", () => {
     const html = render({ ...buildBoard([], new Map(), new Map(), new Map(), [], T0), mode: "unreachable" });
     expect(html).toContain('class="opsStrip opsStripOff"');
     expect(html.match(/class="opsCellFig">—</g)).toHaveLength(4);
-    expect(html).toContain("unreachable this render · nothing shown · stamped 08:40:00 utc");
+    expect(html).toContain("unreachable this render · nothing shown · stamped 13:40:00 utc");
     expect(html).toContain("no receipts yet · the first run writes the first row");
   });
   it("a board that has not reported says so rather than claiming a schedule", () => {

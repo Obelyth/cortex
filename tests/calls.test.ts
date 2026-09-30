@@ -115,16 +115,16 @@ describe("call log", () => {
     // The log sits in the shared store. An unkeyed sha256 of a short question lets anyone who
     // reads it confirm a guessed question was asked; keyed with the connector secret it tells
     // repeats apart and nothing else. No key, no digest — a row without one is still a row.
-    const d = questionDigest("is beacon live", "secret-a");
+    const d = questionDigest("is sample live", "secret-a");
     expect(d).toMatch(/^[0-9a-f]{8}$/);
-    expect(d).toBe(questionDigest("is beacon live", "secret-a"));
-    expect(d).not.toBe(questionDigest("is harbor live", "secret-a"));
-    expect(d).not.toBe(questionDigest("is beacon live", "secret-b"));
-    expect(d).not.toBe(createHash("sha256").update("is beacon live").digest("hex").slice(0, 8));
+    expect(d).toBe(questionDigest("is sample live", "secret-a"));
+    expect(d).not.toBe(questionDigest("is hotel live", "secret-a"));
+    expect(d).not.toBe(questionDigest("is sample live", "secret-b"));
+    expect(d).not.toBe(createHash("sha256").update("is sample live").digest("hex").slice(0, 8));
     vi.stubEnv("CONNECTOR_PATH_SECRET", "");
-    expect(questionDigest("is beacon live")).toBeUndefined();
+    expect(questionDigest("is sample live")).toBeUndefined();
     vi.stubEnv("CONNECTOR_PATH_SECRET", "secret-a");
-    expect(questionDigest("is beacon live")).toBe(d);
+    expect(questionDigest("is sample live")).toBe(d);
   });
 
   it("returns rows oldest first even when a slow call finishes last", async () => {

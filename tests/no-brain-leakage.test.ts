@@ -193,9 +193,9 @@ const PLACEHOLDER = /^(x+|\.+|<.*>|\{.*\}|changeme|your[-_]?\w*|placeholder|reda
 /**
  * A short run of plain letters is prose, not a credential this check can police.
  *
- * Measured against the real brain, the extractor yields seven distinct tokens: four are shell
- * indirection, one is the credential, and two are the words "temp" and "user" — which appear in
- * ordinary source everywhere and would flag thirty files. A password that IS a short dictionary
+ * Against a real brain, the extractor yields a handful of distinct tokens: most are shell
+ * indirection, one is the credential, and the rest are words like "temp" and "user" — which
+ * appear in ordinary source everywhere and would flag dozens of files. A password that IS a short dictionary
  * word is indistinguishable from prose by any rule that does not also flag the prose, so it is
  * out of scope here and belongs to rotation instead. Digits and mixed-class tokens stay in,
  * which is what the leaked value was.
@@ -317,8 +317,7 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
    * A stem must be hyphenated and longer than eight characters to count — that is what makes a
    * name a name rather than a word ("setup.md", "map.md" and "log.md" are shapes anyone would
    * write). Schema paths are exempt for the reason SCHEMA_PATHS gives, and STEM_ALLOW carries
-   * the names that are the product describing itself. Measured against the live brain when this
-   * was written: 138 distinctive stems, one allowed, and the six real leaks all caught.
+   * the names that are the product describing itself.
    * Independently public repository identifiers have a separate exact-occurrence policy;
    * it does not exempt their files or other occurrences of the same stem. See docs/export-gate.md.
    */
@@ -388,8 +387,8 @@ describe.skipIf(!present)("export gate: this repo must not quote the real brain"
     const base = (p: string) => p.split("/").pop()!.replace(/\.md$/, "").toLowerCase();
     const real = brainPaths().filter((p) => !isSchemaPath(p));
 
-    // Truncation, not overlap. `quarry` against a real `quarry-api` is the same name with a
-    // qualifier dropped; `harbor-policy` against a real `harbor-targets` is two different notes
+    // Truncation, not overlap. `widget` against a real `widget-api` is the same name with a
+    // qualifier dropped; `garden-policy` against a real `garden-targets` is two different notes
     // that happen to start with an ordinary word, and policing that would fire on English.
     //
     // The examples here are fictional on purpose. Describing a leak is how the last two got

@@ -23,7 +23,7 @@ import type { EdgeRow } from "../lib/edges";
 const corpus = (entries: Record<string, string>) => new Map(Object.entries(entries));
 
 /** The house way to retire a whole note: its description LEADS with the word. */
-const DEAD = `---\ndescription: "SUPERSEDED — retired at the cutover; kept for the why"\n---\n\n# Old harbor plan\n\nEverything here is history.\n`;
+const DEAD = `---\ndescription: "SUPERSEDED — retired at the cutover; kept for the why"\n---\n\n# Old hotel plan\n\nEverything here is history.\n`;
 
 const jsonRes = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -49,13 +49,13 @@ describe("check 1 — live link to a superseded note", () => {
   it("fires on a [[wiki-link]], with the linking line and the target's marker as evidence", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md": "# Harbor\n\nThe mooring rules live in [[dead]] and still apply.\n",
+      "projects/hotel.md": "# Hotel\n\nThe access rules live in [[dead]] and still apply.\n",
     });
     const items = supersededLinkItems(files);
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ sev: "watch", kind: "superseded-link", loc: "projects/harbor.md:3" });
+    expect(items[0]).toMatchObject({ sev: "watch", kind: "superseded-link", loc: "projects/hotel.md:3" });
     expect(items[0].evidence).toContain("L3:");
-    expect(items[0].evidence).toContain("The mooring rules live in");
+    expect(items[0].evidence).toContain("The access rules live in");
     expect(items[0].evidence).toContain("notes/dead.md");
     expect(items[0].evidence).toContain("SUPERSEDED");
   });
@@ -63,12 +63,12 @@ describe("check 1 — live link to a superseded note", () => {
   it("fires on a bare path reference, and one item covers repeat references to the same target", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md":
-        "# Harbor\n\nSee notes/dead.md for the mooring rules.\n\nAnd notes/dead.md again for the tides.\n",
+      "projects/hotel.md":
+        "# Hotel\n\nSee notes/dead.md for the access rules.\n\nAnd notes/dead.md again for the audit log.\n",
     });
     const items = supersededLinkItems(files);
     expect(items).toHaveLength(1);
-    expect(items[0].loc).toBe("projects/harbor.md:3");
+    expect(items[0].loc).toBe("projects/hotel.md:3");
     expect(items[0].evidence).toContain("+1 more");
   });
 
@@ -77,11 +77,11 @@ describe("check 1 — live link to a superseded note", () => {
       "notes/dead.md": DEAD,
       // The path is written as the wiki-link's own inner text — resolveRef catches it, and the
       // literal path inside the brackets must not be re-counted by the bare-path pass.
-      "projects/harbor.md": "# Harbor\n\nThe rules live in [[notes/dead.md]] still.\n",
+      "projects/hotel.md": "# Hotel\n\nThe rules live in [[notes/dead.md]] still.\n",
     });
     const items = supersededLinkItems(files);
     expect(items).toHaveLength(1);
-    expect(items[0].loc).toBe("projects/harbor.md:3");
+    expect(items[0].loc).toBe("projects/hotel.md:3");
     // One physical reference — the evidence must not invent a phantom second mention.
     expect(items[0].evidence).not.toContain("more");
   });
@@ -91,12 +91,12 @@ describe("check 1 — live link to a superseded note", () => {
       "notes/dead.md": DEAD,
       // Two consecutive non-blank lines merge into one block; the bare path is on line 3, the
       // [[link]] on line 4. The item must point at line 3, not at whichever kind was scanned first.
-      "projects/harbor.md":
-        "# Harbor\n\nThe rules are in notes/dead.md and\nthey were also captured as [[dead]] earlier.\n",
+      "projects/hotel.md":
+        "# Hotel\n\nThe rules are in notes/dead.md and\nthey were also captured as [[dead]] earlier.\n",
     });
     const items = supersededLinkItems(files);
     expect(items).toHaveLength(1);
-    expect(items[0].loc).toBe("projects/harbor.md:3");
+    expect(items[0].loc).toBe("projects/hotel.md:3");
     expect(items[0].evidence).toContain("L3: The rules are in notes/dead.md and");
     // Two genuinely distinct references — a bare path and a link — so the count IS honest here.
     expect(items[0].evidence).toContain("+1 more");
@@ -106,7 +106,7 @@ describe("check 1 — live link to a superseded note", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
       // archive/ is not even loadable as live corpus, but prose can still NAME such a path.
-      "projects/harbor.md": "# Harbor\n\nThe old copy sits at archive/notes/dead.md for history.\n",
+      "projects/hotel.md": "# Hotel\n\nThe old copy sits at archive/notes/dead.md for history.\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -114,8 +114,8 @@ describe("check 1 — live link to a superseded note", () => {
   it("PRECISION PIN — a reference inside a quoted (was: \"…\") parenthetical never fires", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md":
-        '# Harbor\n\nMooring is governed by the port authority (was: "self-managed per notes/dead.md").\n',
+      "projects/hotel.md":
+        '# Hotel\n\nAccess is governed by the admin team (was: "self-managed per notes/dead.md").\n',
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -125,8 +125,8 @@ describe("check 1 — live link to a superseded note", () => {
       "notes/dead.md": DEAD,
       // Replica of the live shape: the note explaining what it USED to say, with the pointer
       // to the retired page inside the parenthetical.
-      "projects/harbor.md":
-        "# Harbor\n\n- **Tandem** — uses this brand. (was: this page used to cover the old plan instead — updated 2026-07-24; see notes/dead.md.)\n",
+      "projects/hotel.md":
+        "# Hotel\n\n- **Alpha** — uses this brand. (was: this page used to cover the old plan instead — updated 2026-07-24; see notes/dead.md.)\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -134,8 +134,8 @@ describe("check 1 — live link to a superseded note", () => {
   it("a reference OUTSIDE the (was:) span in the same block still fires", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md":
-        '# Harbor\n\nRules live in notes/dead.md today (was: "they were unwritten").\n',
+      "projects/hotel.md":
+        '# Hotel\n\nRules live in notes/dead.md today (was: "they were unwritten").\n',
     });
     expect(supersededLinkItems(files)).toHaveLength(1);
   });
@@ -155,8 +155,8 @@ describe("check 1 — live link to a superseded note", () => {
     const files = corpus({
       "notes/dead.md": DEAD,
       "log/2026-08-09.md": "# 2026-08-09\n\nClosed the open item on notes/dead.md tonight.\n",
-      "projects/harbor.md":
-        "# Harbor\n\n## Cleanup found on the box 2026-07-31\n\nDeleted the scripts notes/dead.md described.\n",
+      "projects/hotel.md":
+        "# Hotel\n\n## Cleanup on the test machine 2026-01-31\n\nDeleted the scripts notes/dead.md described.\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
@@ -173,22 +173,22 @@ describe("check 1 — live link to a superseded note", () => {
     const files = corpus({
       "notes/setup.md": DEAD,
       "projects/setup.md": DEAD,
-      "projects/harbor.md": "# Harbor\n\nSee [[setup]] for the rules.\n",
+      "projects/hotel.md": "# Hotel\n\nSee [[setup]] for the rules.\n",
     });
     expect(supersededLinkItems(files)).toHaveLength(0);
   });
 
   it("LEAVES when the reference goes, and when the target un-supersedes", () => {
-    const linked = "# Harbor\n\nThe rules live in [[dead]] still.\n";
-    expect(supersededLinkItems(corpus({ "notes/dead.md": DEAD, "projects/harbor.md": linked }))).toHaveLength(1);
+    const linked = "# Hotel\n\nThe rules live in [[dead]] still.\n";
+    expect(supersededLinkItems(corpus({ "notes/dead.md": DEAD, "projects/hotel.md": linked }))).toHaveLength(1);
     // The link is removed — the item derives from the corpus, so it is simply gone.
     expect(
-      supersededLinkItems(corpus({ "notes/dead.md": DEAD, "projects/harbor.md": "# Harbor\n\nRules moved.\n" }))
+      supersededLinkItems(corpus({ "notes/dead.md": DEAD, "projects/hotel.md": "# Hotel\n\nRules moved.\n" }))
     ).toHaveLength(0);
     // The target's description stops claiming SUPERSEDED — same mechanics from the other end.
-    const revived = `---\ndescription: "The live harbor plan"\n---\n\n# Harbor plan\n`;
+    const revived = `---\ndescription: "The live hotel plan"\n---\n\n# Hotel plan\n`;
     expect(
-      supersededLinkItems(corpus({ "notes/dead.md": revived, "projects/harbor.md": linked }))
+      supersededLinkItems(corpus({ "notes/dead.md": revived, "projects/hotel.md": linked }))
     ).toHaveLength(0);
   });
 });
@@ -369,7 +369,7 @@ describe("check 2 — co-read pair with no link", () => {
   });
 
   describe("filter 3 — mutual top-K, the hub gate", () => {
-    // The measured live shape (2026-08-11): one hub with dozens of co-access partners, and every
+    // The shape that matters: one hub with dozens of co-access partners, and every
     // floor-passing pair through it. The hub sits at the top of everyone's list; almost nobody
     // sits at the top of the hub's.
     const files = corpus({
@@ -430,7 +430,7 @@ describe("check 3 — correction chain crossing notes", () => {
     expect(items[0].evidence).toContain("projects/alpha.md L3:");
   });
 
-  it("a one-directional correction is not a chain — the loose shape fired 14 times on the live corpus, 13 of them noise", () => {
+  it("a one-directional correction is not a chain — the loose shape is mostly hub noise", () => {
     const oneWay = corpus({
       "projects/alpha.md":
         "# Alpha\n\n**CORRECTION 2026-08-01:** the port in notes/beta.md was wrong; it is 9443.\n",
@@ -459,7 +459,7 @@ describe("check 3 — correction chain crossing notes", () => {
       "projects/alpha.md":
         "# Alpha\n\n**CORRECTION 2026-08-01:** the port in notes/beta.md was wrong; it is 9443.\n",
       // beta absorbed the story; its text no longer carries a correction naming alpha.
-      "notes/beta.md": "# Beta\n\nThe port is 8443, re-measured 2026-08-05.\n",
+      "notes/beta.md": "# Beta\n\nThe port is 8443, checked again 2026-08-05.\n",
     });
     expect(correctionChainItems(collapsed)).toHaveLength(0);
   });
@@ -472,8 +472,8 @@ describe("check 3 — correction chain crossing notes", () => {
  * It already meant "this note records something that happened rather than something true now",
  * and already excused a note from the stale-stamp clock. It now excuses it from these three too,
  * because the same reasoning covers them: a retired project page does not need its dead links
- * repointed or its co-read pairs written down. Live 2026-08-17, three projects were retired in
- * one evening and their pages kept generating watch items about work nobody will ever do.
+ * repointed or its co-read pairs written down. Without it, retiring several projects at once left
+ * their pages generating watch items about work nobody will ever do.
  *
  * It is still not a dismiss — it is a claim written into the note, as a commit, that any reader
  * can see and disagree with.
@@ -485,13 +485,13 @@ describe("settled notes leave the watch checks", () => {
   it("a settled note stops generating superseded-link items", async () => {
     const live = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md": "# Harbor\n\nThe rules live in [[dead]] still.\n",
+      "projects/hotel.md": "# Hotel\n\nThe rules live in [[dead]] still.\n",
     });
     expect((await watchItems({ files: live })).map((i) => i.kind)).toEqual(["superseded-link"]);
 
     const settled = corpus({
       "notes/dead.md": DEAD,
-      "projects/harbor.md": SETTLED("# Harbor\n\nThe rules live in [[dead]] still.\n"),
+      "projects/hotel.md": SETTLED("# Hotel\n\nThe rules live in [[dead]] still.\n"),
     });
     expect(await watchItems({ files: settled })).toHaveLength(0);
   });
@@ -520,7 +520,7 @@ describe("settled notes leave the watch checks", () => {
     for (const v of ["maybe", "flase", "true", "0", ""]) {
       const files = corpus({
         "notes/dead.md": DEAD,
-        "projects/harbor.md": `---\ndecays: ${v}\n---\n\n# Harbor\n\nThe rules live in [[dead]] still.\n`,
+        "projects/hotel.md": `---\ndecays: ${v}\n---\n\n# Hotel\n\nThe rules live in [[dead]] still.\n`,
       });
       expect((await watchItems({ files })).length, v).toBe(1);
     }
@@ -531,7 +531,7 @@ describe("watchItems — the assembler and the absent-edges fallback", () => {
   // A corpus where check 1 and check 3 each have one honest item.
   const files = corpus({
     "notes/dead.md": DEAD,
-    "projects/harbor.md": "# Harbor\n\nThe rules live in [[dead]] still.\n",
+    "projects/hotel.md": "# Hotel\n\nThe rules live in [[dead]] still.\n",
     "projects/alpha.md": "# Alpha\n\n**CORRECTION 2026-08-01:** the port in notes/beta.md was wrong.\n",
     "notes/beta.md": '# Beta\n\nPort is 8443 (was: "9443 per projects/alpha.md, re-measured").\n',
   });
@@ -569,7 +569,7 @@ describe("watchItems — the assembler and the absent-edges fallback", () => {
       "fetch",
       vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
         jsonRes(rangeSlice([
-          { src: "notes/beta.md", dst: "projects/harbor.md", kind: "coaccess", weight: 7, evidence: "co-read in 7 shared one-hour windows" },
+          { src: "notes/beta.md", dst: "projects/hotel.md", kind: "coaccess", weight: 7, evidence: "co-read in 7 shared one-hour windows" },
         ], init))
       )
     );

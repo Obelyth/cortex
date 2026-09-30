@@ -6,10 +6,10 @@ import { __setMailer, type Mailer } from "../lib/mail";
 import { GET } from "../app/api/ops/sweep/route";
 import {withAtomic,testEnvelope} from "./ops-test-store";
 
-const T0 = new Date("2026-09-02T09:17:00Z");
+const T0 = new Date("2026-09-02T06:40:00Z");
 const min = (n: number) => new Date(T0.getTime() + n * 60_000);
 const gk: Unit = { id: "groundskeeper", kind: "routine", name: "Brain groundskeeper", owner: "manager", period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: null, notes: null };
-const rog: Unit = { ...gk, id: "workstation-test", name: "Test workstation", kind: "machine", period_s: 900, pages: false };
+const ws: Unit = { ...gk, id: "workstation-test", name: "Test workstation", kind: "machine", period_s: 900, pages: false };
 
 /**
  * The double keeps the events array the sweep writes into and answers every "what happened
@@ -20,7 +20,7 @@ const rog: Unit = { ...gk, id: "workstation-test", name: "Test workstation", kin
  * `priors` seeds transitions that predate the test (a sweep that already ran) without putting
  * rows in `events`, so assertions counting newly appended events stay readable.
  */
-function store(runs: Run[], events: OpsEvent[] = [], units: Unit[] = [gk, rog], priors: Record<string, string> = { "workstation-test": "quiet" }, fails = 0): OpsStore & { events: OpsEvent[] } {
+function store(runs: Run[], events: OpsEvent[] = [], units: Unit[] = [gk, ws], priors: Record<string, string> = { "workstation-test": "quiet" }, fails = 0): OpsStore & { events: OpsEvent[] } {
   const seeded: OpsEvent[] = Object.entries(priors).map(([unit_id, to_state]) => ({ unit_id, run_id: null, at: new Date(T0.getTime() - 3_600_000).toISOString(), actor: "sweep", kind: "transition", to_state }));
   const all = () => [...seeded, ...events];
   const newest = (unitId: string, kind: OpsEvent["kind"], toState?: string) =>
@@ -51,7 +51,7 @@ const after = (state: string, unit = "groundskeeper") => ({ "workstation-test": 
 
 describe("runSweep", () => {
   it("turns a lapsed lease into crashed, writes the transition, pages once", async () => {
-    const s = store([running()], [], [gk, rog], after("running")); const m = recorder();
+    const s = store([running()], [], [gk, ws], after("running")); const m = recorder();
     const r = await runSweep(s, m, T0, "https://cortex.test/s/x/console/ops");
     expect(r.transitions).toEqual([{ unit: "groundskeeper", from: "running", to: "crashed" }]);
     expect(s.events.filter((e) => e.kind === "transition")).toHaveLength(1);
@@ -62,25 +62,25 @@ describe("runSweep", () => {
     expect(r2.transitions).toEqual([]); expect(m.sent).toHaveLength(1);
   });
   it("records alert_failed when the mail bounces and still stores the transition", async () => {
-    const s = store([running()], [], [gk, rog], after("running")); const m = recorder(true);
+    const s = store([running()], [], [gk, ws], after("running")); const m = recorder(true);
     const r = await runSweep(s, m, T0, "https://x");
     expect(r.mailFailed).toEqual(["groundskeeper"]);
     expect(s.events.at(-1)).toMatchObject({ kind: "alert_failed", body: { status: 502 } });
   });
   it("machines go quiet without a mail", async () => {
     const hb: Run = { ...running(), id: 2, unit_id: "workstation-test", trigger: "heartbeat", started_at: min(-40).toISOString(), ended_at: min(-40).toISOString(), lease_until: null, state: "seen" };
-    const s = store([hb], [], [gk, rog], { "workstation-test": "seen" }); const m = recorder();
+    const s = store([hb], [], [gk, ws], { "workstation-test": "seen" }); const m = recorder();
     const r = await runSweep(s, m, T0, "https://x");
     expect(r.transitions).toEqual([{ unit: "workstation-test", from: "seen", to: "quiet" }]);
     expect(m.sent).toEqual([]);
   });
   it("works with no mailer: transitions recorded, paged empty, nothing thrown", async () => {
-    const s = store([running()], [], [gk, rog], after("running"));
+    const s = store([running()], [], [gk, ws], after("running"));
     const r = await runSweep(s, null, T0, "https://x");
     expect(r.transitions).toHaveLength(1); expect(r.paged).toEqual([]);
   });
   it("sends one recovery mail when a paged unit succeeds again, and only one", async () => {
-    const r1 = running(); const s = store([r1], [], [gk, rog], after("running")); const m = recorder();
+    const r1 = running(); const s = store([r1], [], [gk, ws], after("running")); const m = recorder();
     await runSweep(s, m, T0, "https://x");                       // running → crashed → paged
     // The finish ingest would write: ended, lease dropped, evidence, and state "succeeded" —
     // the state column carries what ingest derived, which is why the sweep must not read it.
@@ -98,7 +98,7 @@ describe("runSweep", () => {
     const failed: Run = { ...running(), ended_at: min(-5).toISOString(), lease_until: null, state: "failed", exit_reason: "code", error: "exit 1" };
     // fails=1 is the ledger's own count of trailing failed transitions, i.e. gk's tolerance of 1
     // is already spent when this pass runs; the page is then owed on the transition.
-    const s = store([failed], [], [gk, rog], after("running"), 1); const m = recorder();
+    const s = store([failed], [], [gk, ws], after("running"), 1); const m = recorder();
     const r = await runSweep(s, m, T0, "https://x");
     expect(r.transitions).toEqual([{ unit: "groundskeeper", from: "running", to: "failed" }]);
     expect(m.sent).toEqual(["CORTEX OPS: Brain groundskeeper running → failed"]);
@@ -113,17 +113,17 @@ describe("runSweep", () => {
       { unit_id: "groundskeeper", run_id: null, at: min(-90).toISOString(), actor: "sweep", kind: "alert_sent", to_state: "succeeded" },
       { unit_id: "groundskeeper", run_id: null, at: min(-45).toISOString(), actor: "sweep", kind: "transition", to_state: "late" },
     ];
-    const s = store([done], history, [gk, rog]); const m = recorder();
+    const s = store([done], history, [gk, ws]); const m = recorder();
     const r = await runSweep(s, m, T0, "https://x");
     expect(r.transitions).toEqual([{ unit: "groundskeeper", from: "late", to: "succeeded" }]);
     expect(m.sent).toEqual([]);
   });
   it("pages a run-less item unit once, then uses the recorded transition as the baseline", async () => {
-    const cs: Unit = { ...gk, id: "console-secret", kind: "item", name: "Console secret", pages: true };
+    const cs: Unit = { ...gk, id: "cert-renewal", kind: "item", name: "Certificate renewal", pages: true };
     const s = store([], [], [cs]); const m = recorder();
     const r1 = await runSweep(s, m, T0, "https://x");
-    expect(r1.transitions).toEqual([{ unit: "console-secret", from: "scheduled", to: "needs_you" }]);
-    expect(m.sent).toEqual(["CORTEX OPS: Console secret scheduled → needs_you"]);
+    expect(r1.transitions).toEqual([{ unit: "cert-renewal", from: "scheduled", to: "needs_you" }]);
+    expect(m.sent).toEqual(["CORTEX OPS: Certificate renewal scheduled → needs_you"]);
     // second sweep: still no run, but the transition event just written is now the baseline
     const r2 = await runSweep(s, m, min(15), "https://x");
     expect(r2.transitions).toEqual([]);
@@ -152,7 +152,7 @@ describe("GET /api/ops/sweep", () => {
   it("links the mail to the bare origin — the console secret never rides in an alert", async () => {
     vi.stubEnv("CONNECTOR_PATH_SECRET", "s".repeat(64));
     const m = recorder();
-    __setOpsStore(store([running()], [], [gk, rog], after("running")));
+    __setOpsStore(store([running()], [], [gk, ws], after("running")));
     __setMailer(m);
     expect((await GET(req(`Bearer ${"c".repeat(32)}`))).status).toBe(200);
     expect(m.bodies).toHaveLength(1);

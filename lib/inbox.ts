@@ -13,9 +13,9 @@
  * rather than something that is true now" and already excused it from the stale-stamp check;
  * it now excuses it from these three as well, because the same reasoning covers them. A retired
  * project page does not need its dead links repointed, its co-read pairs written down, or its
- * correction chains collapsed — it is a record of a thing that is over. Live 2026-08-17: three
- * projects were retired in one evening and their pages went on generating watch items about
- * work nobody will ever do.
+ * correction chains collapsed — it is a record of a thing that is over. Without this, retiring
+ * several projects at once leaves their pages generating watch items about work nobody will
+ * ever do.
  *
  * It is still not a dismiss, and the difference is the whole point. A dismiss clears a row and
  * changes nothing; `decays: false` is a claim the operator writes INTO the corpus, in the note,
@@ -25,11 +25,10 @@
  * retired-tool claim keep firing on a settled page, because "this is history" does not make a
  * stored secret safe or an unmarked claim safe to quote.
  *
- * PRECISION OVER RECALL, measured before shipping. This queue's history is 23 checker-noise
- * items burying the 1 real one (log/2026-08-03, PR #34) — an alert that fires on healthy text
- * stops being read. So every rule here was run against the live corpus first and tightened until
- * the queue held a handful of true items, and each exclusion below names the real passage that
- * demanded it. All three checks are `watch` severity, a tier below warn: structure worth a
+ * PRECISION OVER RECALL. Checker noise that buries the one real item is the failure to avoid —
+ * an alert that fires on healthy text stops being read. So every rule here is tightened until the
+ * queue holds only true items, and each exclusion below names the kind of passage that demanded
+ * it. All three checks are `watch` severity, a tier below warn: structure worth a
  * glance, never an alarm.
  *
  * WHO RUNS: the superseded-link and correction-chain checks are pure corpus derivations and
@@ -135,9 +134,9 @@ const ev = scrubEvidence;
  *   - notes that are themselves superseded: history pointing at history misleads nobody who
  *     got past the description.
  *
- * Measured on the live corpus 2026-08-11: three raw candidates, all three excluded by the rules
- * above, zero items surfaced. Quiet is the correct state for a well-kept corpus, and the check
- * stands guard for the next unmarked pointer rather than manufacturing work today.
+ * On a well-kept corpus the rules above exclude every raw candidate and nothing surfaces. Quiet
+ * is the correct state there, and the check stands guard for the next unmarked pointer rather
+ * than manufacturing work today.
  */
 export function supersededLinkItems(files: Map<string, string>): TriageItem[] {
   const dead = supersededNotes(files);
@@ -227,9 +226,8 @@ export const COACCESS_TOP_K = 3;
  * name in live prose — because the item's whole ask is "write the connection down", and every
  * one of those forms is it written down.
  *
- * RAW WEIGHT CANNOT TELL AFFINITY FROM POPULARITY, and here is the measurement that taught it
- * (live note_edges, 2026-08-11): sixteen unlinked pairs stood at the floor, and every single one
- * involved hub pages and day logs co-read in bulk, as well as the
+ * RAW WEIGHT CANNOT TELL AFFINITY FROM POPULARITY, and a real edge table taught it: the unlinked
+ * pairs standing at the floor all involved hub pages and day logs co-read in bulk, as well as the
  * boot profile affected by reconcile-trigger reads. Three mechanical filters follow, each doing
  * one job:
  *
@@ -386,13 +384,12 @@ export function coaccessGapItems(
  * since re-corrected. Both line references ride as evidence. Leaves when the chain is collapsed
  * in place — when either side stops carrying a correction that names the other.
  *
- * DELIBERATELY GATED to mutual pairs, and here is the measurement that gated it: the loose
- * shape from the spec — any correction edge whose source is itself the target of another —
- * fired 14 times on the live corpus (2026-08-11), and 13 were hub-page noise: the main project
- * page's housekeeping blocks name a dozen pages, so every correction ANYWHERE that mentioned
- * that page chained through it. The one chain a reader could actually be misled by was the
- * mutual pair — a query-label story corrected twice, recorded on two pages, each page deferring
- * to the other. Requiring the chain to close keeps that item and drops the thirteen.
+ * DELIBERATELY GATED to mutual pairs. The loose shape from the spec — any correction edge whose
+ * source is itself the target of another — fires mostly on hub-page noise: a main project page's
+ * housekeeping blocks name a dozen pages, so every correction ANYWHERE that mentions that page
+ * chains through it. The chain a reader can actually be misled by is the mutual pair — one story
+ * corrected twice, recorded on two pages, each page deferring to the other. Requiring the chain
+ * to close keeps that item and drops the noise.
  * Corrections are derived live via correctionEdges() — the same single opinion the graph
  * rebuild stores — so this check runs without the store and the item leaves the moment the
  * note changes, not a rebuild later.
@@ -455,13 +452,11 @@ export function correctionChainItems(files: Map<string, string>): TriageItem[] {
 /**
  * A page that has outgrown the boot call.
  *
- * THE CAPABILITY EXISTED AND NOTHING POINTED AT IT. scripts/split-project-page.ts has cut a
- * quarter-megabyte page into a status page plus monthly history since 2026-09-02, byte for byte,
- * with a test suite behind it — and nothing anywhere told anyone a page had got large enough to
- * need it. the largest project page reached 274,453 B, 97% of the brain's own 256 KB safety line and a
- * quarter of the 1 MB GitHub cliff that makes a note permanently unreadable AND unwritable, and
- * it was found by a person reading a file listing. That is the same shape as the export gate that
- * never ran and the migrations pending for three weeks: the tool was built, the trigger was not.
+ * THE CAPABILITY EXISTED AND NOTHING POINTED AT IT. scripts/split-project-page.ts cuts an
+ * oversized page into a status page plus monthly history, byte for byte, with a test suite behind
+ * it — and without this check nothing tells anyone a page has got large enough to need it, while
+ * the 1 MB GitHub cliff makes a note permanently unreadable AND unwritable. A tool that is built
+ * with no trigger pointing at it does not run.
  *
  * DAY LOGS ARE EXEMPT, and not as a convenience. A log is a dated record that is never split —
  * the router already collapses the whole of log/ into one row per month, so its size costs the

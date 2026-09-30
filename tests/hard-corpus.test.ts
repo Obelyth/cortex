@@ -435,7 +435,7 @@ describe("loadCorpus — cache under stress", () => {
   });
 
   it("OK: a failed tarball fetch never clobbers a good cache and never exposes half a corpus", async () => {
-    const tarball = gzTar({ "profile.md": "operator", "projects/beacon.md": "dark" });
+    const tarball = gzTar({ "profile.md": "operator", "projects/sample.md": "dark" });
     let head = "sha1";
     let tarballCalls = 0;
     globalThis.fetch = (async (url: string) => {

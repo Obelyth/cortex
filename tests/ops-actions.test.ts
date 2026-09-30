@@ -7,7 +7,7 @@ import { STAMP_COOKIE, stampValue } from "../lib/stamp";
 
 const NOW = new Date("2026-09-02T10:00:00Z");
 const gk: Unit = { id: "groundskeeper", kind: "routine", name: "gk", owner: "manager", period_s: 86400, grace_s: 1800, max_run_s: 1200, pages: true, tolerance: 1, paused_until: null, run_now: { kind: "dispatch", target: "run-groundskeeper" }, notes: null };
-const item: Unit = { ...gk, id: "console-secret", kind: "item", period_s: null, run_now: null };
+const item: Unit = { ...gk, id: "cert-renewal", kind: "item", period_s: null, run_now: null };
 function store(): OpsStore & { events: OpsEvent[]; patched: Array<[string, Partial<Unit>]> } {
   const events: OpsEvent[] = []; const patched: Array<[string, Partial<Unit>]> = [];
   return { events, patched, listUnits: async () => [gk, item], latestRuns: async () => new Map(), findRun: async () => null, insertRun: async (r) => ({ ...r, id: 1 }) as never, patchRun: async () => ({}) as never, latestEvent: async () => null,
@@ -28,9 +28,9 @@ describe("applyAction", () => {
   const noDispatch = async () => ({ ok: true, status: 204 });
   it("ack writes a neutral console actor and returns its id as the receipt", async () => {
     const s = store();
-    const r = await applyAction(s, [gk, item], { action: "ack", unit: "console-secret", note: "rotating tomorrow" }, NOW, noDispatch);
+    const r = await applyAction(s, [gk, item], { action: "ack", unit: "cert-renewal", note: "renewing tomorrow" }, NOW, noDispatch);
     expect(r).toEqual({ ok: true, receipt: 1 });
-    expect(s.events[0]).toMatchObject({ kind: "ack", actor: "console", unit_id: "console-secret", body: { note: "rotating tomorrow", until: null } });
+    expect(s.events[0]).toMatchObject({ kind: "ack", actor: "console", unit_id: "cert-renewal", body: { note: "renewing tomorrow", until: null } });
   });
   it("snooze stores until = now + hours", async () => {
     const s = store();
@@ -51,7 +51,7 @@ describe("applyAction", () => {
     expect(dispatch).toHaveBeenCalledWith("run-groundskeeper");
     expect(r).toEqual({ ok: true, receipt: 1 });
     expect(s.events[0]).toMatchObject({ kind: "run_now", body: { target: "run-groundskeeper", status: 204 } });
-    expect(await applyAction(s, [gk, item], { action: "run-now", unit: "console-secret" }, NOW, dispatch)).toMatchObject({ ok: false, status: 409 });
+    expect(await applyAction(s, [gk, item], { action: "run-now", unit: "cert-renewal" }, NOW, dispatch)).toMatchObject({ ok: false, status: 409 });
   });
   it("run-now on a failed dispatch is 502 and still receipted", async () => {
     const s = store();
@@ -67,8 +67,8 @@ describe("applyAction", () => {
   });
   it("run-now on a link target returns opened and receipts { opened: true }", async () => {
     const s = store();
-    const link: Unit = { ...gk, id: "canary", run_now: { kind: "link", target: "https://claude.ai/code/routines/x" } };
-    const r = await applyAction(s, [gk, item, link], { action: "run-now", unit: "canary" }, NOW, noDispatch);
+    const link: Unit = { ...gk, id: "nightly-check", run_now: { kind: "link", target: "https://claude.ai/code/routines/x" } };
+    const r = await applyAction(s, [gk, item, link], { action: "run-now", unit: "nightly-check" }, NOW, noDispatch);
     expect(r).toEqual({ ok: true, receipt: 1, opened: "https://claude.ai/code/routines/x" });
     expect(s.events[0]).toMatchObject({ kind: "run_now", body: { target: "https://claude.ai/code/routines/x", opened: true } });
   });

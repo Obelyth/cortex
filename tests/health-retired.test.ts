@@ -119,8 +119,8 @@ describe("retiredRefs ranking", () => {
 describe("triage tuning", () => {
   it("does not alert on the shapes that were never secrets", async () => {
     const { plausibleSecret } = await import("../lib/health");
-    // The four false positives the queue actually carried, by shape:
-    expect(plausibleSecret("sudo is ENABLED via sudoers (`itsjackal ALL=(ALL) NOPASSWD: ALL`)")).toBe(false);
+    // Four shapes that look like secrets but are not:
+    expect(plausibleSecret("sudo is ENABLED via sudoers (`alice ALL=(ALL) NOPASSWD: ALL`)")).toBe(false);
     expect(plausibleSecret("Fix: `~/.zshrc` now has `export GITHUB_PERSONAL_ACCESS_TOKEN=<your-pat-here>`")).toBe(false);
     expect(plausibleSecret("override inline: `GITHUB_TOKEN=ghp_exampl npx tsx ...`")).toBe(false);
     expect(plausibleSecret("MY_TOKEN=${SOME_OTHER_VAR}")).toBe(false);

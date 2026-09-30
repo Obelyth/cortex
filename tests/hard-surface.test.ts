@@ -97,7 +97,7 @@ function poisonedCorpus(): Corpus {
     files: new Map([
       ["profile.md", `# Profile\n\n${REAL_PROFILE_SENTENCE}\nAdmin passwords are never stored here.`],
       ["notes/pasted-from-web.md", POISON],
-      ["projects/harbor.md", "Harbor ships the mooring backlog nightly."],
+      ["projects/hotel.md", "Hotel ships the import queue nightly."],
     ]),
   };
 }
@@ -321,7 +321,7 @@ describe("archive/ reachability", () => {
 
   it("FIXED: every writable path is a path the corpus will actually serve", () => {
     // The invariant behind the bug above, stated once so the two rules cannot drift again.
-    for (const p of ["profile.md", "projects/harbor.md", "notes/a-b_c.md", "log/2026-07-24.md"]) {
+    for (const p of ["profile.md", "projects/hotel.md", "notes/a-b_c.md", "log/2026-07-24.md"]) {
       expect(() => validatePath(p)).not.toThrow();
       expect(isLive(p)).toBe(true);
     }
@@ -607,7 +607,7 @@ describe("size and cost against the live brain", () => {
     if (!haveBrain) return;
     const files = live();
     const corpus: Corpus = { files, sha: "0".repeat(40), bytes: 0, fetchedAt: 0 };
-    const { prompt } = buildPrompt(corpus, "what did I decide about the OTS board", [...files.keys()]);
+    const { prompt } = buildPrompt(corpus, "what did I decide about the weekly report", [...files.keys()]);
     const inTok = prompt.length / 4;
 
     const cost = (perM: number) => Number(((inTok * perM) / 1e6).toFixed(4));
@@ -826,9 +826,9 @@ describe("happy path still holds", () => {
   it("OK: brain_corpus with a question narrows, and parseReply refuses to invent a citation", async () => {
     const c = poisonedCorpus();
     pinCorpus(c);
-    const out = await TOOLS.get("brain_corpus")!.handler({ question: "harbor mooring backlog", k: 1 });
+    const out = await TOOLS.get("brain_corpus")!.handler({ question: "hotel import queue", k: 1 });
     expect(out.content[0].text).toContain("1 of 3 notes");
-    expect(out.content[0].text).toContain("projects/harbor.md");
+    expect(out.content[0].text).toContain("projects/hotel.md");
     expect(parseReply("I cannot answer that.")).toEqual({
       answer: "I cannot answer that.",
       tag: "",
