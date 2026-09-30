@@ -382,9 +382,10 @@ async function main(): Promise<void> {
 
   // The label set is not part of the brain's shape, so its location is always given, never
   // guessed from the checkout layout.
-  const labelsPath = arg("labels") ?? process.env.EVAL_LABELS;
+  // Taken from the command line only, so the run names its label file explicitly.
+  const labelsPath = arg("labels");
   if (!labelsPath || !existsSync(labelsPath)) {
-    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json> or set EVAL_LABELS`);
+    console.error(`no labels at ${labelsPath ?? "(unset)"} — pass --labels <labels.json>`);
     process.exit(2);
   }
   const labelsRaw = readFileSync(labelsPath, "utf8");

@@ -63,5 +63,4 @@ so the repository does not name it; environment variables point at it instead:
 Unset, each suite reports a visible skip. Set to a path that does not exist, it fails.
 `REQUIRE_BM25_PARITY=1` makes an unset ranker a failure too.
 
-The evaluation scripts take their label set the same way: `--labels <file>` or
-`EVAL_LABELS`.
+The evaluation scripts take their label set from `--labels <file>`.
