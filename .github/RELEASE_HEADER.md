@@ -1,20 +1,18 @@
 This release packages the source at its tag. Read any **Action required** section below before upgrading an existing installation.
 
-## What changed in v2.0.1
+## What changed in v2.0.2
 
-- Privacy: documentation examples and MCP tool descriptions now use neutral placeholder names, hosts, values and wording, and test fixtures and code comments were rewritten as self-contained examples.
-- Security updates: the lockfile moves brace-expansion, fast-uri and ip-address to their patched releases, which resolves six Dependabot advisories. None of the three runs in the deployed server.
-- Documentation fixes: the security policy describes what the health check actually probes, the environment example documents the timezone default and a missing setting, the maintenance template lists every trusted tool, and broken links in the setup and repository guides now point at their public sources.
-- Release publishing: only the release workflow publishes a release, after the checks at the tag pass and a maintainer approves it in the `release` environment (the approval step is new since v2.0.0). The pull-request housekeeping workflow added since v2.0.0 does not run on version tags.
-- Overview shows its introduction and the working-notes workspace as separate sections in both themes. Controls and their meanings are unchanged.
-- For contributors: a GitHub Codespaces setup (Node 22, non-root, locked install) that does not start the server, run migrations or deploy; a documentation hub, a repository settings guide and an updated design reference; an optional Claude pull-request review workflow and housekeeping checks; documented export privacy checks; and evaluation scripts that take their label file from `--labels`.
+- Security update: Next.js moves from 16.3.4 to 16.3.8, outside the range affected by the critical advisory [GHSA-vcvr-r3jv-pc5j](https://github.com/advisories/GHSA-vcvr-r3jv-pc5j) (remote code execution in the Node.js `ImageResponse` from `next/og`, Next.js 16.2.0 up to but not including 16.3.6). Cortex does not import `next/og` and its icons are static image files, so v2.0.1 deployments do not run the affected code. This release updates anyway, so that the published source no longer pins an affected version. Only Next.js and its own `@next/*` packages change version.
+- Smaller install: `@modelcontextprotocol/sdk` is no longer a dependency. Cortex used it for one type, which now comes from `@modelcontextprotocol/server`, the package the MCP route already runs on. The lockfile lists 82 fewer packages, including express, hono and cors. The MCP tools and their behavior are unchanged.
+- For contributors: the optional SonarQube job skips, instead of failing, on runs that Dependabot starts, because GitHub gives those runs no Actions secrets. Every other run is analyzed as before.
 
 ## Action required
 
-- **From v2.0.0:** if `BRAIN_TZ` is unset or empty, daily log boundaries now use UTC. Before redeploying, set `BRAIN_TZ` to the IANA timezone your daily logs should follow. Nothing else is required.
+- **From v2.0.1:** nothing. Redeploy to run Next.js 16.3.8.
+- **From v2.0.0:** the v2.0.1 timezone change applies. If `BRAIN_TZ` is unset or empty, daily log boundaries use UTC. Before redeploying, set `BRAIN_TZ` to the IANA timezone your daily logs should follow. Nothing else is required.
 - **From v1.2.0 or earlier:** every v2.0.0 requirement still applies. Local tools and builds require Node 22.18.0 or newer within 22.x. Configure `CONSOLE_PASSCODE` separately from the connector secret before deploying. Back up notes and database state separately; existing v1.2.0 databases need an administrator-reviewed integration plan, and pristine bootstrap or fabricated migration records must never be used on an existing database. Read the [v2.0.0 upgrade requirements for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.0.md#action-required-for-existing-installations). The `BRAIN_TZ` change above applies too.
 
-Read the [v2.0.1 release guide for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.1.md) before continuing.
+Read the [v2.0.2 release guide for this exact source]({{RELEASE_SOURCE}}/docs/releases/v2.0.2.md) before continuing.
 
 ## Install and verify
 

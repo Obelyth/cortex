@@ -156,3 +156,59 @@ describe("release publication", () => {
     expect(existsSync(`docs/releases/v${version}.md`)).toBe(true);
   });
 });
+
+// The expression's terms joined by a top-level `op`, ignoring any inside parentheses.
+function topLevelTerms(expression: string, op: string): string[] {
+  const terms: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < expression.length; i++) {
+    if (expression[i] === "(") depth++;
+    else if (expression[i] === ")") depth--;
+    else if (depth === 0 && expression.startsWith(op, i)) {
+      terms.push(expression.slice(start, i).trim());
+      start = i + op.length;
+    }
+  }
+  return [...terms, expression.slice(start).trim()];
+}
+
+// The step blocks of a job block, in file order, each starting at its `- ` line.
+function steps(job: string): string[] {
+  const body = job.split(/^    steps:[ \t]*\n/m)[1] ?? "";
+  const blocks: string[] = [];
+  for (const line of body.split("\n")) {
+    if (/^ {0,5}\S/.test(line)) break;
+    if (/^      - /.test(line)) blocks.push(`${line}\n`);
+    else if (blocks.length) blocks[blocks.length - 1] += `${line}\n`;
+  }
+  return blocks;
+}
+
+describe("optional Sonar analysis", () => {
+  it("skips, instead of failing, on runs Dependabot starts and on fork pull requests", () => {
+    // Runs Dependabot starts receive no Actions secrets, so the job's configuration check
+    // would fail every Dependabot pull request. github.actor, not triggering_actor: a re-run
+    // keeps the original actor's privileges. Every other run is analysed as before.
+    const sonarqube = Object.fromEntries(jobs(readFileSync(join(dir, "build.yml"), "utf8"))).sonarqube;
+    expect(sonarqube, "SonarQube job present").toBeDefined();
+    const condition = sonarqube.match(/^    if: (.+)$/m)?.[1] ?? "";
+    expect(topLevelTerms(condition, "&&")).toEqual([
+      "vars.SONAR_ENABLED == 'true'",
+      "github.actor != 'dependabot[bot]'",
+      "(github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)",
+    ]);
+    // A run that does reach the job still fails when the configuration is missing: the
+    // check is the job's first step, it has no condition of its own, it reads the real
+    // secret, and its missing-token branch reports the error and exits 1 in that step.
+    expect(sonarqube).not.toMatch(/^\s+(?:-\s+)?continue-on-error:/m);
+    const check = steps(sonarqube)[0] ?? "";
+    expect(check).toMatch(/^      - name: Require the repository's Sonar configuration$/m);
+    expect(check, "configuration check runs unconditionally").not.toMatch(/^\s+(?:-\s+)?if:/m);
+    expect(check).toMatch(/^          SONAR_TOKEN: \$\{\{ secrets\.SONAR_TOKEN \}\}$/m);
+    expect(check).toContain('if [ -z "$SONAR_TOKEN" ] ||');
+    expect(check).toMatch(
+      /^ +echo '::error::Sonar is enabled but SONAR_TOKEN[^\n]*\n +exit 1\n +fi$/m,
+    );
+  });
+});

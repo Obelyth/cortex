@@ -9,7 +9,7 @@ manage working notes and review operational results.
 
 - [What Cortex does and how its dashboard works](https://github.com/Obelyth/cortex/blob/main/README.md#the-dashboard)
 - [Set up a private, blank brain](https://github.com/Obelyth/cortex/blob/main/README.md#start-with-a-private-blank-brain)
-- [Linux and macOS setup for v2.0.1](https://github.com/Obelyth/cortex/blob/v2.0.1/docs/releases/v2.0.1.md#linux-and-macos-setup)
+- [Linux and macOS setup for v2.0.2](https://github.com/Obelyth/cortex/blob/v2.0.2/docs/releases/v2.0.2.md#linux-and-macos-setup)
 - [Downloads and release notes](https://github.com/Obelyth/cortex/releases)
 
 A fresh installation contains an empty profile and index, not somebody else's

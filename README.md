@@ -32,11 +32,11 @@ stored at that same tag.
 
 **Navigate:** [Dashboard](#the-dashboard) · [Setup](#start-with-a-private-blank-brain) · [Optional services](#add-services-when-you-need-them) · [MCP clients](#connect-a-trusted-client) · [Local development](#local-development) · [Updates](#updates-and-recovery)
 
-**Documentation:** [Environment variables](https://github.com/Obelyth/cortex/blob/v2.0.1/.env.example) · [Database setup](docs/database-bootstrap.md) · [Dependencies and CI](https://github.com/Obelyth/cortex/blob/d78d74921ba6988bede7782c66137fd6ac45e8d7/.github/DEPENDENCIES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](ROADMAP.md) · [Design reference](DESIGN.md)
+**Documentation:** [Environment variables](https://github.com/Obelyth/cortex/blob/v2.0.2/.env.example) · [Database setup](docs/database-bootstrap.md) · [Dependencies and CI](https://github.com/Obelyth/cortex/blob/v2.0.2/.github/DEPENDENCIES.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Roadmap](ROADMAP.md) · [Design reference](DESIGN.md)
 
 **GitHub workspace:** [Documentation hub](docs/wiki/Home.md) · [Codespaces](docs/codespaces.md) · [Repository settings and environments](docs/github-project-setup.md)
 
-**v2.0.1:** [Release notes and Linux/macOS setup](docs/releases/v2.0.1.md). Upgrading from
+**v2.0.2:** [Release notes and Linux/macOS setup](docs/releases/v2.0.2.md). Upgrading from
 v1.2.0 or earlier: read the [v2.0.0 upgrade requirements](docs/releases/v2.0.0.md#action-required-for-existing-installations) first.
 Existing v1.2.0 databases need an administrator-reviewed integration plan before
 deploying this source against them. The ordinary migration apply path does not
@@ -65,7 +65,7 @@ You need a GitHub account and a Vercel account for this browser-based hosted set
 1. In GitHub, use the template action on [Obelyth/cortex](https://github.com/Obelyth/cortex) to make your own application source repository. This is the **application source**, not the notes repository. Keep secrets and notes out of it.
 2. Create a separate **private** GitHub repository for the brain. Put the two files from [brain-template](https://github.com/Obelyth/cortex/tree/d78d74921ba6988bede7782c66137fd6ac45e8d7/brain-template) at its root and make an initial commit. They contain only an empty `profile.md` and an `INDEX.md` listing that profile. Do not upload the enclosing `brain-template` directory. No other directories are needed until you create notes.
 3. Create a fine-grained GitHub token restricted to that brain repository, with **Contents: Read and write**. Set `BRAIN_REPO` to its `owner/repository` and `BRAIN_BRANCH` to its actual default branch. Do not assume the branch is `main` for an existing repository.
-4. Import your application source into Vercel. In the project's environment settings, set `BRAIN_REPO`, `BRAIN_BRANCH`, `GITHUB_TOKEN`, `MCP_TOKEN`, `CONNECTOR_PATH_SECRET`, and `CONSOLE_PASSCODE` for Production. Generate separate random values for the three access credentials and store them in a password manager. [.env.example](https://github.com/Obelyth/cortex/blob/v2.0.1/.env.example) explains each exact field name and whether it is a secret or configuration value.
+4. Import your application source into Vercel. In the project's environment settings, set `BRAIN_REPO`, `BRAIN_BRANCH`, `GITHUB_TOKEN`, `MCP_TOKEN`, `CONNECTOR_PATH_SECRET`, and `CONSOLE_PASSCODE` for Production. Generate separate random values for the three access credentials and store them in a password manager. [.env.example](https://github.com/Obelyth/cortex/blob/v2.0.2/.env.example) explains each exact field name and whether it is a secret or configuration value.
 5. Deploy the configured project. Copy its actual production domain from the Vercel project dashboard, confirm it points to the successful deployment, then open the protected console path above. Never construct a host by guessing a project name.
 6. Open **Settings** and **Ops** to see what is ready and what is unavailable. Missing optional services should remain unconfigured until you want them. No model, database, email account, or guest connector is required to start browsing the private notes repository.
 
@@ -77,14 +77,14 @@ Linux and macOS use the same source package and hosted dashboard. Cortex is a we
 application, not a native desktop binary. You can use the browser-based setup above
 without installing local tools.
 
-For the packaged release, download `cortex-v2.0.1.tar.gz` from
-[v2.0.1](https://github.com/Obelyth/cortex/releases/tag/v2.0.1), extract it, and enter
+For the packaged release, download `cortex-v2.0.2.tar.gz` from
+[v2.0.2](https://github.com/Obelyth/cortex/releases/tag/v2.0.2), extract it, and enter
 the extracted directory. On Linux, run `bash "Cortex Setup.sh"`; on macOS, open
 `Cortex Setup.command`. Linux checks your existing tools and offers the same
 interactive wizard; it does not run `sudo` or choose a distribution's package
 manager. Missing prerequisites stop setup before sign-in or installation. The
 [v2.0.0 setup guide](docs/releases/v2.0.0.md#linux-and-macos-setup), unchanged for
-v2.0.1, explains the prerequisites and the manual alternative.
+v2.0.2, explains the prerequisites and the manual alternative.
 
 The wizard performs the repository and Vercel steps interactively. It requires
 Node **22.18.0 or newer and earlier than 23**, Git, an authenticated
@@ -95,7 +95,7 @@ browser-based steps above do not require Node, local Git, either CLI, or a local
 Git identity.
 
 ```bash
-git clone --branch v2.0.1 --single-branch https://github.com/Obelyth/cortex.git
+git clone --branch v2.0.2 --single-branch https://github.com/Obelyth/cortex.git
 cd cortex
 npm ci --ignore-scripts
 npm run onboard

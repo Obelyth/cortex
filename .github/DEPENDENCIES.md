@@ -43,10 +43,12 @@ Sonar analysis is disabled until the repository owner sets these Actions setting
 - Repository secret `SONAR_TOKEN`: that project's analysis credential.
 
 Enabled analysis fails if its configuration is incomplete. Pull requests from
-forks skip credentialed analysis; the portable CI gates still run. Only require
-the Sonar status in branch protection when you have configured that service and
-chosen how to review fork contributions. Sonar properties retain the repository's
-analysis exclusions; the workflow supplies the owner-specific identifiers.
+forks and runs that Dependabot starts skip credentialed analysis, because neither
+receives the repository's Actions secrets; the portable CI gates still run. Only
+require the Sonar status in branch protection when you have configured that
+service and chosen how to review fork contributions. Sonar properties retain the
+repository's analysis exclusions; the workflow supplies the owner-specific
+identifiers.
 
 ## Dashboard workflow permissions
 

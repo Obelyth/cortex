@@ -11,8 +11,10 @@ on:
 jobs:
   sonarqube:
     name: SonarQube
-    # Fork pull requests cannot use the base repository's analysis credentials.
-    if: vars.SONAR_ENABLED == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    # Fork pull requests cannot use the base repository's analysis credentials, and runs
+    # Dependabot starts receive no Actions secrets, so both skip instead of failing the
+    # configuration check below. A re-run keeps github.actor, and with it those privileges.
+    if: vars.SONAR_ENABLED == 'true' && github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
