@@ -30,11 +30,11 @@
     "@types/pg": "^8.20.4",
     "@types/react": "^19",
     "@types/react-dom": "19.2.7",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "happy-dom": "20.14.0",
     "pg": "^8.22.0",
     "typescript": "^7",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   },
   "overrides": {
     "sharp": "0.35.4"
