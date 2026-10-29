@@ -31,7 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "19.2.7",
     "@vitest/coverage-v8": "^4.1.11",
-    "happy-dom": "20.14.0",
+    "happy-dom": "21.0.4",
     "pg": "^8.22.0",
     "typescript": "^7",
     "vitest": "4.1.11"
